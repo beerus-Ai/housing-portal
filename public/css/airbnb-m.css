@@ -135,3 +135,29 @@
 .gl-s { font-size: 12px; opacity: .7; overflow-wrap: anywhere; }
 .gl-bar { display: block; height: 5px; border-radius: 5px; background: #e9f8ff; overflow: hidden; }
 .gl-bar span { display: block; height: 100%; background: #0088b0; }
+
+/* ===== Smaller cards on the phone Home (tenant, owner, family): about 30% less height ===== */
+.am-card { width: 190px; padding: 8px 8px 12px; border-radius: 20px; }
+.am-art { height: 96px; border-radius: 14px; font-size: 40px; margin-bottom: 4px; }
+.am-t { font-size: 15px; }
+.am-s { font-size: 13px; }
+.am-big { width: 148px; }
+.am-big .am-art { height: 64px; font-size: 30px; }
+.am-num { font-size: 30px; }
+.am-card.am-cat { width: 150px; padding: 10px; }
+.am-card.am-cat .am-art { height: 64px; }
+
+/* ===== Bottom navigation + sub-screen header ===== */
+.mob .tabbar { position: relative; z-index: 8; flex: none; }
+.mob .tab[aria-current="page"] { color: #0088b0; font-weight: 700; }
+.mob .tab { min-width: 0; }
+.mob .tab .badge-pink, .mob .tab .badge-red { right: 12%; }
+.sub-head { display: flex; align-items: center; gap: 12px; }
+.sub-head .am-h1 { min-width: 0; overflow-wrap: anywhere; font-size: 30px; }
+.back-ic { all: unset; box-sizing: border-box; cursor: pointer; flex: none; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; background: #e9f8ff; color: #0a303e; touch-action: manipulation; }
+.back-ic:focus-visible { outline: var(--focus-ring); }
+.back-ic i { position: relative; display: inline-block; width: 1em; height: 1em; }
+/* keep content clear of the bar and the + button */
+.mob .phone > .screen, .mob .phone > form.screen { padding-bottom: 128px; }
+/* Menu rows are big and calm */
+.mob .am-list { width: 100%; }
