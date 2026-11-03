@@ -49,10 +49,10 @@
   const amCard = (icon, title, sub, act, k, v) => `<button class="am-card ${v || 'wh'}" data-act="${act}" data-k="${esc(k)}"><span class="am-art">${ic(icon)}</span><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span></button>`;
   const amBig = (i, n, l, tab, v) => `<button class="am-card am-big ${v}" data-act="${tab.endsWith('-sub') ? 'quick' : 'tab'}" data-tab="${tab}" data-k="${tab}"><span class="am-art">${ic(i)}</span><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></button>`;
   // photo card: /img/categories/<key>.svg (or the request's own photo) with a dark label bar; solid dark-teal + icon when the image fails
-  const catPhoto = k => '/img/categories/' + encodeURIComponent(k) + '.svg';
-  const photoCard = (src, icon, title, sub, attrs, extra) => `<button class="am-card am-photo" ${attrs}><img class="am-pimg" data-fb="1" src="${esc(src)}" alt="" loading="lazy"><span class="am-pic">${ic(icon)}</span><span class="am-over"><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span>${extra || ''}</span></button>`;
+  const catPhoto = () => ''; // category cards are icon cards now (no images)
+  const photoCard = (src, icon, title, sub, attrs, extra) => `<button class="am-card am-photo" ${attrs}>${src ? `<img class="am-pimg" data-fb="1" src="${esc(src)}" alt="" loading="lazy">` : ''}<span class="am-pic">${ic(icon)}</span><span class="am-over"><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span>${extra || ''}</span></button>`;
   const amReq = r => photoCard(r.has_photo ? API.requests.photoUrl(r.id) : catPhoto(r.category), catIcon(r.category), r.title, `${rid(r)} · ${day(r.created_at)}`, `data-act="open" data-id="${r.id}"`, `<span class="am-tag">${statusTag(r)}</span>`);
-  const catCard = (k, l, i) => photoCard(catPhoto(k), i, l, 'Category', `data-act="catgo" data-c="${esc(k)}"`);
+  const catCard = (k, l, i) => `<button class="am-card am-cat wh" data-act="catgo" data-c="${esc(k)}"><span class="am-art">${ic(i)}</span><span class="am-t">${esc(l)}</span><span class="am-s">See requests</span></button>`;
   const catSection = () => amSection('By category', CATS.map(([k, l, i]) => catCard(k, l, i)).join(''));
   function wirePhotos() {
     document.querySelectorAll('img[data-fb]').forEach(img => {
@@ -254,7 +254,7 @@
       const a = adminSummary(reqs, s), unList = a.open.filter(r => !r.vendor_id), un = unList.length;
       const chips = [['user-check', 'Approvals', 'approvals', true, pend.length], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['shield-check', 'Gate', 'gate', feat('gate')],
         ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'More', 'menu', true]];
-      const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'em' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
+      const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'dk has-alert' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
       const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'sf') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'sf');
       const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map(amReq).join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}

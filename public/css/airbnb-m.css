@@ -117,3 +117,9 @@
 .chip-ok { background: #e9f8ff; color: #006786; }
 .chip-no { background: #0a303e; color: #fff; }
 @media (max-width: 360px) { .pk-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* needs-attention cards share one colour; a red dot marks live emergencies */
+.am-card.has-alert .am-art { position: relative; }
+.am-card.has-alert .am-art::after { content: ""; position: absolute; top: 10px; right: 10px; width: 14px; height: 14px; border-radius: 50%; background: #c4142c; border: 2px solid #0a303e; }
+.am-card.am-cat { width: 168px; padding: 14px; }
+.am-card.am-cat .am-art { height: 84px; }

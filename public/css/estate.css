@@ -124,3 +124,20 @@
   .top-shell .side-meta { display: none; }
   .top-shell .side-link[data-page="alerts"] .side-t { display: none; }
 }
+
+/* ===== Needs your attention: one colour for every card; a red dot marks live emergencies ===== */
+.ds-attn .ds-stat, .ds-attn .ds-stat.s-tint, .ds-attn .ds-stat.s-white, .ds-attn .ds-stat.s-red, .ds-attn .s-ring { background: #0a303e; color: #fff; }
+.ds-attn .ds-stat .ds-stat-i { background: rgba(255, 255, 255, .14); color: #99e0ff; position: relative; }
+.ds-attn .ds-stat.s-red .ds-stat-i::after { content: ""; position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 50%; background: #c4142c; border: 2px solid #0a303e; }
+.ds-attn .s-ring .ds-ringbox > span { background: #0a303e; color: #fff; }
+
+/* ===== Category tiles: clean white icon cards (no illustrations) ===== */
+.cat-photo { aspect-ratio: auto; min-height: 176px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 20px; background: #fff; color: #0a303e; }
+.cat-photo .cat-ic { position: static; inset: auto; padding: 0; width: 68px; height: 68px; border-radius: 50%; background: #e9f8ff; color: #0088b0; display: grid; place-items: center; }
+.cat-photo .cat-ic i { font-size: 34px; }
+.cat-strip { position: static; padding: 0; background: transparent; color: #0a303e; }
+.cat-strip b { font-size: 20px; }
+.cat-strip span { opacity: .65; font-size: 14px; }
+.cat-photo.on { background: #0a303e; color: #fff; box-shadow: 0 0 0 3px #0088b0; }
+.cat-photo.on .cat-ic { background: rgba(255, 255, 255, .14); color: #99e0ff; }
+.cat-photo.on .cat-strip { color: #fff; }
