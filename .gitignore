@@ -7,3 +7,6 @@ uploads
 .DS_Store
 Untitled
 .admin-password.local
+
+# agent worktrees (local only)
+.claude/worktrees/
