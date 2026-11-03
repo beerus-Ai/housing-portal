@@ -50,7 +50,7 @@
       ${login ? '' : `<label class="consent sm"><input type="checkbox" name="consent" required>I consent to these details being stored to manage society services (DPDP Act, 2023).</label>`}
       <p class="err" id="autherr" role="alert"></p><button class="btn btn-primary btn-lg">${login ? 'Sign in' : 'Send for approval'}</button>
       <button type="button" class="link-btn" style="text-align:center;min-height:44px" data-act="mode">${login ? 'New resident? Join your society' : 'Already registered? Sign in'}</button>
-      <p class="install muted">Add this page to your home screen to use it like an app. <a href="/?web">Open the website</a></p></form></div>`;
+      ${(window.Capacitor || matchMedia('(display-mode: standalone)').matches) ? '' : `<p class="install muted">Add this page to your home screen to use it like an app. <a href="/?web">Open the website</a></p>`}</form></div>`;
   }
 
   // ---------- resident + committee screens

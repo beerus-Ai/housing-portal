@@ -1,0 +1,14 @@
+{
+  "appId": "com.sahyadri.heights",
+  "appName": "Sahyadri Heights",
+  "webDir": "www",
+  "backgroundColor": "#0a303e",
+  "server": {
+    "url": "http://localhost:3000/m/",
+    "cleartext": true,
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

@@ -1,5 +1,5 @@
 ﻿// Offline shell for the mobile app. API calls are never cached: data always comes live from the server.
-const CACHE = 'sh-shell-v5';
+const CACHE = 'sh-shell-v6';
 const SHELL = ['/m/', '/m/m.js', '/common.js', '/api.js', '/css/ds.css', '/css/tokens.css', '/css/fonts.css', '/css/app.css', '/css/ui.css', '/css/mobile.css', '/ui.js', '/vendor/lottie/lottie_light.min.js', '/anim/loader.json', '/anim/check.json', '/anim/empty.json', '/anim/building.json', '/vendor/phosphor/style.css',
   '/vendor/phosphor/Phosphor-Duotone.woff2', '/vendor/fonts/outfit-latin-wght-normal.woff2', '/vendor/fonts/plus-jakarta-sans-latin-wght-normal.woff2', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
