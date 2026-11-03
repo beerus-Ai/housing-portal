@@ -1,0 +1,12 @@
+{
+  "name": "Sahyadri Heights",
+  "short_name": "Sahyadri",
+  "description": "Raise and track work requests, read notices and manage the society.",
+  "start_url": "/m/",
+  "scope": "/m/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f2f2",
+  "theme_color": "#0a303e",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
