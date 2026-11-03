@@ -1,0 +1,64 @@
+/* Airbnb-style phone UI: airy cards, pill search, chips, carousels, settings. Loaded after mobile.css. */
+.mob .am-h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+.mob .am-h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.am-head { display: flex; align-items: center; gap: 12px; }
+.am-logo { border-radius: 12px; flex: none; }
+.am-soc { font-weight: 800; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.am-sum { margin: 0; font-size: 16px; }
+.mob .am-search .input { min-height: 60px; border-radius: 999px; padding-left: 54px; font-size: 17px; border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); box-shadow: 0 6px 20px color-mix(in srgb, var(--color-text) 10%, transparent); background: var(--color-surface); }
+.am-search .m-search-ic { left: 20px; font-size: 24px; opacity: .8; }
+.am-chips { display: flex; gap: 14px; overflow-x: auto; padding: 4px 20px 10px; margin: 0 -20px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.am-chips::-webkit-scrollbar, .am-row::-webkit-scrollbar { display: none; }
+.am-chip { all: unset; box-sizing: border-box; cursor: pointer; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 72px; min-height: 52px; font-size: 13px; font-weight: 600; text-align: center; scroll-snap-align: start; touch-action: manipulation; }
+.am-chip:focus-visible { outline: var(--focus-ring); border-radius: 16px; }
+.am-chip-ic { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--color-surface); box-shadow: 0 4px 14px color-mix(in srgb, var(--color-text) 14%, transparent); color: var(--color-accent-700); }
+.am-sec { display: flex; flex-direction: column; gap: 12px; }
+.am-row { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 20px 16px; margin: 0 -20px; scrollbar-width: none; scroll-padding-left: 20px; }
+.am-card { all: unset; box-sizing: border-box; cursor: pointer; flex: none; width: 240px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 16px; border-radius: 24px; background: var(--color-surface); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-text) 12%, transparent); touch-action: manipulation; }
+.am-card:focus-visible { outline: var(--focus-ring); }
+.am-card:active { transform: scale(.98); }
+.am-art { height: 150px; border-radius: 18px; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 56px; color: #fff; margin-bottom: 6px; }
+.am-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.am-t { font-weight: 800; font-size: 17px; padding: 0 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.am-s { font-size: 14px; padding: 0 6px; opacity: .7; }
+.am-tag { padding: 0 6px; align-self: flex-start; }
+.g1 .am-art { background: #ff7a59; } .g2 .am-art { background: #2ec4b6; } .g3 .am-art { background: #7b5cff; }
+.g4 .am-art { background: #ff5a5f; } .g5 .am-art { background: #f9a826; } .g6 .am-art { background: #3d8bfd; }
+.am-card .am-art:has(img) { background: #ddd; }
+.am-big { width: 190px; }
+.am-big .am-art { height: 110px; }
+.am-num { font-size: 40px; font-weight: 800; line-height: 1; padding: 0 6px; font-variant-numeric: tabular-nums; }
+.am-list { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 16px; min-height: 80px; padding: 14px 18px; border-radius: 24px; background: var(--color-surface); box-shadow: 0 6px 20px color-mix(in srgb, var(--color-text) 10%, transparent); }
+.am-list:focus-visible, .am-urow:focus-visible { outline: var(--focus-ring); }
+.am-list b { font-size: 18px; }
+.am-li { width: 48px; height: 48px; border-radius: 16px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 26px; background: color-mix(in srgb, var(--color-accent-700) 12%, transparent); color: var(--color-accent-700); }
+.am-form { gap: 16px; padding: 18px; border-radius: 24px; box-shadow: 0 6px 20px color-mix(in srgb, var(--color-text) 8%, transparent); }
+.am-perm { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+.am-frow { flex-direction: row; align-items: center; gap: 14px; }
+.am-frow .grow { flex: 1; }
+.am-sws { display: flex; gap: 8px; justify-content: space-between; }
+.am-sw { all: unset; box-sizing: border-box; cursor: pointer; position: relative; min-width: 84px; min-height: 52px; height: 52px; border-radius: 26px; background: color-mix(in srgb, var(--color-text) 18%, transparent); display: flex; align-items: center; padding: 0 12px 0 54px; font-weight: 800; font-size: 14px; transition: background .2s; touch-action: manipulation; }
+.am-sw:focus-visible { outline: var(--focus-ring); }
+.am-knob { position: absolute; left: 6px; top: 6px; width: 40px; height: 40px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: transform .2s; }
+.am-sw.on { background: #1b7f3b; color: #fff; padding: 0 54px 0 14px; }
+.am-sw.on .am-knob { transform: translateX(32px); }
+.am-user { gap: 12px; }
+.am-urow { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; min-height: 56px; width: 100%; }
+.am-more { display: flex; flex-direction: column; gap: 12px; }
+.am-segs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.am-seg { min-height: 52px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--color-text) 15%, transparent); background: var(--color-surface); font-weight: 700; font-size: 15px; color: inherit; }
+.am-seg.on { background: var(--color-accent-700); color: #fff; border-color: transparent; }
+.am-inline { display: flex; gap: 8px; } .am-inline .input { flex: 1; }
+/* login */
+.mob .am-auth { background: var(--color-bg); }
+.am-auth .auth-top { color: inherit; padding: max(32px, env(safe-area-inset-top)) 20px 8px; gap: 10px; }
+.am-auth .auth-top h1 { color: inherit; font-size: 26px; }
+.am-auth-logo { border-radius: 20px; box-shadow: 0 8px 24px color-mix(in srgb, var(--color-text) 16%, transparent); }
+.am-auth .auth-sheet { box-shadow: none; margin-top: 0; border-radius: 0; }
+.am-auth .auth-go { min-height: 60px; border-radius: 999px; font-size: 19px; }
+.am-switch { text-align: center; margin: 0; font-size: 15px; }
+.am-switch .link-btn { display: inline; min-height: 44px; font-weight: 800; }
+
+/* Fix: children of the screen must never shrink (the scrolling chip row collapsed to a sliver in the flex column) */
+.phone > .screen > *, .phone > form.screen > * { flex-shrink: 0; }
+.am-chips { min-height: 104px; }
