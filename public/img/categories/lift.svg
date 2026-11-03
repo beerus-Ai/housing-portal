@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Lift">
+  <rect width="800" height="600" fill="#0a303e"/>
+  <circle cx="650" cy="120" r="190" fill="#0e4156"/>
+  <circle cx="90" cy="540" r="150" fill="#0e4156"/>
+  <!-- door frame -->
+  <rect x="220" y="90" width="360" height="460" rx="20" fill="#e9f8ff"/>
+  <rect x="250" y="150" width="140" height="370" rx="8" fill="#99e0ff"/>
+  <rect x="410" y="150" width="140" height="370" rx="8" fill="#99e0ff"/>
+  <rect x="390" y="150" width="20" height="370" fill="#0a303e"/>
+  <rect x="270" y="170" width="100" height="330" rx="6" fill="#e9f8ff" opacity=".55"/>
+  <rect x="430" y="170" width="100" height="330" rx="6" fill="#e9f8ff" opacity=".55"/>
+  <!-- floor display -->
+  <rect x="330" y="100" width="140" height="38" rx="10" fill="#0a303e"/>
+  <path d="M390 126l10-14 10 14z" fill="#0088b0"/>
+  <text x="430" y="127" font-family="Outfit, Arial, sans-serif" font-size="22" font-weight="700" fill="#99e0ff">4</text>
+  <!-- call buttons -->
+  <rect x="612" y="270" width="64" height="130" rx="20" fill="#e9f8ff"/>
+  <circle cx="644" cy="308" r="18" fill="#0088b0"/>
+  <path d="M644 297l9 14h-18z" fill="#e9f8ff"/>
+  <circle cx="644" cy="362" r="18" fill="#0a303e"/>
+  <path d="M644 373l9-14h-18z" fill="#e9f8ff"/>
+  <!-- little person -->
+  <circle cx="118" cy="380" r="26" fill="#e9f8ff"/>
+  <rect x="88" y="414" width="60" height="110" rx="26" fill="#0088b0"/>
+</svg>

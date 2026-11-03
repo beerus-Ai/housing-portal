@@ -6,8 +6,8 @@
   const { S, PAGES, ACT, page, render } = W;
   const $ = (s, r = document) => r.querySelector(s);
 
-  const SECS = [['general', 'General', 'buildings'], ['access', 'Access control', 'lock-key'], ['users', 'Users', 'users-three'], ['guards', 'Guards', 'identification-card'], ['features', 'Features', 'toggle-right'], ['signin', 'Sign-in', 'sign-in']];
-  const FEATS = [['emergency', 'Emergency alerts', 'Residents can raise alerts that reach the committee.'], ['gate', 'Gate and visitor passes', 'Gate passes, QR codes and the guard screen.'], ['contacts', 'Contacts', 'The "Who to call" directory.'], ['notices', 'Notices', 'The notice board.']];
+  const SECS = [['general', 'General', 'buildings'], ['access', 'Access control', 'lock-key'], ['users', 'Users', 'users-three'], ['guards', 'Guards', 'identification-card'], ['estate', 'Estate', 'garage'], ['features', 'Features', 'toggle-right'], ['signin', 'Sign-in', 'sign-in']];
+  const FEATS = [['emergency', 'Emergency alerts', 'Residents can raise alerts that reach the committee.'], ['gate', 'Gate and visitor passes', 'Gate passes, QR codes and the guard screen.'], ['contacts', 'Contacts', 'The "Who to call" directory.'], ['notices', 'Notices', 'The notice board.'], ['parking', 'Vehicles and parking', 'The vehicle register and parking slots.']];
   const KINDS = ['Co-operative Housing Society', 'Apartment Owners Association', 'Residential Complex', 'Gated Community'];
   const ST = { settings: null, access: null, draft: null, orig: null, users: [], guards: [], pw: null, del: null, gdel: null, q: '', stf: '' };
   const clone = o => JSON.parse(JSON.stringify(o || {}));
@@ -42,6 +42,11 @@
 
   const features = () => `<h2>Features</h2><p class="muted">Switch off what your society does not use. It disappears for residents straight away.</p>
     <form id="stfeatures" class="col st-form"><div class="st-list">${FEATS.map(([k, l, d]) => `<div class="st-item"><span class="col" style="gap:0"><b>${l}</b><span class="muted sm">${d}</span></span>${sw(`name="${k}"`, l, ST.settings.features && ST.settings.features[k] !== false)}</div>`).join('')}</div>${saveRow('Save')}</form>`;
+
+  const estate = () => `<h2>Estate</h2><p class="muted">Vehicles, parking and staff for the whole society.</p>
+    <div class="st-estate">${[['vehicles', 'Vehicles', 'car', 'Every registered vehicle, searchable by plate, flat or owner.'], ['parking', 'Parking', 'garage', 'Slots by level, assign them to flats and vehicles.'], ['workers', 'Workers', 'hard-hat', 'Security, housekeeping, maintenance and gardeners.']]
+      .map(([k, l, i, d]) => `<button type="button" class="st-link" data-act="nav" data-page="${k}"><span class="st-link-i">${ic(i)}</span><span class="col" style="gap:2px"><b>${l}</b><span class="muted sm">${d}</span></span>${ic('caret-right')}</button>`).join('')}</div>
+    <p class="callout st-note">${ic('info')} Switch Vehicles and Parking off under Features if your society does not use them.</p>`;
 
   const signin = () => `<h2>Sign-in</h2><p class="muted">Let residents sign in with their Google account.</p>
     <form id="stsignin" class="col st-form">${field('stg', 'Google client ID', `<input class="input" id="stg" name="google_client_id" maxlength="200" autocomplete="off" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com" value="${esc(ST.settings.google_client_id || '')}">`, 'Leave empty to turn Google sign-in off.')}
@@ -86,13 +91,14 @@
       else if (s === 'guards') ST.guards = await API.gate.guards();
       else ST.settings = await API.admin.settings();
     } catch (x) { loadErr = x.message; }
-    const body = loadErr ? '' : { general, access, users, guards, features, signin }[s]();
+    const body = loadErr ? '' : { general, access, users, guards, estate, features, signin }[s]();
     page(`<div class="st"><header class="st-head"><h1>Settings</h1></header><div class="st-grid">
       <nav class="st-nav" aria-label="Settings sections">${SECS.map(([k, l, i]) => `<button type="button" class="st-tab ${k === s ? 'on' : ''}" data-act="stsec" data-s="${k}" ${k === s ? 'aria-current="page"' : ''}>${ic(i)}<span>${l}</span></button>`).join('')}</nav>
       <section class="st-panel" aria-live="polite"><p class="err" id="sterr" role="alert">${esc(loadErr)}</p>${body}</section></div></div>`);
     if (!loadErr && s === 'access') paintDirty();
     if (!loadErr && s === 'users') drawUsers();
   };
+  PAGES.users = () => { S.setSec = 'users'; return PAGES.settings(); };
   PAGES.guards = () => { S.setSec = 'guards'; return PAGES.settings(); };
 
   // ---------- events

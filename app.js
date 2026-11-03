@@ -10,7 +10,7 @@ const { openDb, PERMISSIONS, ACCESS_ROLES } = require('./db');
 const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping', 'other'];
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 const RESIDENT_TYPES = ['owner', 'tenant', 'family'];
-const FEATURES = ['emergency', 'gate', 'contacts', 'notices'];
+const FEATURES = ['emergency', 'gate', 'contacts', 'notices', 'parking'];
 const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '' };
 const CSP_BASE = {
   'default-src': ["'self'"], 'img-src': ["'self'", 'data:'], 'style-src': ["'self'", "'unsafe-inline'"], 'script-src': ["'self'"],
@@ -88,7 +88,7 @@ function createApp(opts = {}) {
     if (u.role === 'guard') {
       const p = req.path, m = req.method;
       const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
-        (m === 'GET' && (p === '/api/gate/log' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
+        (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
       if (!okGuard) return res.status(403).json({ error: 'Not allowed for guard accounts' });
     }
     req.user = u; next();
@@ -800,6 +800,181 @@ function createApp(opts = {}) {
   });
   app.get('/api/gate/log', auth, gate, (req, res) => res.json(q(`SELECT l.id,l.kind,l.subject,l.flat,l.result,l.reason,u.name AS guard_name,l.created_at
     FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 100`)));
+
+  // ---- gate overview (guard or committee). "today" is the UTC calendar day (SQLite 'now'), same clock gate_log uses.
+  app.get('/api/gate/overview', auth, gate, (req, res) => {
+    const t = one(`SELECT COALESCE(SUM(result='allowed'),0) AS allowed, COALESCE(SUM(result='denied'),0) AS denied,
+      COALESCE(SUM(result='allowed' AND kind='visitor'),0) AS visitors, COALESCE(SUM(result='allowed' AND kind='resident'),0) AS residents
+      FROM gate_log WHERE date(created_at)=date('now')`);
+    const hours = Object.fromEntries(q("SELECT CAST(strftime('%H',created_at) AS INTEGER) AS h, COUNT(*) AS n FROM gate_log WHERE date(created_at)=date('now') GROUP BY h").map(r => [r.h, r.n]));
+    res.json({
+      today: { allowed: t.allowed, denied: t.denied, visitors: t.visitors, residents: t.residents },
+      active_passes: one("SELECT COUNT(*) AS n FROM gate_passes WHERE status='active' AND valid_until>=?", ts(new Date())).n,
+      inside: t.visitors, // no exit tracking: this is "visitors admitted today"
+      recent: q(`SELECT l.kind,l.subject,l.flat,l.result,l.reason,u.name AS guard_name,l.created_at
+        FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 20`),
+      by_hour: Array.from({ length: 24 }, (_, hour) => ({ hour, n: hours[hour] || 0 })),
+    });
+  });
+
+  // ---- vehicles
+  const VEHICLE_TYPES = ['car', 'bike', 'scooter', 'other'];
+  const MAX_VEHICLES_PER_FLAT = 6;
+  const plateKey = p => p.replace(/[\s-]/g, '');
+  const residentFlat = f => !!one("SELECT 1 AS x FROM users WHERE flat=? AND role='resident' AND status='approved' LIMIT 1", f);
+  const flatResidents = f => q("SELECT id FROM users WHERE flat=? AND role='resident' AND status='approved'", f);
+  const VEHICLE_SELECT = `SELECT v.id, v.flat, u.name AS owner_name, v.plate, v.type, v.make, v.color, v.sticker, v.created_at
+    FROM vehicles v LEFT JOIN users u ON u.id=v.user_id`;
+  app.get('/api/vehicles', auth, feat('parking'), (req, res) => {
+    if (req.user.role === 'admin') {
+      const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+      if (!term) return res.json(q(`${VEHICLE_SELECT} ORDER BY v.id DESC`));
+      const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
+      return res.json(q(`${VEHICLE_SELECT} WHERE v.plate LIKE ? ESCAPE '\\' OR v.flat LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' ORDER BY v.id DESC`, like, like, like));
+    }
+    if (req.user.role !== 'resident' || !req.user.flat) return res.status(403).json({ error: 'Only residents with a flat can use this' });
+    res.json(q(`${VEHICLE_SELECT} WHERE v.flat=? ORDER BY v.id DESC`, req.user.flat));
+  });
+  app.post('/api/vehicles', auth, feat('parking'), can('vehicle.manage'), (req, res) => {
+    const b = req.body || {}, isAdmin = req.user.role === 'admin';
+    if (!isAdmin && (req.user.role !== 'resident' || !req.user.flat)) return res.status(403).json({ error: 'Only residents with a flat can use this' });
+    let flat = req.user.flat;
+    if (isAdmin) {
+      flat = str(b.flat, 20);
+      if (!flat || !residentFlat(flat)) return res.status(400).json({ error: 'Choose an existing resident flat' });
+    }
+    const plate = typeof b.plate === 'string' ? b.plate.trim().toUpperCase() : '';
+    if (!/^[A-Z0-9 -]{4,15}$/.test(plate) || plateKey(plate).length < 3) return res.status(400).json({ error: 'Plate must be 4 to 15 characters: letters, digits, spaces or dashes' });
+    const type = b.type == null || b.type === '' ? 'car' : b.type;
+    if (!VEHICLE_TYPES.includes(type)) return res.status(400).json({ error: 'Choose car, bike, scooter or other' });
+    const lim = (k, max) => (b[k] == null ? '' : typeof b[k] === 'string' && b[k].trim().length <= max ? b[k].trim() : null);
+    const make = lim('make', 40), color = lim('color', 40), sticker = lim('sticker', 20);
+    if (make === null || color === null) return res.status(400).json({ error: 'Make and color must be 40 characters or fewer' });
+    if (sticker === null) return res.status(400).json({ error: 'Sticker must be 20 characters or fewer' });
+    if (!isAdmin && one('SELECT COUNT(*) AS n FROM vehicles WHERE flat=?', flat).n >= MAX_VEHICLES_PER_FLAT)
+      return res.status(409).json({ error: `A flat can register at most ${MAX_VEHICLES_PER_FLAT} vehicles` });
+    if (one('SELECT id FROM vehicles WHERE plate_key=?', plateKey(plate))) return res.status(409).json({ error: 'This plate is already registered' });
+    const r = run('INSERT INTO vehicles(flat,user_id,plate,plate_key,type,make,color,sticker) VALUES(?,?,?,?,?,?,?,?)',
+      flat, isAdmin ? null : req.user.id, plate, plateKey(plate), type, make || null, color || null, sticker || null);
+    const id = Number(r.lastInsertRowid);
+    log(req.user.id, 'vehicle', id, 'created', `${plate} flat ${flat}`);
+    res.status(201).json({ id });
+  });
+  app.delete('/api/vehicles/:id', auth, feat('parking'), can('vehicle.manage'), (req, res) => {
+    const v = one('SELECT * FROM vehicles WHERE id=?', req.params.id);
+    if (!v || (req.user.role !== 'admin' && v.flat !== req.user.flat)) return res.status(404).json({ error: 'Vehicle not found' });
+    const freed = run('UPDATE parking_slots SET flat=NULL, vehicle_id=NULL WHERE vehicle_id=?', v.id).changes;
+    run('DELETE FROM vehicles WHERE id=?', v.id);
+    log(req.user.id, 'vehicle', v.id, 'deleted', `${v.plate} flat ${v.flat}${freed ? `; freed ${freed} slot(s)` : ''}`);
+    res.json({ ok: true });
+  });
+
+  // ---- parking
+  const SLOT_KINDS = ['car', 'bike', 'visitor'];
+  const SLOT_SELECT = 'SELECT s.id, s.code, s.level, s.kind, s.flat, s.vehicle_id, v.plate FROM parking_slots s LEFT JOIN vehicles v ON v.id=s.vehicle_id';
+  app.get('/api/parking', auth, feat('parking'), can('parking.view'), (req, res) => {
+    const c = one('SELECT COUNT(*) AS total, COALESCE(SUM(flat IS NOT NULL),0) AS assigned FROM parking_slots');
+    const summary = { total: c.total, assigned: c.assigned, free: c.total - c.assigned };
+    if (req.user.role === 'admin') return res.json({ summary, slots: q(`${SLOT_SELECT} ORDER BY s.code`) });
+    if (req.user.role !== 'resident' || !req.user.flat) return res.status(403).json({ error: 'Only residents with a flat can use this' });
+    res.json({ summary, slots: q(`${SLOT_SELECT} WHERE s.flat=? ORDER BY s.code`, req.user.flat) });
+  });
+  app.post('/api/parking', auth, admin, (req, res) => {
+    const b = req.body || {};
+    const prefix = b.prefix == null ? '' : b.prefix;
+    if (typeof prefix !== 'string' || !/^[A-Za-z0-9-]{0,10}$/.test(prefix.trim())) return res.status(400).json({ error: 'Prefix can have up to 10 letters, digits or dashes' });
+    const from = b.from == null ? 1 : Number(b.from), count = Number(b.count);
+    if (!Number.isInteger(from) || from < 0 || from > 99999) return res.status(400).json({ error: 'Start number must be a whole number from 0 to 99999' });
+    if (!Number.isInteger(count) || count < 1 || count > 200) return res.status(400).json({ error: 'Count must be from 1 to 200' });
+    const kind = b.kind == null || b.kind === '' ? 'car' : b.kind;
+    if (!SLOT_KINDS.includes(kind)) return res.status(400).json({ error: 'Kind must be car, bike or visitor' });
+    if (b.level != null && (typeof b.level !== 'string' || b.level.trim().length > 20)) return res.status(400).json({ error: 'Level must be 20 characters or fewer' });
+    const level = (b.level || '').trim() || null, pre = prefix.trim();
+    const width = Math.max(2, String(from + count - 1).length);
+    let created = 0;
+    const ins = db.prepare('INSERT OR IGNORE INTO parking_slots(code,level,kind) VALUES(?,?,?)');
+    db.exec('BEGIN');
+    try {
+      for (let i = 0; i < count; i++) created += Number(ins.run(pre + String(from + i).padStart(width, '0'), level, kind).changes);
+      log(req.user.id, 'parking', null, 'slots_created', `${pre}${String(from).padStart(width, '0')} x${count}, ${kind}: ${created} created, ${count - created} skipped`);
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+    res.status(201).json({ created, skipped: count - created });
+  });
+  app.post('/api/parking/:id/assign', auth, admin, (req, res) => {
+    const s = one('SELECT * FROM parking_slots WHERE id=?', req.params.id);
+    if (!s) return res.status(404).json({ error: 'Slot not found' });
+    const flat = str(req.body && req.body.flat, 20);
+    if (!flat || !residentFlat(flat)) return res.status(400).json({ error: 'Choose an existing resident flat' });
+    let vid = null;
+    const rv = req.body.vehicle_id;
+    if (rv != null && rv !== '') {
+      const v = one('SELECT * FROM vehicles WHERE id=?', rv);
+      if (!v || v.flat !== flat) return res.status(400).json({ error: 'That vehicle does not belong to this flat' });
+      vid = v.id;
+    }
+    if (s.flat) return res.status(409).json({ error: 'Slot is already assigned. Free it first.' });
+    run('UPDATE parking_slots SET flat=?, vehicle_id=? WHERE id=?', flat, vid, s.id);
+    log(req.user.id, 'parking', s.id, 'assigned', `${s.code} -> flat ${flat}${vid ? ` vehicle ${vid}` : ''}`);
+    for (const u of flatResidents(flat)) notify(u.id, `Parking slot ${s.code} was assigned to your flat`);
+    res.json({ ok: true });
+  });
+  app.post('/api/parking/:id/free', auth, admin, (req, res) => {
+    const s = one('SELECT * FROM parking_slots WHERE id=?', req.params.id);
+    if (!s) return res.status(404).json({ error: 'Slot not found' });
+    if (!s.flat) return res.status(409).json({ error: 'Slot is already free' });
+    run('UPDATE parking_slots SET flat=NULL, vehicle_id=NULL WHERE id=?', s.id);
+    log(req.user.id, 'parking', s.id, 'freed', `${s.code} from flat ${s.flat}`);
+    for (const u of flatResidents(s.flat)) notify(u.id, `Parking slot ${s.code} was released from your flat`);
+    res.json({ ok: true });
+  });
+  app.delete('/api/parking/:id', auth, admin, (req, res) => {
+    const s = one('SELECT * FROM parking_slots WHERE id=?', req.params.id);
+    if (!s) return res.status(404).json({ error: 'Slot not found' });
+    if (s.flat) return res.status(409).json({ error: 'Free the slot before removing it' });
+    run('DELETE FROM parking_slots WHERE id=?', s.id);
+    log(req.user.id, 'parking', s.id, 'slot_deleted', s.code);
+    res.json({ ok: true });
+  });
+
+  // ---- workers (committee only)
+  const WORKER_ROLES = ['security', 'housekeeping', 'maintenance', 'gardener', 'other'];
+  const workerFields = (b, cur) => {
+    const o = cur ? { ...cur } : { name: '', role: 'other', phone: '', shift: '', status: 'active', notes: '' };
+    const txt = (k, max) => { if (!(k in b)) return true; if (typeof b[k] !== 'string' || b[k].trim().length > max) return false; o[k] = b[k].trim(); return true; };
+    if (!txt('name', 100) || !o.name) return { error: 'Name is required (up to 100 characters)' };
+    if ('role' in b) { if (!WORKER_ROLES.includes(b.role)) return { error: 'Unknown role' }; o.role = b.role; }
+    if ('status' in b) { if (!['active', 'inactive'].includes(b.status)) return { error: "Status must be 'active' or 'inactive'" }; o.status = b.status; }
+    if (!txt('phone', 20) || (o.phone && !/^[+\d][\d\s()+-]{3,19}$/.test(o.phone))) return { error: 'Enter a valid phone number' };
+    if (!txt('shift', 40)) return { error: 'Shift must be 40 characters or fewer' };
+    if (!txt('notes', 300)) return { error: 'Notes must be 300 characters or fewer' };
+    return { o };
+  };
+  app.get('/api/admin/workers', auth, admin, (req, res) => res.json(q('SELECT id,name,role,phone,shift,status,notes FROM workers ORDER BY status, name')));
+  app.post('/api/admin/workers', auth, admin, (req, res) => {
+    const r = workerFields(req.body || {});
+    if (r.error) return res.status(400).json({ error: r.error });
+    const w = r.o, ins = run('INSERT INTO workers(name,role,phone,shift,status,notes) VALUES(?,?,?,?,?,?)', w.name, w.role, w.phone || null, w.shift || null, w.status, w.notes || null);
+    log(req.user.id, 'worker', ins.lastInsertRowid, 'created', `${w.name} (${w.role})`);
+    res.status(201).json({ id: Number(ins.lastInsertRowid) });
+  });
+  app.put('/api/admin/workers/:id', auth, admin, (req, res) => {
+    const cur = one('SELECT * FROM workers WHERE id=?', req.params.id);
+    if (!cur) return res.status(404).json({ error: 'Worker not found' });
+    const r = workerFields(req.body || {}, { ...cur, phone: cur.phone || '', shift: cur.shift || '', notes: cur.notes || '' });
+    if (r.error) return res.status(400).json({ error: r.error });
+    const w = r.o;
+    run('UPDATE workers SET name=?, role=?, phone=?, shift=?, status=?, notes=? WHERE id=?', w.name, w.role, w.phone || null, w.shift || null, w.status, w.notes || null, cur.id);
+    log(req.user.id, 'worker', cur.id, 'updated', w.name);
+    res.json({ ok: true });
+  });
+  app.delete('/api/admin/workers/:id', auth, admin, (req, res) => {
+    const w = one('SELECT * FROM workers WHERE id=?', req.params.id);
+    if (!w) return res.status(404).json({ error: 'Worker not found' });
+    run('DELETE FROM workers WHERE id=?', w.id);
+    log(req.user.id, 'worker', w.id, 'deleted', w.name);
+    res.json({ ok: true });
+  });
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   app.use(express.static(path.join(__dirname, 'public')));

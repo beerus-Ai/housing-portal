@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Security">
+  <rect width="800" height="600" fill="#0a303e"/>
+  <circle cx="610" cy="140" r="200" fill="#0e4156"/>
+  <circle cx="110" cy="530" r="150" fill="#0e4156"/>
+  <!-- shield -->
+  <path d="M400 70l190 70v150c0 130-80 220-190 262C290 510 210 420 210 290V140z" fill="#e9f8ff"/>
+  <path d="M400 118l146 54v118c0 100-60 170-146 204-86-34-146-104-146-204V172z" fill="#0088b0"/>
+  <path d="M330 300l52 52 98-110" fill="none" stroke="#e9f8ff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- camera -->
+  <g transform="translate(640 330)">
+    <rect x="-10" y="-70" width="20" height="60" fill="#99e0ff"/>
+    <rect x="-70" y="-24" width="140" height="68" rx="18" fill="#e9f8ff"/>
+    <circle cx="36" cy="10" r="20" fill="#0a303e"/>
+    <circle cx="36" cy="10" r="8" fill="#0088b0"/>
+  </g>
+  <!-- gate barrier -->
+  <rect x="60" y="440" width="200" height="22" rx="11" fill="#e9f8ff"/>
+  <rect x="60" y="440" width="50" height="22" rx="11" fill="#0088b0"/>
+  <rect x="140" y="440" width="50" height="22" rx="0" fill="#0088b0"/>
+  <rect x="236" y="400" width="48" height="140" rx="12" fill="#99e0ff"/>
+</svg>

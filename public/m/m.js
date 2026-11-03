@@ -14,12 +14,14 @@
   const feat = k => !S.me.features || S.me.features[k] !== false;
   S.set = { access: null, matrix: null, features: null, users: [], q: '', open: null, confirm: null, reset: false, guards: [], gconfirm: null };
   S.gp = { view: null, confirm: null, list: [] }; S.gRes = null;
+  S.veh = { type: 'car', q: '', list: [], confirm: null }; S.pk = { data: null, vehicles: [], sel: null, confirm: null }; S.wk = { list: [], edit: null, confirm: null };
+  const TABBY = ['approvals', 'requests', 'emergency', 'notices'];
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['profile', 'Profile', 'user-circle']],
     guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['profile', 'Profile', 'user-circle']],
     admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone']],
   };
-  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
+  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
   const dateShort = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const back = (label, to) => `<button class="back" data-act="tab" data-tab="${to}">${ic('caret-left')}${esc(label)}</button>`;
@@ -41,11 +43,25 @@
   // ---------- airbnb-style building blocks
   const amHead = (title, sub, adm) => `<div class="am-head">${HP.logo(44, 'am-logo')}<div class="col grow" style="gap:0;min-width:0"><span class="am-soc">${esc(SOCIETY.name)}</span><span class="muted xs">${esc(sub)}</span></div>
     ${adm ? `<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="profile" aria-label="Profile" style="font-size:24px">${ic('user-circle')}</button>` : ''}<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div><h1 class="am-h1">${esc(title)}</h1>`;
-  const amChips = list => `<div class="am-chips" role="list">${list.filter(c => c[3]).map(([i, l, k]) => `<button class="am-chip" role="listitem" data-act="${['approvals', 'requests', 'emergency', 'notices'].includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${k}" data-k="${k}"><span class="am-chip-ic">${ic(i)}</span><span>${esc(l)}</span></button>`).join('')}</div>`;
+  const amChips = list => `<div class="am-chips" role="list">${list.filter(c => c[3]).map(([i, l, k, , n]) => `<button class="am-chip ${k === 'menu' ? 'more' : ''}" role="listitem" data-act="${['approvals', 'requests', 'emergency', 'notices'].includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${k}" data-k="${k}"><span class="am-chip-ic">${ic(i)}${n ? `<span class="badge-pink">${n}</span>` : ''}</span><span>${esc(l)}</span></button>`).join('')}</div>`;
   const amSection = (t, cards) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2><div class="am-row">${cards}</div></section>`;
-  const amCard = (icon, title, sub, act, k, g) => `<button class="am-card g${(g % 6) + 1}" data-act="${act}" data-k="${esc(k)}"><span class="am-art">${ic(icon)}</span><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span></button>`;
-  const amReq = (r, i) => `<button class="am-card g${(i % 6) + 1}" data-act="open" data-id="${r.id}"><span class="am-art">${r.has_photo ? `<img src="${API.requests.photoUrl(r.id)}" alt="" loading="lazy">` : ic(catIcon(r.category))}</span>
-    <span class="am-t">${esc(r.title)}</span><span class="am-s">${rid(r)} · ${esc(day(r.created_at))}</span><span class="am-tag">${statusTag(r)}</span></button>`;
+  // card variants (one palette): dk = dark teal, wh = white, sf = soft teal tint
+  const amCard = (icon, title, sub, act, k, v) => `<button class="am-card ${v || 'wh'}" data-act="${act}" data-k="${esc(k)}"><span class="am-art">${ic(icon)}</span><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span></button>`;
+  const amBig = (i, n, l, tab, v) => `<button class="am-card am-big ${v}" data-act="${tab.endsWith('-sub') ? 'quick' : 'tab'}" data-tab="${tab}" data-k="${tab}"><span class="am-art">${ic(i)}</span><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></button>`;
+  // photo card: /img/categories/<key>.svg (or the request's own photo) with a dark label bar; solid dark-teal + icon when the image fails
+  const catPhoto = k => '/img/categories/' + encodeURIComponent(k) + '.svg';
+  const photoCard = (src, icon, title, sub, attrs, extra) => `<button class="am-card am-photo" ${attrs}><img class="am-pimg" data-fb="1" src="${esc(src)}" alt="" loading="lazy"><span class="am-pic">${ic(icon)}</span><span class="am-over"><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span>${extra || ''}</span></button>`;
+  const amReq = r => photoCard(r.has_photo ? API.requests.photoUrl(r.id) : catPhoto(r.category), catIcon(r.category), r.title, `${rid(r)} · ${day(r.created_at)}`, `data-act="open" data-id="${r.id}"`, `<span class="am-tag">${statusTag(r)}</span>`);
+  const catCard = (k, l, i) => photoCard(catPhoto(k), i, l, 'Category', `data-act="catgo" data-c="${esc(k)}"`);
+  const catSection = () => amSection('By category', CATS.map(([k, l, i]) => catCard(k, l, i)).join(''));
+  function wirePhotos() {
+    document.querySelectorAll('img[data-fb]').forEach(img => {
+      if (img.dataset.w) return; img.dataset.w = '1';
+      const bad = () => { const c = img.closest('.am-photo'); if (c) c.classList.add('nophoto'); img.remove(); };
+      img.addEventListener('error', bad, { once: true });
+      if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) bad();
+    });
+  }
   const emgType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', k];
   const emgTag = e => e.status === 'active' ? '<span class="tag tag-accent-2">Active</span>' : '<span class="tag tag-neutral">Resolved</span>';
   const emgRow = (e, admin) => { const t = emgType(e.type); return `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="tile lg" style="width:48px;height:48px;border-radius:16px;font-size:26px">${ic(t[1])}</span>
@@ -62,12 +78,12 @@
       pending = (await API.admin.users('pending').catch(() => [])).length;
       S.emgActive = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active').length;
     }
-    const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
+    const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="badge-pink">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
     const fab = !isAdmin() && !isGuard() && !S.sub && S.tab !== 'raise' ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
     app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : tabs.length < 4 ? 'three' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
-  const screen = h => { $('#screen').innerHTML = h; };
+  const screen = h => { $('#screen').innerHTML = h; wirePhotos(); };
 
   // ---------- signed out
   // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
@@ -100,14 +116,19 @@
       const gateOn = feat('gate') && can('gate.pass'), hhOn = can('household.manage') && S.me.resident_type === 'owner', noteOn = feat('notices') && can('notice.read');
       const [reqs, notices, passes, hh] = await Promise.all([API.requests.list(), noteOn ? API.notices.list().catch(() => []) : [], gateOn ? API.gate.passes().catch(() => []) : [], hhOn ? API.household.list().catch(() => []) : []]);
       const { open } = residentSummary(reqs, S.me, notices); S.idx = { reqs, notices };
+      const parkOn = feat('parking');
       const chips = [['list-checks', 'Requests', 'requests', true], ['plus-circle', 'Raise', 'raise', can('request.create')], ['siren', 'Emergency', 'emergency', feat('emergency') && can('emergency.raise')],
-        ['qr-code', 'Gate pass', 'gatepass', gateOn], ['users-three', 'Household', 'household', hhOn], ['address-book', 'Contacts', 'contacts-sub', feat('contacts') && can('contacts.read')], ['megaphone', 'Notices', 'notices-sub', noteOn]];
+        ['qr-code', 'Gate pass', 'gatepass', gateOn], ['car', 'Vehicles', 'vehicles', parkOn && can('vehicle.manage')], ['megaphone', 'Notices', 'notices-sub', noteOn], ['address-book', 'Contacts', 'contacts-sub', feat('contacts') && can('contacts.read')], ['squares-four', 'More', 'menu', true]];
       const sorted = [...reqs].sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id).slice(0, 8);
+      const activePasses = passes.filter(p => p.status === 'active').length;
+      const glance = amBig('list-checks', open.length, 'Open requests', 'requests', 'dk') + (gateOn ? amBig('qr-code', activePasses, 'Active gate passes', 'gatepass', 'sf') : '') + (noteOn ? amBig('megaphone', notices.length, 'Notices', 'notices-sub', 'sf') : '');
       const secs = [
-        amSection('Your requests', sorted.map((r, i) => amReq(r, i)).join('') + (can('request.create') ? amCard('plus-circle', 'Raise a request', 'Takes a minute', 'quick', 'raise', sorted.length) : '')),
-        noteOn && notices.length ? amSection('Notices', notices.slice(0, 6).map((n, i) => amCard(noticeIcon(n), n.title, day(n.created_at), 'quick', 'notices-sub', i + 2)).join('')) : '',
-        gateOn ? amSection('Visitors and passes', passes.slice(0, 6).map((p, i) => amCard('qr-code', p.visitor_name, stamp(p.valid_until), 'quick', 'gatepass', i + 1)).join('') + amCard('user-plus', 'Invite a visitor', 'New gate pass', 'quick', 'gatepass', 4)) : '',
-        hhOn ? amSection('Household', hh.slice(0, 6).map((m, i) => amCard('user-circle', m.name, TYPE[m.resident_type] || '', 'quick', 'household', i + 3)).join('') + amCard('user-plus', 'Add someone', 'Family or tenant', 'quick', 'household', 5)) : ''].join('');
+        amSection('At a glance', glance),
+        amSection('Your requests', sorted.map(amReq).join('') + (can('request.create') ? amCard('plus-circle', 'Raise a request', 'Takes a minute', 'quick', 'raise', 'dk') : '')),
+        can('request.create') ? catSection() : '',
+        noteOn && notices.length ? amSection('Notices', notices.slice(0, 6).map(n => amCard(noticeIcon(n), n.title, day(n.created_at), 'quick', 'notices-sub', 'sf')).join('')) : '',
+        gateOn ? amSection('Visitors and passes', passes.slice(0, 6).map(p => amCard('qr-code', p.visitor_name, stamp(p.valid_until), 'quick', 'gatepass', 'wh')).join('') + amCard('user-plus', 'Invite a visitor', 'New gate pass', 'quick', 'gatepass', 'dk')) : '',
+        hhOn ? amSection('Household', hh.slice(0, 6).map(m => amCard('user-circle', m.name, TYPE[m.resident_type] || '', 'quick', 'household', 'wh')).join('') + amCard('user-plus', 'Add someone', 'Family or tenant', 'quick', 'household', 'sf')) : ''].join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · ${S.me.flat}`, false)}${searchBox()}${amChips(chips)}
         <p class="am-sum"><b>${open.length}</b> open request${open.length === 1 ? '' : 's'}</p>${secs}`);
     },
@@ -145,6 +166,7 @@
 
     // ---------- gate: guard / committee verify
     async gate() {
+      if (isAdmin()) return gateOverview();
       const canScan = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
       screen(`${isAdmin() ? back('Dashboard', 'home') : ''}<h2>Gate</h2>
         <form id="gateform" class="col" style="gap:12px"><input class="input gate-code" id="gcode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="6-digit code"><button class="btn btn-primary btn-lg gate-go">${ic('shield-check')}Verify</button></form>
@@ -230,19 +252,48 @@
       const [s, reqs, notices, emg, pend] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => []), API.admin.users('pending').catch(() => [])]);
       S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active');
       const a = adminSummary(reqs, s), unList = a.open.filter(r => !r.vendor_id), un = unList.length;
-      const chips = [['user-check', 'Approvals', 'approvals', true], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['megaphone', 'Notices', 'notices', feat('notices')],
-        ['shield-check', 'Gate', 'gate', feat('gate')], ['gear-six', 'Settings', 'settings-sub', true]];
-      const big = (i, n, l, tab, g) => `<button class="am-card am-big g${g}" data-act="${tab.endsWith('-sub') ? 'quick' : 'tab'}" data-tab="${tab}" data-k="${tab}"><span class="am-art">${ic(i)}</span><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></button>`;
-      const attn = big('user-check', pend.length, 'Pending approvals', 'approvals', 1) + big('siren', act.length, 'Active emergencies', 'emergency', 4) + big('user-gear', un, 'Unassigned requests', 'requests', 3);
-      const week = big('clipboard-text', a.open.length, 'Open requests', 'requests', 2) + big('timer', a.overdue, 'Past 48 hours', 'requests', 4) + big('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 5) + big('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 6);
-      const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map((r, i) => amReq(r, i)).join('');
+      const chips = [['user-check', 'Approvals', 'approvals', true, pend.length], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['shield-check', 'Gate', 'gate', feat('gate')],
+        ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'More', 'menu', true]];
+      const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'em' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
+      const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'sf') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'sf');
+      const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map(amReq).join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}
-        ${amSection('Needs your attention', attn)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}
-        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gatelog">${ic('clock-counter-clockwise')}Gate log</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
+        ${amSection('Needs your attention', attn)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}${catSection()}
+        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
     },
 
     async alerts() { return SUB.alerts(!isAdmin()); },
+
+    async menu() {
+      const groups = menuGroups().map(([t, items]) => [t, items.filter(i => i[4])]).filter(g => g[1].length);
+      screen(`${back('Home', 'home')}<h1 class="am-h1">Menu</h1>${groups.map(([t, items]) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2>${items.map(([i, l, d, k]) => `<button class="am-list" data-act="${TABBY.includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${esc(k)}" data-k="${esc(k)}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(l)}</b><span class="muted sm">${esc(d)}</span></span>${ic('caret-right')}</button>`).join('')}</section>`).join('')}`);
+    },
+
+    async vehicles() {
+      S.veh.list = await API.vehicles.list();
+      const adm = isAdmin();
+      const tiles = VT.map(([k, i, l]) => `<button type="button" class="type-tile ${S.veh.type === k ? 'on' : ''}" style="align-items:center;padding:8px 2px" data-act="vtype" data-t="${k}">${ic(i)}<b style="font-size:13px">${l}</b></button>`).join('');
+      const form = adm ? '' : `<form id="vform" class="m-card am-form"><h3>Add a vehicle</h3><div class="field"><label for="vpl">Number plate</label><input class="input" id="vpl" name="plate" required maxlength="20" autocapitalize="characters" autocomplete="off" placeholder="MH 12 AB 1234"></div>
+        <div class="type-tiles" style="grid-template-columns:repeat(4,minmax(0,1fr))" role="group" aria-label="Type">${tiles}</div>
+        <div class="two"><div class="field"><label for="vmk">Make</label><input class="input" id="vmk" name="make" maxlength="40"></div><div class="field"><label for="vcl">Colour</label><input class="input" id="vcl" name="color" maxlength="30"></div></div>
+        <div class="field"><label for="vst">Parking sticker</label><input class="input" id="vst" name="sticker" maxlength="30"></div><p class="err" id="verr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('plus-circle')}Add vehicle</button></form>`;
+      const search = adm ? `<div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="vq" type="search" placeholder="Search plate, flat or owner" autocomplete="off" aria-label="Search vehicles" value="${esc(S.veh.q)}"></div>` : '';
+      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Vehicles</h1>${adm ? '' : `<span class="muted sm">Flat ${esc(S.me.flat)}</span>`}${search}${form}<div id="vlist" class="col" style="gap:12px"></div>`);
+      drawVehicles();
+    },
+
+    async parking() {
+      S.pk.data = await API.parking.list();
+      S.pk.vehicles = isAdmin() ? await API.vehicles.list().catch(() => []) : [];
+      drawParking();
+    },
+
+    async workers() {
+      S.wk.list = await API.admin.workers();
+      drawWorkers();
+    },
+
 
     async emergency() {
       const list = await API.emergencies.list().catch(() => []);
@@ -311,7 +362,8 @@
     async 'settings-sub'() {
       const row = (i, t, d, sub) => `<button class="am-list" data-act="quick" data-k="${sub}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${t}</b><span class="muted sm">${d}</span></span>${ic('caret-right')}</button>`;
       screen(`${back('Dashboard', 'home')}<h1 class="am-h1">Settings</h1>${row('buildings', 'General', 'Society name and type', 'set-general')}${row('shield-check', 'Access control', 'Who can do what', 'set-access')}
-        ${row('users-three', 'Users', 'Search, edit, suspend', 'set-users')}${row('toggle-right', 'Features', 'Switch parts of the app on or off', 'set-features')}${row('shield-star', 'Guards', 'Security staff accounts', 'set-guards')}`);
+        ${row('users-three', 'Users', 'Search, edit, suspend', 'set-users')}${row('toggle-right', 'Features', 'Switch parts of the app on or off', 'set-features')}${row('shield-star', 'Guards', 'Security staff accounts', 'set-guards')}
+        ${row('hard-hat', 'Workers', 'Staff, shifts and contacts', 'workers')}${feat('parking') ? row('garage', 'Parking', 'Slots and assignments', 'parking') : ''}`);
     },
     async 'set-general'() {
       const st = await API.admin.settings();
@@ -325,8 +377,8 @@
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="accsave">Save access</button></div>`);
     },
     async 'set-features'() {
-      const st = await API.admin.settings(); S.set.features = { emergency: true, gate: true, contacts: true, notices: true, ...(st.features || {}) };
-      const L = { emergency: ['siren', 'Emergency alerts'], gate: ['shield-check', 'Gate passes'], contacts: ['address-book', 'Society contacts'], notices: ['megaphone', 'Notices'] };
+      const st = await API.admin.settings(); S.set.features = { emergency: true, gate: true, contacts: true, notices: true, parking: true, ...(st.features || {}) };
+      const L = { emergency: ['siren', 'Emergency alerts'], gate: ['shield-check', 'Gate passes'], contacts: ['address-book', 'Society contacts'], notices: ['megaphone', 'Notices'], parking: ['garage', 'Vehicles and parking'] };
       screen(`${setBack()}<h1 class="am-h1">Features</h1><div class="m-card am-form">${Object.keys(L).map(k => `<div class="am-perm am-frow"><span class="am-li">${ic(L[k][0])}</span><b class="grow">${L[k][1]}</b>${swBtn(S.set.features[k] !== false, 'ftgl', `data-f="${k}"`, L[k][1])}</div>`).join('')}
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="featsave">Save features</button></div>`);
     },
@@ -341,6 +393,14 @@
         <div class="field"><label for="ge">Email</label><input class="input" id="ge" name="email" type="email" required autocomplete="off"></div><div class="field"><label for="gw">Password (8+)</label><input class="input" id="gw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('user-plus')}Add guard</button></form>`);
       drawGuards();
+    },
+    async 'vendors-sub'() {
+      const vs = await API.vendors.list();
+      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Vendors</h1>${vs.map(v => `<a class="m-card am-vrow" href="tel:${esc(String(v.phone || '').replace(/[^+\d]/g, ''))}"><span class="am-li">${ic('storefront')}</span><span class="col grow" style="gap:0"><b>${esc(v.name)}</b><span class="muted xs">${esc(catLabel(v.trade))}</span><span class="sm">${esc(v.phone || '')}</span></span></a>`).join('') || '<p class="muted">No vendors yet.</p>'}`);
+    },
+    async 'audit-sub'() {
+      const rows = await API.admin.audit();
+      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Audit trail</h1>${rows.map(r => `<div class="m-card" style="gap:2px"><b class="sm">${esc(r.actor || 'System')} · ${esc(r.action)} ${esc(r.entity)}${r.entity_id ? ' #' + esc(r.entity_id) : ''}</b>${r.detail ? `<span class="sm">${esc(r.detail)}</span>` : ''}<span class="muted xs">${esc(stamp(r.created_at))}</span></div>`).join('') || '<p class="muted">Nothing recorded yet.</p>'}`);
     },
     async 'notices-sub'() { const ns = await API.notices.list(); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
     async 'contacts-sub'() {
@@ -375,6 +435,119 @@
   }
   const userById = id => S.set.users.find(u => String(u.id) === String(id));
 
+  // ---------- menu
+  const menuGroups = () => {
+    const adm = isAdmin(), park = feat('parking'), gateOn = feat('gate') && can('gate.pass'), noteOn = feat('notices') && (adm || can('notice.read'));
+    return [
+      ['Requests and safety', [
+        ['list-checks', 'Requests', adm ? 'Assign and resolve' : 'Track your requests', 'requests', true],
+        ['plus-circle', 'Raise', 'Report a problem', 'raise', !adm && can('request.create')],
+        ['siren', 'Emergency', adm ? 'Active alerts' : 'Send an alert', 'emergency', feat('emergency') && (adm || can('emergency.raise'))],
+        ['shield-check', 'Gate', 'Live entries and denials', 'gate', adm && feat('gate')]]],
+      ['Community', [
+        ['megaphone', 'Notices', 'News from the committee', adm ? 'notices' : 'notices-sub', noteOn],
+        ['address-book', 'Contacts', 'Who to call', 'contacts-sub', feat('contacts') && (adm || can('contacts.read'))],
+        ['users-three', 'Household', 'Family and tenants', 'household', !adm && can('household.manage') && S.me.resident_type === 'owner']]],
+      ['Property', [
+        ['car', 'Vehicles', adm ? 'Every registered vehicle' : 'Vehicles of your flat', 'vehicles', park && (adm || can('vehicle.manage'))],
+        ['garage', 'Parking', adm ? 'Slots and assignments' : 'Your slots', 'parking', park && (adm || can('parking.view'))],
+        ['file-text', 'Leases', adm ? 'Tenant leases' : 'Your lease', adm ? 'leases-sub' : 'lease', adm || S.me.resident_type === 'tenant'],
+        ['qr-code', 'Gate pass', 'Invite a visitor', 'gatepass', !adm && gateOn]]],
+      ['Administration', [
+        ['user-check', 'Approvals', 'New residents', 'approvals', adm],
+        ['users-three', 'Residents', 'Search, edit, suspend', 'set-users', adm],
+        ['hard-hat', 'Workers', 'Staff and shifts', 'workers', adm],
+        ['storefront', 'Vendors', 'Contractors', 'vendors-sub', adm],
+        ['shield-star', 'Guards', 'Security accounts', 'set-guards', adm],
+        ['clock-counter-clockwise', 'Audit trail', 'Who changed what', 'audit-sub', adm],
+        ['gear-six', 'Settings', 'Society, access, features', 'settings-sub', adm]]],
+    ];
+  };
+
+  // ---------- vehicles
+  const VT = [['car', 'car', 'Car'], ['bike', 'motorcycle', 'Bike'], ['scooter', 'scooter', 'Scooter'], ['other', 'dots-three-circle', 'Other']];
+  const vtInfo = t => VT.find(x => x[0] === t) || VT[3];
+  function drawVehicles() {
+    const box = $('#vlist'); if (!box) return;
+    const q = S.veh.q.trim().toLowerCase();
+    const vs = S.veh.list.filter(v => !q || [v.plate, v.flat, v.owner_name, v.make].some(x => (x || '').toLowerCase().includes(q)));
+    box.innerHTML = vs.map(v => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="am-li">${ic(vtInfo(v.type)[1])}</span><span class="col grow" style="gap:2px"><b class="am-plate">${esc(v.plate)}</b>
+      <span class="muted xs">${esc([vtInfo(v.type)[2], v.make, v.color].filter(Boolean).join(' · '))}</span>${isAdmin() ? `<span class="sm">Flat ${esc(v.flat)}${v.owner_name ? ' · ' + esc(v.owner_name) : ''}</span>` : ''}${v.sticker ? `<span class="xs">Sticker ${esc(v.sticker)}</span>` : ''}</span></div>
+      ${S.veh.confirm === v.id ? `<div class="callout col" style="gap:8px"><b class="sm">Remove ${esc(v.plate)}?</b><div class="two"><button class="btn btn-primary" data-act="vrmyes" data-id="${v.id}">Yes, remove</button><button class="btn btn-secondary" data-act="vrmno">Keep</button></div></div>` : `<button class="btn btn-secondary" data-act="vrmask" data-id="${v.id}">${ic('trash')}Remove</button>`}</div>`).join('') || '<p class="muted">No vehicles found.</p>';
+  }
+
+  // ---------- parking
+  const vehOpts = flat => {
+    const f = (flat || '').trim().toLowerCase(); if (!f) return '<option value="">Type the flat first</option>';
+    const vs = S.pk.vehicles.filter(v => (v.flat || '').toLowerCase() === f);
+    return '<option value="">No vehicle</option>' + vs.map(v => `<option value="${v.id}">${esc(v.plate)} (${esc(vtInfo(v.type)[2])})</option>`).join('');
+  };
+  function drawParking() {
+    const d = S.pk.data || {}, sm = d.summary || { total: 0, assigned: 0, free: 0 }, adm = isAdmin(), slots = d.slots || [];
+    const stat = (n, l, v) => `<div class="am-stat ${v}"><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></div>`;
+    const stats = `<div class="am-stats">${stat(sm.total, 'Total slots', 'dk')}${stat(sm.assigned, 'Assigned', 'wh')}${stat(sm.free, 'Free', 'sf')}</div>`;
+    let body;
+    if (!adm) {
+      body = `<h2 class="am-h2">Your slots</h2>${slots.map(x => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="am-li">${ic('garage')}</span><span class="col grow" style="gap:0"><b>${esc(x.code)}</b><span class="muted xs">${esc([x.level, x.kind].filter(Boolean).join(' · '))}</span>${x.plate ? `<span class="sm">${esc(x.plate)}</span>` : ''}</span></div></div>`).join('') || '<p class="callout">No slot is assigned to your flat yet. Ask the committee.</p>'}`;
+    } else {
+      const lv = {}; slots.forEach(x => { const k = x.level || 'No level'; (lv[k] = lv[k] || []).push(x); });
+      const sel = slots.find(x => x.id === S.pk.sel);
+      const form = `<form id="pkform" class="m-card am-form"><h3>Add slots</h3><div class="two"><div class="field"><label for="pkp">Prefix</label><input class="input" id="pkp" name="prefix" maxlength="10" placeholder="B1-" required></div><div class="field"><label for="pkl">Level</label><input class="input" id="pkl" name="level" maxlength="30" placeholder="Basement 1"></div></div>
+        <div class="two"><div class="field"><label for="pkf">From number</label><input class="input" id="pkf" name="from" type="number" min="1" max="9999" value="1" required inputmode="numeric"></div><div class="field"><label for="pkc">How many</label><input class="input" id="pkc" name="count" type="number" min="1" max="200" value="10" required inputmode="numeric"></div></div>
+        <div class="field"><label for="pkk">Kind</label><select class="input" id="pkk" name="kind"><option value="car">Car</option><option value="bike">Bike</option><option value="visitor">Visitor</option></select></div><p class="err" id="pkerr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('plus-circle')}Add slots</button></form>`;
+      const groups = Object.keys(lv).sort().map(k => `<section class="am-sec"><h3 class="am-h3">${esc(k)} <span class="muted xs">${lv[k].filter(x => x.flat).length} of ${lv[k].length} assigned</span></h3><div class="pk-grid">${lv[k].map(x => `<button class="pk-slot ${x.flat ? 'taken' : 'free'} ${sel && sel.id === x.id ? 'sel' : ''}" data-act="pkpick" data-id="${x.id}"><b>${esc(x.code)}</b><span class="xs">${x.flat ? esc(x.flat) : 'Free'}</span></button>`).join('')}</div></section>`).join('') || '<p class="muted">No slots yet. Add some below.</p>';
+      const sheet = sel ? `<div class="sheet-back" data-act="pkclose"></div><div class="sheet" role="dialog" aria-label="Slot ${esc(sel.code)}"><h3>Slot ${esc(sel.code)}</h3><span class="muted sm">${esc([sel.level, sel.kind].filter(Boolean).join(' · '))}</span>
+        ${sel.flat ? `<div class="callout sm">Assigned to flat <b>${esc(sel.flat)}</b>${sel.plate ? ' · ' + esc(sel.plate) : ''}</div><button class="btn btn-primary btn-lg" data-act="pkfree">${ic('arrow-u-up-left')}Free this slot</button>`
+          : `<form id="pkassign" class="col" style="gap:12px"><div class="field"><label for="pkflat">Flat</label><input class="input" id="pkflat" name="flat" required maxlength="20" autocomplete="off" placeholder="B-304"></div>
+            <div class="field"><label for="pkveh">Vehicle</label><select class="input" id="pkveh" name="vehicle_id">${vehOpts('')}</select></div><p class="err" id="pkaerr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('check-circle')}Assign</button></form>
+            ${S.pk.confirm === sel.id ? `<div class="callout col" style="gap:8px"><b class="sm">Delete slot ${esc(sel.code)}?</b><div class="two"><button class="btn btn-primary" data-act="pkdelyes">Yes, delete</button><button class="btn btn-secondary" data-act="pkdelno">Keep</button></div></div>` : `<button class="btn btn-secondary" data-act="pkdelask">${ic('trash')}Delete slot</button>`}`}
+        <button class="btn btn-secondary btn-lg" data-act="pkclose">Close</button></div>` : '';
+      body = `${groups}${form}${sheet}`;
+    }
+    screen(`${back('Menu', 'menu')}<h1 class="am-h1">Parking</h1>${stats}${body}`);
+  }
+
+  // ---------- workers
+  const WR = [['security', 'Security', 'shield-check'], ['housekeeping', 'Housekeeping', 'broom'], ['maintenance', 'Maintenance', 'wrench'], ['gardener', 'Gardener', 'plant'], ['other', 'Other', 'dots-three-circle']];
+  function drawWorkers() {
+    const L = S.wk.list, ed = S.wk.edit, w = ed && ed !== 'new' ? L.find(x => x.id === ed) || {} : {};
+    const form = ed ? `<form id="wkform" class="m-card am-form"><h3>${ed === 'new' ? 'Add a worker' : 'Edit worker'}</h3><div class="field"><label for="wkn">Name</label><input class="input" id="wkn" name="name" required maxlength="100" value="${esc(w.name || '')}"></div>
+      <div class="field"><label for="wkr">Role</label><select class="input" id="wkr" name="role">${WR.map(([k, l]) => `<option value="${k}" ${(w.role || 'security') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="two"><div class="field"><label for="wkp">Phone</label><input class="input" id="wkp" name="phone" maxlength="20" inputmode="tel" value="${esc(w.phone || '')}"></div><div class="field"><label for="wks">Shift</label><input class="input" id="wks" name="shift" maxlength="40" placeholder="6am to 2pm" value="${esc(w.shift || '')}"></div></div>
+      <div class="field"><label for="wkt">Notes</label><textarea class="input" id="wkt" name="notes" maxlength="300" style="min-height:80px">${esc(w.notes || '')}</textarea></div><p class="err" id="wkerr" role="alert"></p>
+      <div class="two"><button class="btn btn-primary btn-lg">Save</button><button type="button" class="btn btn-secondary btn-lg" data-act="wkcancel">Cancel</button></div></form>` : `<button class="btn btn-primary btn-lg" data-act="wkadd">${ic('user-plus')}Add a worker</button>`;
+    const groups = [...WR, ['_', 'Unlisted', 'user']].map(([k, l, i]) => {
+      const ws = L.filter(x => k === '_' ? !WR.some(r => r[0] === x.role) : x.role === k); if (!ws.length) return '';
+      return `<section class="am-sec"><h3 class="am-h3">${esc(l)} <span class="muted xs">${ws.length}</span></h3>${ws.map(x => `<div class="m-card ${x.status === 'inactive' ? 'am-off' : ''}"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:2px"><b>${esc(x.name)}</b>
+        <span class="muted xs">${esc(x.shift || 'No shift set')}</span>${x.phone ? `<a class="sm" href="tel:${esc(String(x.phone).replace(/[^+\d]/g, ''))}">${esc(x.phone)}</a>` : ''}${x.notes ? `<span class="xs">${esc(x.notes)}</span>` : ''}</span><span class="tag ${x.status === 'inactive' ? 'tag-neutral' : 'tag-accent'}">${x.status === 'inactive' ? 'Inactive' : 'Active'}</span></div>
+        ${S.wk.confirm === x.id ? `<div class="callout col" style="gap:8px"><b class="sm">Remove ${esc(x.name)}?</b><div class="two"><button class="btn btn-primary" data-act="wkrmyes" data-id="${x.id}">Yes, remove</button><button class="btn btn-secondary" data-act="wkrmno">Keep</button></div></div>`
+          : `<div class="am-acts"><button class="btn btn-secondary" data-act="wkedit" data-id="${x.id}">${ic('pencil-simple')}Edit</button><button class="btn btn-secondary" data-act="wktoggle" data-id="${x.id}">${x.status === 'inactive' ? 'Activate' : 'Set inactive'}</button><button class="btn btn-secondary" data-act="wkrmask" data-id="${x.id}" aria-label="Remove ${esc(x.name)}">${ic('trash')}</button></div>`}</div>`).join('')}</section>`;
+    }).join('') || '<p class="muted">No workers yet.</p>';
+    screen(`${back('Menu', 'menu')}<h1 class="am-h1">Workers</h1>${form}${groups}`);
+  }
+  const wkReload = async () => { S.wk.list = await API.admin.workers(); drawWorkers(); };
+
+  // ---------- committee gate overview (no scanner, no code input)
+  let ovTimer = null;
+  const ovBody = o => {
+    const t = o.today || {}, stat = (n, l, v) => `<div class="am-stat ${v}"><span class="am-num">${esc(n == null ? 0 : n)}</span><span class="am-t">${esc(l)}</span></div>`;
+    const hrs = Array.from({ length: 24 }, (_, h) => { const r = (o.by_hour || []).find(x => Number(x.hour) === h); return r ? Number(r.n) || 0 : 0; }), mx = Math.max(1, ...hrs);
+    const bars = hrs.map((n, h) => `<span class="ov-bar" title="${h}:00 · ${n}"><i class="ov-fill" style="height:${Math.round(n / mx * 100)}%"></i><em>${h % 6 === 0 ? h : ''}</em></span>`).join('');
+    const rows = (o.recent || []).map(r => { const ok = r.result === 'allowed'; return `<div class="m-card ov-row"><div class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><b>${esc(r.subject || 'Unknown')}</b><span class="chip ${ok ? 'chip-ok' : 'chip-no'}">${ok ? 'ALLOWED' : 'DENIED'}</span></div>
+      <span class="muted xs">${esc(stamp(r.created_at))}${r.flat ? ' · Flat ' + esc(r.flat) : ''}${r.guard_name ? ' · ' + esc(r.guard_name) : ''}</span>${!ok && r.reason ? `<span class="sm">${esc(reasonText(r.reason))}</span>` : ''}</div>`; }).join('') || '<p class="muted">No scans yet today.</p>';
+    return `<div class="am-stats">${stat(t.allowed, 'Admitted today', 'dk')}${stat(t.denied, 'Denied today', 'sf')}${stat(t.visitors, 'Visitors', 'wh')}${stat(t.residents, 'Residents', 'wh')}${stat(o.active_passes, 'Active passes', 'sf')}${o.inside != null ? stat(o.inside, 'Inside now', 'wh') : ''}</div>
+      <div class="m-card"><h3>Entries by hour</h3><div class="ov-chart" role="img" aria-label="Entries by hour of day">${bars}</div></div><h3>Recent scans</h3>${rows}`;
+  };
+  async function gateOverview() {
+    const o = await API.gate.overview();
+    screen(`${back('Dashboard', 'home')}<h1 class="am-h1">Gate</h1><span class="muted sm">Live overview, refreshes every few seconds</span><div id="ovbody" class="col" style="gap:16px">${ovBody(o)}</div>`);
+    clearInterval(ovTimer);
+    ovTimer = setInterval(async () => {
+      const b = $('#ovbody'); if (!b || S.tab !== 'gate' || S.sub || document.hidden) { if (!b) clearInterval(ovTimer); return; }
+      try { b.innerHTML = ovBody(await API.gate.overview()); } catch { /* keep last */ }
+    }, 5000);
+  }
+
   // ---------- gate helpers
   const gpTag = st => `<span class="tag ${st === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc({ active: 'Active', used: 'Used', cancelled: 'Cancelled', expired: 'Expired' }[st] || st)}</span>`;
   const REASONS = { expired: 'This pass has expired.', used: 'This pass was already used.', cancelled: 'This pass was cancelled by the resident.', not_found: 'Code not recognised.', unknown: 'Code not recognised.', invalid: 'Code not recognised.', not_yet_valid: 'This pass is not valid yet.', inactive: 'This resident is not active.' };
@@ -397,6 +570,7 @@
     const i = $('#gcode'); if (i) { i.value = ''; i.focus(); }
   }
   function stopScan() {
+    clearInterval(ovTimer);
     if (!cam) return;
     clearTimeout(cam.t); if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
     cam = null; const b = $('#gcam'); if (b) b.innerHTML = '';
@@ -424,6 +598,24 @@
   const flipSw = (el, on) => { el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.am-st').textContent = on ? 'On' : 'Off'; };
   const ACT = {
     gscan: () => startScan(),
+    catgo: el => { if (isAdmin()) return go('requests'); S.cat = el.dataset.c; go('raise'); },
+    vtype: el => { S.veh.type = el.dataset.t; document.querySelectorAll('[data-act=vtype]').forEach(b => b.classList.toggle('on', b === el)); },
+    vrmask: el => { S.veh.confirm = Number(el.dataset.id); drawVehicles(); },
+    vrmno: () => { S.veh.confirm = null; drawVehicles(); },
+    vrmyes: el => trySet(async () => { await API.vehicles.remove(el.dataset.id); S.veh.list = S.veh.list.filter(v => String(v.id) !== el.dataset.id); S.veh.confirm = null; toast('Vehicle removed'); drawVehicles(); }),
+    pkpick: el => { S.pk.sel = Number(el.dataset.id); S.pk.confirm = null; drawParking(); },
+    pkclose: () => { S.pk.sel = null; S.pk.confirm = null; drawParking(); },
+    pkfree: () => trySet(async () => { await API.parking.free(S.pk.sel); S.pk.sel = null; toast('Slot freed'); render(); }),
+    pkdelask: () => { S.pk.confirm = S.pk.sel; drawParking(); },
+    pkdelno: () => { S.pk.confirm = null; drawParking(); },
+    pkdelyes: () => trySet(async () => { await API.parking.removeSlot(S.pk.sel); S.pk.sel = null; S.pk.confirm = null; toast('Slot deleted'); render(); }),
+    wkadd: () => { S.wk.edit = 'new'; drawWorkers(); },
+    wkedit: el => { S.wk.edit = Number(el.dataset.id); drawWorkers(); window.scrollTo(0, 0); },
+    wkcancel: () => { S.wk.edit = null; drawWorkers(); },
+    wktoggle: el => trySet(async () => { const w = S.wk.list.find(x => String(x.id) === el.dataset.id); await API.admin.updateWorker(w.id, { name: w.name, role: w.role, phone: w.phone, shift: w.shift, notes: w.notes, status: w.status === 'inactive' ? 'active' : 'inactive' }); await wkReload(); }),
+    wkrmask: el => { S.wk.confirm = Number(el.dataset.id); drawWorkers(); },
+    wkrmno: () => { S.wk.confirm = null; drawWorkers(); },
+    wkrmyes: el => trySet(async () => { await API.admin.removeWorker(el.dataset.id); S.wk.confirm = null; toast('Worker removed'); await wkReload(); }),
     mtgl: el => { const m = S.set.matrix, r = el.dataset.r, p = el.dataset.p; m[r] = m[r] || {}; m[r][p] = !m[r][p]; flipSw(el, m[r][p]); },
     ftgl: el => { const f = el.dataset.f; S.set.features[f] = S.set.features[f] === false; flipSw(el, S.set.features[f]); },
     accsave: () => trySet(async () => { await API.admin.setAccess(S.set.matrix); toast('Access saved'); }),
@@ -476,6 +668,8 @@
     if (e.target.id === 'hs') { const r = $('#hres'); if (r) r.innerHTML = searchResults(e.target.value); }
     else if (e.target.id === 'us') { S.set.q = e.target.value; drawUsers(); }
     else if (e.target.id === 'enote') S.note = e.target.value;
+    else if (e.target.id === 'vq') { S.veh.q = e.target.value; drawVehicles(); }
+    else if (e.target.id === 'pkflat') { const sel = $('#pkveh'); if (sel) sel.innerHTML = vehOpts(e.target.value); }
   });
   document.addEventListener('change', guard(async e => {
     if (e.target.id !== 'photo') return;
@@ -527,6 +721,23 @@
       await trySet(async () => { const r = await API.admin.setSettings({ society_name: d.society_name.trim(), society_kind: (d.society_kind || '').trim() }); SOCIETY.name = (r && r.society_name) || d.society_name.trim(); SOCIETY.kind = (r && r.society_kind) || d.society_kind; toast('Saved'); });
     } else if (f.id === 'gform') {
       await trySet(async () => { await API.gate.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); toast('Guard added'); go('home', null, 'set-guards'); });
+    } else if (f.id === 'vform') {
+      const err = $('#verr'); err.textContent = '';
+      try { await API.vehicles.add({ plate: d.plate.trim().toUpperCase(), type: S.veh.type, make: (d.make || '').trim(), color: (d.color || '').trim(), sticker: (d.sticker || '').trim() }); toast('Vehicle added'); render(); } catch (x) { err.textContent = x.message; }
+    } else if (f.id === 'pkform') {
+      const err = $('#pkerr'); err.textContent = '';
+      try { await API.parking.addSlots({ prefix: d.prefix.trim(), from: Number(d.from), count: Number(d.count), kind: d.kind, level: (d.level || '').trim() }); toast('Slots added'); render(); } catch (x) { err.textContent = x.message; }
+    } else if (f.id === 'pkassign') {
+      const err = $('#pkaerr'); err.textContent = '';
+      try { const b = { flat: d.flat.trim() }; if (d.vehicle_id) b.vehicle_id = Number(d.vehicle_id); await API.parking.assign(S.pk.sel, b); S.pk.sel = null; toast('Slot assigned'); render(); } catch (x) { err.textContent = x.message; }
+    } else if (f.id === 'wkform') {
+      const err = $('#wkerr'); err.textContent = '';
+      try {
+        const body = { name: d.name.trim(), role: d.role, phone: (d.phone || '').trim(), shift: (d.shift || '').trim(), notes: (d.notes || '').trim() };
+        if (S.wk.edit === 'new') await API.admin.addWorker({ ...body, status: 'active' });
+        else { const w = S.wk.list.find(x => x.id === S.wk.edit) || {}; await API.admin.updateWorker(S.wk.edit, { ...body, status: w.status || 'active' }); }
+        S.wk.edit = null; toast('Worker saved'); await wkReload();
+      } catch (x) { err.textContent = x.message; }
     } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
   }));
 
@@ -536,6 +747,7 @@
     const ae = document.activeElement;
     if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && app.contains(ae)) return;
     if (S.sub && S.sub.startsWith('set-')) return;
+    if (!S.sub && (S.pk.sel || S.wk.edit)) return;
     if (!S.sub && (S.tab === 'gate' || S.tab === 'gatepass' || S.gRes || cam)) return;
     const sc = $('#screen'), top = sc ? sc.scrollTop : 0;
     await render();

@@ -9,6 +9,8 @@ const PERMISSIONS = [
   { key: 'notice.read', label: 'Read notices' },
   { key: 'contacts.read', label: 'View society contacts' },
   { key: 'lease.view', label: 'View own lease' },
+  { key: 'vehicle.manage', label: 'Register vehicles' },
+  { key: 'parking.view', label: 'View parking' },
 ];
 const ACCESS_ROLES = ['owner', 'tenant', 'family'];
 
@@ -65,16 +67,24 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS gate_log(
     id INTEGER PRIMARY KEY, kind TEXT NOT NULL, subject TEXT, flat TEXT, result TEXT NOT NULL, reason TEXT,
     guard_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS vehicles(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, user_id INTEGER, plate TEXT NOT NULL, plate_key TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'car', make TEXT, color TEXT, sticker TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS parking_slots(
+    id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, level TEXT, kind TEXT NOT NULL DEFAULT 'car',
+    flat TEXT, vehicle_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS workers(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'other', phone TEXT, shift TEXT,
+    status TEXT NOT NULL DEFAULT 'active', notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
   CREATE TABLE IF NOT EXISTS role_permissions(
     role TEXT NOT NULL, permission TEXT NOT NULL, allowed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(role, permission));
   `);
-  // Seed defaults only when empty, so committee changes are never overwritten.
-  if (!db.prepare('SELECT 1 FROM role_permissions LIMIT 1').get()) {
-    const ins = db.prepare('INSERT INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
-    const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view'] };
-    for (const role of Object.keys(off)) for (const k of PERMISSIONS.map(x => x.key)) ins.run(role, k, off[role].includes(k) ? 0 : 1);
-  }
+  // Insert any missing role/permission row with its default; never touches rows the committee already edited.
+  const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
+  const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
+  for (const role of Object.keys(off)) for (const k of PERMISSIONS.map(x => x.key)) ins.run(role, k, off[role].includes(k) ? 0 : 1);
   const admin =db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {
     // Synthetic default admin for dev/demo. Set ADMIN_EMAIL / ADMIN_PASSWORD in production.
