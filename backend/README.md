@@ -52,3 +52,10 @@ Flyway runs `src/main/resources/db/migration` on start (`V1__schema.sql` creates
   `feature(user, name)`, `permission(user, key)` (= `can`). `AuditService.log` and `NotificationService.notify` are the
   `log()` / `notify()` helpers.
 - Google sign-in: implement or replace the `GoogleTokenVerifier` bean (tests inject a fake); the default calls Google tokeninfo.
+
+## What is implemented (phase 2)
+`POST|GET /api/requests` (multipart photo: JPEG/PNG/WebP, magic-byte check, 5 MB), `GET /api/requests/{id}`, `GET .../photo`,
+`GET|POST .../comments`, `POST .../assign|status|rate`, `GET|POST /api/notices`, `DELETE /api/notices/{id}`,
+`GET|POST /api/household`, `GET /api/lease`, `GET /api/admin/leases`, `PUT /api/admin/users/{id}/lease`,
+`GET|POST /api/vendors`, `PUT|DELETE /api/vendors/{id}`, `GET /api/admin/stats`, `GET /api/admin/export.csv`, `GET /api/pulse`.
+Photos are written under `portal.upload-dir` (env `UPLOAD_DIR`, default `./uploads`).
