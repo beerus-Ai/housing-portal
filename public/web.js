@@ -23,21 +23,20 @@
     if (!S.me) return authView();
     let pending = 0;
     if (isAdmin()) pending = (await API.admin.users('pending')).length;
-    const nav = navFor().map(([k, label, icon]) => `<button class="btn ${S.page === k ? 'btn-primary' : 'btn-ghost'}" data-act="nav" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}${esc(label)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}</button>`).join('');
+    const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
+    const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : '')).join('');
     const who = isAdmin() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
-    root.innerHTML = `<div class="web">
-      <header class="col" style="gap:var(--space-2)">
-        <div class="masthead">
-          <div class="row" style="flex-wrap:nowrap"><span class="tile lg" style="background:var(--color-accent-900);color:var(--color-bg);width:52px;height:52px;border-radius:22px">${ic('buildings')}</span>
-            <div class="col" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
-          <div class="row"><button class="btn btn-ghost" data-act="nav" data-page="alerts" aria-label="Alerts">${ic('bell')}</button>
-            <span class="avatar">${esc(initials(S.me.name))}</span><span class="sm">${esc(who)}</span>
-            <button class="btn btn-secondary" data-act="logout">Sign out</button></div>
-        </div>
-        <div class="navrail"><nav aria-label="Main">${nav}</nav><span class="sm row" style="gap:var(--space-3)">${HP.liveBadge()}<i>${esc(todayLabel())}</i></span></div>
-      </header>
-      <main id="page" class="page"></main>
-      <footer class="foot muted"><a href="/m/">Open the mobile app</a></footer></div>`;
+    root.innerHTML = `<div class="web side-shell">
+      <aside class="sidebar">
+        <div class="side-brand"><span class="tile lg side-logo">${ic('buildings')}</span>
+          <div class="col side-t" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
+        <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
+        <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
+        <div class="side-user"><span class="avatar" title="${esc(who)}">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(who)}</span>
+          <button class="btn btn-secondary side-out" data-act="logout" title="Sign out">${ic('sign-out')}<span class="side-t">Sign out</span></button>
+          <a class="side-t xs muted" href="/m/">Open the mobile app</a></div>
+      </aside>
+      <main id="page" class="page"></main></div>`;
     try { await PAGES[S.page](); } catch (e) { $('#page').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const page = h => { $('#page').innerHTML = h; };

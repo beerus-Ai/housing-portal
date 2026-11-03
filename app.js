@@ -18,19 +18,32 @@ function createApp(opts = {}) {
   fs.mkdirSync(uploadDir, { recursive: true });
   const app = express();
   app.disable('x-powered-by');
+  const prod = process.env.NODE_ENV === 'production';
+  if (prod && !process.env.SESSION_SECRET) throw new Error('SESSION_SECRET must be set in production');
   app.use(express.json({ limit: '100kb' }));
+  app.use((req, res, next) => { if (!req.body || typeof req.body !== 'object') req.body = {}; next(); });
   app.use((req, res, next) => {
     res.set({
       'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin',
-      'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     });
+    if (prod) res.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
+    // CSRF defence in depth: reject cross-origin state-changing API calls (SameSite=Lax is the primary control).
+    if (req.path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.get('origin')) {
+      let ok = false;
+      try { ok = new URL(req.get('origin')).host === req.get('host'); } catch { /* bad origin */ }
+      if (!ok) return res.status(403).json({ error: 'Cross-origin request blocked' });
+    }
     next();
   });
-  if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
+  if (prod) app.set('trust proxy', 1);
   app.use(session({
     secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
     resave: false, saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 8 * 3600e3 },
+    cookie: { httpOnly: true, sameSite: 'lax', secure: prod, maxAge: 8 * 3600e3 },
   }));
 
   const q = (sql, ...p) => db.prepare(sql).all(...p);
@@ -50,7 +63,20 @@ function createApp(opts = {}) {
   const admin = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }));
 
   const fails = new Map();
-  const throttled = k => { const f = fails.get(k); return f && f.n >= 5 && Date.now() - f.t < 15 * 60e3; };
+  const WINDOW = 15 * 60e3;
+  const throttled = (k, max = 5) => {
+    const f = fails.get(k);
+    if (!f) return false;
+    if (Date.now() - f.t >= WINDOW) { fails.delete(k); return false; }
+    return f.n >= max;
+  };
+  const fail = k => {
+    if (fails.size > 10000) for (const [key, f] of fails) if (Date.now() - f.t >= WINDOW) fails.delete(key);
+    const f = fails.get(k);
+    fails.set(k, { n: (f && Date.now() - f.t < WINDOW ? f.n : 0) + 1, t: Date.now() });
+  };
+  const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10); // equalise timing for unknown emails
+  const pwStr = v => (typeof v === 'string' ? v.slice(0, 128) : '');
 
   // ---- auth & onboarding
   app.post('/api/register', (req, res) => {
@@ -59,7 +85,7 @@ function createApp(opts = {}) {
     const phone = str(b.phone, 20), rtype = b.resident_type, pw = typeof b.password === 'string' ? b.password : '';
     if (!name || !/^\S+@\S+\.\S+$/.test(email) || !flat) return res.status(400).json({ error: 'Name, valid email and flat are required' });
     if (!RESIDENT_TYPES.includes(rtype)) return res.status(400).json({ error: 'Choose owner, tenant or family' });
-    if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
     if (b.consent !== true) return res.status(400).json({ error: 'Consent to data processing is required' });
     if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });
     const r = run("INSERT INTO users(name,email,phone,flat,resident_type,password_hash,consent_at) VALUES(?,?,?,?,?,?,datetime('now'))",
@@ -71,13 +97,13 @@ function createApp(opts = {}) {
 
   app.post('/api/login', (req, res) => {
     const email = str(req.body && req.body.email, 200).toLowerCase();
-    const key = req.ip + '|' + email;
-    if (throttled(key)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    const key = req.ip + '|' + email, ipKey = 'ip|' + req.ip;
+    if (throttled(key) || throttled(ipKey, 30)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
     const u = one('SELECT * FROM users WHERE email=?', email);
-    const ok = u && bcrypt.compareSync(String(req.body.password || ''), u.password_hash);
+    const match = bcrypt.compareSync(pwStr(req.body.password), u ? u.password_hash : DUMMY_HASH);
+    const ok = u && match;
     if (!ok) {
-      const f = fails.get(key) || { n: 0 };
-      fails.set(key, { n: f.n + 1, t: Date.now() });
+      fail(key); fail(ipKey);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     if (u.status === 'pending') return res.status(403).json({ error: 'Your account is awaiting admin approval' });
@@ -93,8 +119,11 @@ function createApp(opts = {}) {
   });
   app.post('/api/me/password', auth, (req, res) => {
     const cur = typeof (req.body && req.body.current) === 'string' ? req.body.current : '', next = typeof (req.body && req.body.next) === 'string' ? req.body.next : '';
-    if (!bcrypt.compareSync(cur, req.user.password_hash)) return res.status(403).json({ error: 'Current password is wrong' });
-    if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    const pk = 'pw|' + req.user.id;
+    if (throttled(pk)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    if (!bcrypt.compareSync(cur.slice(0, 128), req.user.password_hash)) { fail(pk); return res.status(403).json({ error: 'Current password is wrong' }); }
+    fails.delete(pk);
+    if (next.length < 8 || next.length > 128) return res.status(400).json({ error: 'New password must be at least 8 characters' });
     run('UPDATE users SET password_hash=? WHERE id=?', bcrypt.hashSync(next, 10), req.user.id);
     log(req.user.id, 'user', req.user.id, 'password_changed');
     res.json({ ok: true });
@@ -157,8 +186,18 @@ function createApp(opts = {}) {
       filename: (req, f, cb) => cb(null, crypto.randomUUID() + EXT[f.mimetype]),
     }),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 },
-    fileFilter: (req, f, cb) => cb(null, !!EXT[f.mimetype]),
+    fileFilter: (req, f, cb) => cb(EXT[f.mimetype] ? null : new Error('Only JPEG, PNG or WebP photos are allowed'), !!EXT[f.mimetype]),
   });
+  // Verify the real file signature, not just the client-declared type.
+  const MAGIC = { '.jpg': [0xff, 0xd8, 0xff], '.png': [0x89, 0x50, 0x4e, 0x47] };
+  const validImage = f => {
+    try {
+      const ext = path.extname(f.filename), b = Buffer.alloc(12), fd = fs.openSync(f.path, 'r');
+      fs.readSync(fd, b, 0, 12, 0); fs.closeSync(fd);
+      if (ext === '.webp') return b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP';
+      return MAGIC[ext].every((x, i) => b[i] === x);
+    } catch { return false; }
+  };
   const REQ_SELECT = `SELECT r.*, u.name AS resident_name, u.flat, v.name AS vendor_name FROM requests r
     JOIN users u ON u.id=r.user_id LEFT JOIN vendors v ON v.id=r.vendor_id`;
   // Residents see their own requests and any request from their own flat (owner and family share a flat view).
@@ -171,6 +210,7 @@ function createApp(opts = {}) {
   app.post('/api/requests', auth,
     (req, res, next) => upload.single('photo')(req, res, err => (err ? res.status(400).json({ error: err.message }) : next())),
     (req, res) => {
+      if (req.file && !validImage(req.file)) { fs.unlink(req.file.path, () => {}); return res.status(400).json({ error: 'File is not a valid JPEG, PNG or WebP image' }); }
       const category = req.body.category, title = str(req.body.title, 120), description = str(req.body.description, 2000);
       if (!CATEGORIES.includes(category) || !title) {
         if (req.file) fs.unlink(req.file.path, () => {});
@@ -200,7 +240,7 @@ function createApp(opts = {}) {
   app.get('/api/requests/:id/photo', auth, (req, res) => {
     const r = one(`${REQ_SELECT} WHERE r.id=?`, req.params.id);
     if (!r || !r.photo || !canSee(req.user, r)) return res.status(404).end();
-    res.sendFile(path.join(uploadDir, path.basename(r.photo)));
+    res.set('Cache-Control', 'private, max-age=3600').sendFile(path.join(uploadDir, path.basename(r.photo)), err => { if (err && !res.headersSent) res.status(404).end(); });
   });
 
   app.get('/api/requests/:id/comments', auth, (req, res) => {
@@ -268,7 +308,8 @@ function createApp(opts = {}) {
     const pw = typeof b.password === 'string' ? b.password : '';
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
     if (!['family', 'tenant'].includes(rtype)) return res.status(400).json({ error: 'Add a family member or a tenant' });
-    if (pw.length < 8) return res.status(400).json({ error: 'Temporary password must be at least 8 characters' });
+    if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Temporary password must be 8 to 128 characters' });
+    if (!req.user.flat) return res.status(400).json({ error: 'Your account has no flat set' });
     if (b.consent !== true) return res.status(400).json({ error: 'Consent to data processing is required' });
     if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });
     const r = run("INSERT INTO users(name,email,phone,flat,resident_type,password_hash,consent_at) VALUES(?,?,?,?,?,?,datetime('now'))",
@@ -341,7 +382,7 @@ function createApp(opts = {}) {
   app.get('/api/admin/export.csv', auth, admin, (req, res) => {
     const esc = v => {
       let s = v == null ? '' : String(v);
-      if (/^[=+\-@]/.test(s)) s = "'" + s; // neutralise spreadsheet formulas
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // neutralise spreadsheet formulas
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const rows = q(`${REQ_SELECT} ORDER BY r.id`);
@@ -373,6 +414,13 @@ function createApp(opts = {}) {
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    const code = err.status || err.statusCode;
+    if (code && code >= 400 && code < 500) return res.status(code).json({ error: code === 413 ? 'Request too large' : 'Bad request' });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
+  });
   app.locals.db = db;
   return app;
 }

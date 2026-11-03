@@ -39,6 +39,8 @@ function openDb(file) {
   const admin = db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {
     // Synthetic default admin for dev/demo. Set ADMIN_EMAIL / ADMIN_PASSWORD in production.
+    if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 12))
+      throw new Error('Set ADMIN_EMAIL and ADMIN_PASSWORD (12+ chars) before first production start');
     const email = process.env.ADMIN_EMAIL || 'admin@society.test';
     const pw = process.env.ADMIN_PASSWORD || 'Admin@1234';
     db.prepare("INSERT INTO users(name,email,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,datetime('now'))")
