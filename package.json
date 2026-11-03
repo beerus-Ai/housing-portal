@@ -5,8 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test \"test/*.test.js\"",
-    "seed": "node seed.js"
+    "test": "node --test \"test/*.test.js\""
   },
   "keywords": [],
   "author": "",
@@ -16,6 +15,7 @@
     "bcryptjs": "^3.0.3",
     "express": "^5.3.0",
     "express-session": "^1.19.0",
+    "lottie-web": "^5.13.0",
     "multer": "^2.5.0"
   },
   "engines": {
