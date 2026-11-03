@@ -23,7 +23,7 @@
   };
   // which bottom tab is highlighted: every sub-screen belongs to a parent tab; anything that is not a tab belongs to Menu
   const activeTab = tabs => {
-    if (S.sub === 'alerts') return null;
+    if (S.sub === 'alerts') return isAdmin() ? 'menu' : null;
     if (S.sub) return 'menu';
     const t = S.tab === 'raise' ? 'requests' : S.tab;
     return tabs.some(x => x[0] === t) ? t : 'menu';
@@ -103,7 +103,7 @@
     if (!S.me) return authView();
     stopScan();
     if (isGuard() && !['gate', 'gatelog', 'profile'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
-    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']();
+    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
     let pending = 0;
     if (isAdmin()) {
       pending = (await API.admin.users('pending').catch(() => [])).length;
@@ -285,12 +285,11 @@
       const chips = [['user-check', 'Approvals', 'approvals', true, pend.length], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['shield-check', 'Gate', 'gate', feat('gate')],
         ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'Menu', 'menu', true]];
       const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'dk has-alert' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
-      const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'sf') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'sf');
+      const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'wh') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'wh');
       const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map(amReq).join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}
         ${amSection('Needs your attention', attn)}${glanceSection(ov)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}${catSection()}
-        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
-        <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
+        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>`);
     },
 
     async alerts() { return SUB.alerts(!isAdmin()); },
@@ -442,7 +441,7 @@
   // ---------- settings helpers
   const swBtn = (on, act, attrs, label) => `<button type="button" class="am-sw ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(label)}" data-act="${act}" ${attrs}><span class="am-knob"></span><span class="am-st">${on ? 'On' : 'Off'}</span></button>`;
   const setErr = m => { const e = $('#serr'); if (e) e.textContent = m || ''; };
-  const trySet = async fn => { setErr(''); try { await fn(); } catch (x) { setErr(x.message); toast(x.message); } };
+  const trySet = async fn => { setErr(''); try { await fn(); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
   function drawUsers() {
     const box = $('#ulist'); if (!box) return;
     const q = S.set.q.trim().toLowerCase();
@@ -620,7 +619,7 @@
         if (cam === me) me.t = setTimeout(tick, 250);
       };
       tick();
-    } catch { stopScan(); toast('Camera not available. Type the code instead.'); }
+    } catch { stopScan(); toast('Camera not available. Type the code instead.', 'error'); }
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopScan(); });
 
@@ -671,7 +670,7 @@
     gpshare: async () => {
       const v = S.gp.view, text = `Gate pass for ${v.visitor_name} at ${SOCIETY.name}, Flat ${S.me.flat}. Code ${v.code}. Valid until ${stamp(v.valid_until)}.`;
       if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch { /* cancelled */ } return; }
-      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.'); }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.', 'error'); }
     },
     tab: el => el.dataset.tab === 'settings-sub' ? go('home', null, 'settings-sub') : (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
     emgpick: el => { S.sheet = el.dataset.k; S.note = ''; render(); },
@@ -689,7 +688,7 @@
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thank you. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
@@ -724,7 +723,7 @@
       if (S.photo) fd.set('photo', S.photo);
       const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
     } else if (f.id === 'gateform') {
-      const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code'); return; }
+      const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code', 'error'); return; }
       await doVerify({ code });
     } else if (f.id === 'gpform') {
       const err = $('#gperr'); err.textContent = '';

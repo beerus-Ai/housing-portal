@@ -5,10 +5,13 @@ window.HP = (() => {
   const ic = (name, cls = '') => `<i class="ph-duotone ph-${esc(name)} ${cls}" aria-hidden="true"></i>`;
 
   let toastTimer;
-  function toast(m) {
+  function toast(m, kind) {
+    const err = kind === 'error';
     let t = $('#toast');
-    if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
-    t.innerHTML = '<span class="toast-ico" data-lottie="check" data-loop="false"></span><span class="toast-msg"></span>'; t.querySelector('.toast-msg').textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.setAttribute('aria-live', err ? 'assertive' : 'polite');
+    t.innerHTML = (err ? '<span class="toast-ico toast-err">' + ic('warning-circle') + '</span>' : '<span class="toast-ico" data-lottie="check" data-loop="false"></span>') + '<span class="toast-msg"></span>';
+    t.querySelector('.toast-msg').textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), err ? 4200 : 3200);
   }
   async function api(method, url, body) {
     const opt = { method, headers: {} };
@@ -19,7 +22,7 @@ window.HP = (() => {
     if (!r.ok) { const e = new Error(data.error || 'Request failed'); e.status = r.status; throw e; }
     return data;
   }
-  const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message); } };
+  const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, 'error'); } };
 
   const CATS = [['plumbing', 'Plumbing', 'drop'], ['electrical', 'Electrical', 'lightning'], ['lift', 'Lift', 'elevator'],
     ['housekeeping', 'Housekeeping', 'broom'], ['security', 'Security', 'shield-check'], ['other', 'Other', 'dots-three-circle']];

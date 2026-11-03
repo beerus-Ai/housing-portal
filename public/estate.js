@@ -46,7 +46,7 @@
   ACT.evask = el => { E.vdel = Number(el.dataset.id); drawVeh(); };
   ACT.evkeep = () => { E.vdel = null; drawVeh(); };
   ACT.evdel = async el => {
-    try { await API.vehicles.remove(el.dataset.id); E.vdel = null; E.veh = await API.vehicles.list(); drawVeh(); toast('Vehicle removed'); } catch (x) { E.vdel = null; drawVeh(); toast(x.message); }
+    try { await API.vehicles.remove(el.dataset.id); E.vdel = null; E.veh = await API.vehicles.list(); drawVeh(); toast('Vehicle removed'); } catch (x) { E.vdel = null; drawVeh(); toast(x.message, 'error'); }
   };
 
   // ---------- Parking
@@ -91,7 +91,7 @@
             <p class="err" id="eserr" role="alert"></p><div><button class="btn btn-primary">${ic('plus-circle')}Create slots</button></div></form></div></div></div>`);
     drawPk();
   };
-  const pkRun = fn => async el => { setErr(''); try { await fn(el); } catch (x) { setErr(x.message); toast(x.message); } };
+  const pkRun = fn => async el => { setErr(''); try { await fn(el); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
   ACT.pksel = el => { E.pksel = Number(el.dataset.id); E.pkdel = null; drawPk(); const p = $('#espkflat'); if (p) p.focus(); };
   ACT.pkclose = () => { E.pksel = null; E.pkdel = null; drawPk(); };
   ACT.pkfree = pkRun(async el => { await API.parking.free(el.dataset.id); await loadPk(); drawPk(); toast('Slot freed'); });
@@ -193,6 +193,6 @@
         const w = wk(f.dataset.w);
         await API.admin.updateWorker(f.dataset.w, { name: d.name.trim(), role: d.role, phone: (d.phone || '').trim(), shift: (d.shift || '').trim(), notes: (d.notes || '').trim(), status: w ? w.status : 'active' }); E.wedit = null; await wReload(); toast('Worker saved');
       }
-    } catch (x) { setErr(x.message); toast(x.message); }
+    } catch (x) { setErr(x.message); toast(x.message, 'error'); }
   }, true);
 })();

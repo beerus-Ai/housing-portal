@@ -106,7 +106,7 @@
       await loadGsi(); if (!$('#gbtn') || !window.google || !google.accounts) throw new Error('Google sign-in could not load');
       google.accounts.id.initialize({ client_id: S.gid, callback: async resp => {
         const err = $('#autherr'); if (err) err.textContent = '';
-        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message); }
+        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message, 'error'); }
       } });
       google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(360, box.clientWidth || 360) });
     } catch (x) { const b = $('#gbtn'); if (b) { b.textContent = x.message; b.classList.add('err'); } }
@@ -413,7 +413,7 @@
         setTimeout(loop, 250);
       };
       loop();
-    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied')); }
+    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied'), 'error'); }
   }
 
   // ---------- events (delegated; no inline handlers under the CSP)
@@ -444,7 +444,7 @@
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved. The resident can now rate it.' : 'Work started'); render(); },
     emsel: el => { S.emType = el.dataset.k; render().then(() => { const n = $('#emn'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); } }); },
     emcancel: () => { S.emType = null; render(); },
@@ -460,15 +460,15 @@
     gpclose: () => { S.gpSel = null; S.gpCancel = null; render(); },
     gpask: el => { S.gpCancel = Number(el.dataset.id); render(); },
     gpkeep: () => { S.gpCancel = null; render(); },
-    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message); } render(); },
+    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message, 'error'); } render(); },
     gshare: async el => {
       const text = el.dataset.text;
       if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch (x) { /* dismissed */ } return; }
-      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.'); }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.', 'error'); }
     },
     gmask: () => { S.gmRot = true; render(); },
     gmkeep: () => { S.gmRot = false; render(); },
-    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message); } render(); },
+    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message, 'error'); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },

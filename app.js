@@ -214,7 +214,7 @@ function createApp(opts = {}) {
     const s = typeof req.query.status === 'string' && req.query.status ? req.query.status : '';
     const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
     const where = [], p = [];
-    if (s) { where.push('status=?'); p.push(s); } else where.push("role!='guard'");
+    where.push("role!='guard'"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
     if (term) {
       const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
       where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
@@ -642,7 +642,7 @@ function createApp(opts = {}) {
     if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
     const r = run('INSERT INTO notices(title,body,author_id) VALUES(?,?,?)', title, body, req.user.id);
     log(req.user.id, 'notice', r.lastInsertRowid, 'posted', title);
-    for (const u of q("SELECT id FROM users WHERE status='approved' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`);
+    for (const u of q("SELECT id FROM users WHERE status='approved' AND role!='guard' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`); // guards cannot read notices, so do not notify them
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
   app.delete('/api/notices/:id', auth, admin, (req, res) => {

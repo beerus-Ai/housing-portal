@@ -13,7 +13,7 @@
   const clone = o => JSON.parse(JSON.stringify(o || {}));
   const sec = () => (SECS.some(s => s[0] === S.setSec) ? S.setSec : 'general');
   const setErr = m => { const e = $('#sterr'); if (e) e.textContent = m || ''; };
-  const run = fn => async (...a) => { setErr(''); try { await fn(...a); } catch (x) { setErr(x.message); toast(x.message); } };
+  const run = fn => async (...a) => { setErr(''); try { await fn(...a); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
 
   const sw = (attrs, label, on) => `<label class="st-sw"><input type="checkbox" role="switch" ${attrs} ${on ? 'checked' : ''}><span class="st-sw-t" aria-hidden="true"></span><span class="sr">${esc(label)}</span></label>`;
   const field = (id, label, input, hint) => `<div class="field"><label for="${id}">${label}</label>${input}${hint ? `<span class="muted sm">${hint}</span>` : ''}</div>`;
@@ -149,6 +149,6 @@
       } else if (f.classList.contains('st-upw')) {
         await API.admin.resetPassword(f.dataset.id, d.password); ST.pw = null; toast('Password reset'); drawUsers();
       }
-    } catch (x) { setErr(x.message); toast(x.message); }
+    } catch (x) { setErr(x.message); toast(x.message, 'error'); }
   }, true);
 })();
