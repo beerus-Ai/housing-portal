@@ -58,21 +58,26 @@
   const screen = h => { $('#screen').innerHTML = h; };
 
   // ---------- signed out
+  // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
+  const authField = (id, label, icon, input) => `<div class="field af"><label for="${id}">${label}</label><div class="af-wrap"><span class="af-ic">${ic(icon)}</span>${input}</div></div>`;
+  const pwField = (login) => `<div class="field af"><label for="pw">Password${login ? '' : ' (8+ characters)'}</label><div class="af-wrap"><span class="af-ic">${ic('lock-key')}</span><input class="input" id="pw" name="password" type="password" required minlength="${login ? 1 : 8}" autocomplete="${login ? 'current-password' : 'new-password'}"><button type="button" class="af-eye" data-act="pwtoggle" aria-label="Show password" aria-pressed="false">${ic('eye')}</button></div></div>`;
   function authView() {
     const login = S.mode === 'login';
     const tiles = [['owner', 'key', 'Owner'], ['tenant', 'house-line', 'Tenant'], ['family', 'users', 'Family']]
       .map(([k, i, l]) => `<button type="button" class="type-tile ${S.regType === k ? 'on' : ''}" style="align-items:center" data-act="regtype" data-t="${k}">${ic(i)}<b style="font-size:14px">${l}</b></button>`).join('');
-    app.innerHTML = `<div class="phone"><div class="m-hero-photo">${photoSlot('Sahyadri Heights')}</div><form id="authform" class="screen" novalidate>
-      <span class="eyebrow">${esc(SOCIETY.name)}</span><h2>${login ? 'Welcome back' : 'Join your society'}</h2>
+    app.innerHTML = `<div class="phone auth-phone"><div class="auth-top"><div class="auth-top-anim" data-lottie="building" role="img" aria-label="Animated apartment building"></div><span class="eyebrow">${esc(SOCIETY.kind)}</span><h1>${esc(SOCIETY.name)}</h1></div>
+      <form id="authform" class="screen auth-sheet" novalidate>
+      <div class="auth-seg" role="tablist" aria-label="Sign in or join"><button type="button" role="tab" aria-selected="${login}" class="${login ? 'on' : ''}" data-act="mode">Sign in</button><button type="button" role="tab" aria-selected="${!login}" class="${!login ? 'on' : ''}" data-act="mode">Join</button></div>
+      <h2>${login ? 'Welcome back' : 'Create your account'}</h2>
       ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
-        <div class="field"><label for="n">Full name</label><input class="input" id="n" name="name" required maxlength="100" autocomplete="name"></div>
-        <div class="two" style="grid-template-columns:1fr 1.4fr"><div class="field"><label for="f">Flat</label><input class="input" id="f" name="flat" required maxlength="20" placeholder="B-304"></div>
-        <div class="field"><label for="p">Mobile</label><input class="input" id="p" name="phone" maxlength="20" inputmode="tel" autocomplete="tel"></div></div>`}
-      <div class="field"><label for="e">Email</label><input class="input" id="e" name="email" type="email" required autocomplete="username"></div>
-      <div class="field"><label for="pw">Password${login ? '' : ' (8+ characters)'}</label><input class="input" id="pw" name="password" type="password" required autocomplete="${login ? 'current-password' : 'new-password'}"></div>
+        ${authField('n', 'Full name', 'user', '<input class="input" id="n" name="name" required maxlength="100" autocomplete="name">')}
+        <div class="two" style="grid-template-columns:1fr 1.4fr">${authField('f', 'Flat', 'house', '<input class="input" id="f" name="flat" required maxlength="20" placeholder="B-304">')}
+        ${authField('p', 'Mobile', 'phone', '<input class="input" id="p" name="phone" maxlength="20" inputmode="tel" autocomplete="tel">')}</div>`}
+      ${authField('e', 'Email', 'envelope-simple', '<input class="input" id="e" name="email" type="email" required autocomplete="username">')}
+      ${pwField(login)}
       ${login ? '' : `<label class="consent sm"><input type="checkbox" name="consent" required>I consent to these details being stored to manage society services (DPDP Act, 2023).</label>`}
-      <p class="err" id="autherr" role="alert"></p><button class="btn btn-primary btn-lg">${login ? 'Sign in' : 'Send for approval'}</button>
-      <button type="button" class="link-btn" style="text-align:center;min-height:44px" data-act="mode">${login ? 'New resident? Join your society' : 'Already registered? Sign in'}</button>
+      <p class="err" id="autherr" role="alert"></p>
+      <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
       ${(window.Capacitor || matchMedia('(display-mode: standalone)').matches) ? '' : `<p class="install muted">Add this page to your home screen to use it like an app. <a href="/?web">Open the website</a></p>`}</form></div>`;
   }
 
@@ -379,7 +384,8 @@
     leasesback: () => go('home', null, 'leases-sub'),
     open: el => go('requests', Number(el.dataset.id)),
     logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; S.tab = 'home'; S.sub = null; S.pf = null; S.sheet = null; render(); },
-    mode: () => { S.mode = S.mode === 'login' ? 'join' : 'login'; render(); },
+    mode: el => { if (el && el.getAttribute('role') === 'tab' && el.classList.contains('on')) return; S.mode = S.mode === 'login' ? 'join' : 'login'; render(); },
+    pwtoggle: el => { const i = document.getElementById('pw'); if (!i) return; const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.setAttribute('aria-pressed', String(show)); el.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); el.innerHTML = ic(show ? 'eye-slash' : 'eye'); i.focus(); },
     regtype: el => { S.regType = el.dataset.t; document.querySelectorAll('[data-act=regtype]').forEach(b => b.classList.toggle('on', b === el)); },
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
@@ -403,12 +409,12 @@
     const f = e.target; e.preventDefault();
     const d = Object.fromEntries(new FormData(f));
     if (f.id === 'authform') {
-      const err = $('#autherr'); err.textContent = '';
+      const err = $('#autherr'); err.textContent = ''; f.classList.remove('shake'); f.classList.add('busy'); const btn = f.querySelector('button.auth-go'); if (btn) btn.disabled = true;
       try {
         if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.tab = 'home'; return render(); }
         d.consent = f.consent.checked; d.resident_type = S.regType;
         const r = await API.auth.register(d); S.mode = 'login'; authView(); toast(r.message + ' You will be able to sign in once approved.');
-      } catch (x) { err.textContent = x.message; }
+      } catch (x) { err.textContent = x.message; f.classList.remove('busy'); if (btn) btn.disabled = false; void f.offsetWidth; f.classList.add('shake'); }
     } else if (f.id === 'raiseform') {
       const fd = new FormData();
       fd.set('category', S.cat); fd.set('title', d.title);
