@@ -138,5 +138,5 @@ window.HP = (() => {
   async function fileToUpload(form) { const fd = new FormData(form); const f = fd.get('photo'); if (f && !f.size) fd.delete('photo'); return fd; }
 
   return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, CONTACTS, dateLong, leaseInfo, live, liveBadge };
+    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, dateLong, leaseInfo, live, liveBadge };
 })();

@@ -41,6 +41,16 @@ window.API = (() => {
       list: () => call('GET', '/api/household'),
       add: body => call('POST', '/api/household', body),
     },
+    emergencies: {
+      list: () => call('GET', '/api/emergencies'), // resident: own flat; committee: all. [{ id, type, note, status: 'active'|'resolved', flat, user_name, created_at, resolved_at }]
+      raise: (type, note) => call('POST', '/api/emergencies', { type, note }),
+      resolve: eid => call('POST', `/api/emergencies/${id(eid)}/resolve`),
+    },
+    contacts: {
+      list: () => call('GET', '/api/contacts'), // [{ id, name, role, phone, icon }]
+      create: body => call('POST', '/api/contacts', body), // committee: { name, role, phone, icon }
+      remove: cid => call('DELETE', `/api/contacts/${id(cid)}`),
+    },
     lease: { get: () => call('GET', '/api/lease') },
     vendors: {
       list: () => call('GET', '/api/vendors'),
