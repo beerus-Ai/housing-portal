@@ -178,6 +178,61 @@ function createApp(opts = {}) {
     res.json({ ok: true });
   });
 
+  // ---- emergencies
+  const EMERGENCY_TYPES = ['lift', 'medical', 'fire', 'theft', 'threat', 'violence', 'other'];
+  const EMERGENCY_SELECT = `SELECT e.id, e.type, e.note, e.status, u.flat, u.name AS user_name, e.created_at, e.resolved_at
+    FROM emergencies e JOIN users u ON u.id=e.user_id`;
+  app.post('/api/emergencies', auth, (req, res) => {
+    const type = req.body.type;
+    if (!EMERGENCY_TYPES.includes(type)) return res.status(400).json({ error: 'Choose a valid emergency type' });
+    if (req.body.note != null && typeof req.body.note !== 'string') return res.status(400).json({ error: 'Note must be text' });
+    const note = (req.body.note || '').trim();
+    if (note.length > 500) return res.status(400).json({ error: 'Note must be 500 characters or fewer' });
+    const recent = one("SELECT COUNT(*) AS n FROM emergencies WHERE user_id=? AND created_at >= datetime('now','-1 hour')", req.user.id).n;
+    if (recent >= 5) return res.status(429).json({ error: 'Emergency limit reached: at most 5 alerts per hour. Please call the security desk directly.' });
+    const r = run('INSERT INTO emergencies(user_id,type,note) VALUES(?,?,?)', req.user.id, type, note || null);
+    const id = Number(r.lastInsertRowid);
+    log(req.user.id, 'emergency', id, 'raised', type);
+    const label = type.charAt(0).toUpperCase() + type.slice(1);
+    const msg = `EMERGENCY (${label}) from flat ${req.user.flat || 'n/a'}${note ? ': ' + note : ''}`;
+    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, msg);
+    res.status(201).json({ id });
+  });
+  app.get('/api/emergencies', auth, (req, res) => {
+    if (req.user.role === 'admin') return res.json(q(`${EMERGENCY_SELECT} ORDER BY e.id DESC`));
+    res.json(q(`${EMERGENCY_SELECT} WHERE u.flat=? ORDER BY e.id DESC`, req.user.flat));
+  });
+  app.post('/api/emergencies/:id/resolve', auth, admin, (req, res) => {
+    const e = one('SELECT * FROM emergencies WHERE id=?', req.params.id);
+    if (!e) return res.status(404).json({ error: 'Emergency not found' });
+    if (e.status === 'resolved') return res.status(409).json({ error: 'Emergency is already resolved' });
+    run("UPDATE emergencies SET status='resolved', resolved_at=datetime('now'), resolved_by=? WHERE id=?", req.user.id, e.id);
+    log(req.user.id, 'emergency', e.id, 'resolved', e.type);
+    notify(e.user_id, `Your ${e.type} emergency alert has been marked resolved by the committee`);
+    res.json({ ok: true });
+  });
+
+  // ---- society contacts
+  const CONTACT_ICONS = ['phone', 'briefcase', 'shield-check', 'wrench', 'elevator', 'first-aid', 'fire', 'drop'];
+  app.get('/api/contacts', auth, (req, res) => res.json(q('SELECT id,name,role,phone,icon FROM contacts ORDER BY name')));
+  app.post('/api/contacts', auth, admin, (req, res) => {
+    const name = str(req.body.name, 100), role = str(req.body.role, 100), phone = str(req.body.phone, 40);
+    const icon = req.body.icon == null || req.body.icon === '' ? 'phone' : req.body.icon;
+    if (!name || !role) return res.status(400).json({ error: 'Name and role are required' });
+    if (!/^[+\d][\d\s()+-]{3,19}$/.test(phone)) return res.status(400).json({ error: 'Enter a valid phone number' });
+    if (!CONTACT_ICONS.includes(icon)) return res.status(400).json({ error: 'Unknown icon' });
+    const r = run('INSERT INTO contacts(name,role,phone,icon) VALUES(?,?,?,?)', name, role, phone, icon);
+    log(req.user.id, 'contact', r.lastInsertRowid, 'created', name);
+    res.status(201).json({ id: Number(r.lastInsertRowid) });
+  });
+  app.delete('/api/contacts/:id', auth, admin, (req, res) => {
+    const c = one('SELECT * FROM contacts WHERE id=?', req.params.id);
+    if (!c) return res.status(404).json({ error: 'Contact not found' });
+    run('DELETE FROM contacts WHERE id=?', c.id);
+    log(req.user.id, 'contact', c.id, 'deleted', c.name);
+    res.json({ ok: true });
+  });
+
   // ---- requests
   const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
   const upload = multer({

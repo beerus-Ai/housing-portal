@@ -97,8 +97,10 @@ window.HP = (() => {
 
   const rid = r => 'R-' + String(1000 + Number(r.id));
   const SOCIETY = { name: 'Sahyadri Heights', kind: 'Co-operative Housing Society' };
-  // Society contacts are entered by the committee; none are hard-coded.
-  const CONTACTS = [];
+  // Emergency types: [key, icon, label]. The server validates the key against the same list.
+  const EMERGENCY_TYPES = [['lift', 'elevator', 'Stuck in lift'], ['medical', 'first-aid', 'Medical'], ['fire', 'fire', 'Fire'], ['theft', 'mask-sad', 'Theft'], ['threat', 'warning', 'Threat'], ['violence', 'hand-fist', 'Violence'], ['other', 'siren', 'Other']];
+  // Icons a committee contact can use.
+  const CONTACT_ICONS = ['phone', 'briefcase', 'shield-check', 'wrench', 'elevator', 'first-aid', 'fire', 'drop'];
   const dateLong = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? '' : `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`; };
   // Lease numbers for the tenant screens.
   function leaseInfo(l) {

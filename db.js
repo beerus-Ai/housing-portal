@@ -35,8 +35,15 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS notifications(
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, message TEXT NOT NULL,
     is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS emergencies(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    type TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), resolved_at TEXT, resolved_by INTEGER);
+  CREATE TABLE IF NOT EXISTS contacts(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, phone TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'phone');
   `);
-  const admin = db.prepare("SELECT id FROM users WHERE role='admin'").get();
+  const admin =db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {
     // Synthetic default admin for dev/demo. Set ADMIN_EMAIL / ADMIN_PASSWORD in production.
     if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 12))

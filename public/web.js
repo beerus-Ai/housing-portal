@@ -1,12 +1,13 @@
 // Web app (desktop-first, responsive). Phones are sent to the mobile app at /m/ unless ?web is in the URL.
 (() => {
   const { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, stamp, day, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, CONTACTS, leaseInfo } = HP;
+    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, leaseInfo } = HP;
+  const EMERGENCY_TYPES = HP.EMERGENCY_TYPES || [], CONTACT_ICONS = HP.CONTACT_ICONS || [];
 
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '' };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '' };
   // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
   const NAVKEY = 'hp.nav';
   const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
@@ -23,10 +24,10 @@
   };
   const isAdmin = () => S.me.role === 'admin';
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three']],
-    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text']],
-    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone']],
-    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone'],
+    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three'], ['contacts', 'Contacts', 'phone-call'], ['emergency', 'Emergency', 'siren']],
+    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text'], ['emergency', 'Emergency', 'siren']],
+    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['emergency', 'Emergency', 'siren']],
+    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['approvals', 'Approvals', 'user-check'], ['contacts', 'Contacts', 'phone-call'], ['notices', 'Notices', 'megaphone'],
       ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['audit', 'Audit trail', 'clock-counter-clockwise']],
   };
   const navFor = () => NAV[isAdmin() ? 'admin' : S.me.resident_type] || NAV.owner;
@@ -35,10 +36,10 @@
   // ---------- shell
   async function render() {
     if (!S.me) return authView();
-    let pending = 0;
-    if (isAdmin()) pending = (await API.admin.users('pending')).length;
+    let pending = 0, activeEm = 0;
+    if (isAdmin()) { pending = (await API.admin.users('pending')).length; try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; } }
     const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
-    const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : '')).join('');
+    const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : k === 'emergencies' && activeEm ? `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` : '')).join('');
     const who = isAdmin() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
@@ -92,6 +93,17 @@
     <span class="col" style="gap:4px"><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · ${esc(day(r.created_at))}${isAdmin() || S.me.resident_type !== 'tenant' ? ' · ' + esc(r.flat) : ''}</span><span class="list-title">${esc(r.title)}</span><span style="align-self:flex-start">${statusTag(r)}</span></span></button>`;
   const vendorOptions = (vs, cur) => `<option value="">Unassigned</option>${vs.map(v => `<option value="${v.id}" ${cur === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}`;
 
+  const emType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', 'Emergency'];
+  const contactIcon = i => (CONTACT_ICONS.map(c => Array.isArray(c) ? c[0] : c).includes(i) ? i : 'phone');
+  const contactRow = (c, admin) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(contactIcon(c.icon))}</span><span class="col" style="gap:0"><span class="list-title">${esc(c.name)}</span><span class="muted sm">${esc(c.role)}</span></span>
+    <span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><a href="tel:${esc(String(c.phone).replace(/[^\d+]/g, ''))}" style="font-weight:600;font-size:16px">${esc(c.phone)}</a>${admin ? (S.delContact === c.id
+      ? `<button class="btn btn-danger" data-act="cdel" data-id="${c.id}">Delete ${esc(c.name)}?</button><button class="btn btn-secondary" data-act="ccancel">Keep</button>`
+      : `<button class="btn btn-secondary" data-act="cask" data-id="${c.id}" aria-label="Delete ${esc(c.name)}">${ic('trash')}Delete</button>`) : ''}</span></div>`;
+  const emStatus = e => e.status === 'active' ? '<span class="tag tag-danger">Active</span>' : '<span class="tag tag-accent">Resolved</span>';
+  const emCard = e => { const [, i, l] = emType(e.type); return `<article class="em-row ${e.status === 'active' ? 'on' : ''}"><span class="tile lg em-ic">${ic(i)}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:20px">${esc(l)} · Flat ${esc(e.flat)}</span>
+    <span class="muted sm">${esc(e.user_name || '')} · ${esc(stamp(e.created_at))}${e.resolved_at ? ' · resolved ' + esc(stamp(e.resolved_at)) : ''}</span>${e.note ? `<span>${esc(e.note)}</span>` : ''}</span>
+    <span class="col" style="align-items:flex-end;gap:8px">${emStatus(e)}${isAdmin() && e.status === 'active' ? `<button class="btn btn-primary" data-act="emresolve" data-id="${e.id}">Mark resolved</button>` : ''}</span></article>`; };
+
   // ---------- pages
   const PAGES = {
     async home() {
@@ -110,7 +122,7 @@
       if (track) { const d = await API.requests.get(track.id);
         trackHtml = `<div class="row" style="align-items:baseline"><h3>${esc(track.title)}</h3><span class="muted sm">${rid(track)} · ${esc(track.vendor_name || 'Not yet assigned')}</span></div>${stepper(track, d.history)}`; }
       page(`<div class="g2"><div class="hero"><div class="hero-head">${`<span class="tile">${ic('wrench')}</span>`}<span class="soft">Flat ${esc(S.me.flat)} · ${t === 'family' ? 'household requests' : 'your requests'}</span>
-          <span class="chip">${toRate.length ? toRate.length + ' waiting for your rating' : 'All up to date'}</span></div>
+          <span class="chip">${toRate.length ? toRate.length + ' waiting for your rating' : 'All up to date'}</span><button class="btn em-sos" data-act="nav" data-page="emergency">${ic('siren')}Emergency</button></div>
           <div class="fig">${open.length} open</div><div class="soft" style="font-weight:600;margin-top:8px">${track ? `${esc(track.title)} · ${esc(track.vendor_name || 'not yet assigned')} · raised ${esc(day(track.created_at))}` : 'Nothing open'}</div>
           ${heroPanels(panels)}</div><div class="hero-photo">${photoSlot('Sahyadri Heights')}</div></div>
         <section class="col"><h6 style="margin:0">Track your current request</h6>${trackHtml}</section>
@@ -173,14 +185,46 @@
     },
 
     async lease() {
-      const li = leaseInfo(await API.lease.get());
+      const [lease, contacts] = await Promise.all([API.lease.get(), API.contacts.list()]); const li = leaseInfo(lease);
       if (!li) return page('<h2>Your lease</h2><p class="callout">No lease is on file yet. The committee adds it after verifying your rent agreement.</p>');
       page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="col" style="gap:var(--space-4)"><h2>Your lease</h2>
         <div class="hero"><div class="row soft sm" style="gap:8px;font-weight:600">${ic('calendar-check')}Lease on ${esc(S.me.flat)}</div><div class="fig" style="font-size:48px;margin-top:10px">${li.left} days left</div>
         <div class="soft" style="margin-top:6px">Ends ${esc(li.ends)} · renewal notice due by ${esc(li.renewBy)}</div>
         <div style="height:8px;border-radius:8px;background:color-mix(in srgb,var(--color-bg) 22%,transparent);margin-top:18px;overflow:hidden"><span style="display:block;height:100%;width:${li.pct}%;background:var(--color-accent-300)"></span></div></div>
         <div class="soft-card">${li.rows.map(([i, k, v]) => `<div class="kv">${ic(i)}<span class="muted">${esc(k)}</span><span style="font-weight:600">${esc(v)}</span></div>`).join('')}</div></div>
-        ${CONTACTS.length ? `<div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${CONTACTS.map(([i, n, r, p]) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title">${esc(n)}</span><span class="muted sm">${esc(r)}</span></span><span style="font-weight:600;font-size:14px">${esc(p)}</span></div>`).join('')}</div>` : ''}</div>`);
+        ${contacts.length ? `<div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${contacts.map(c => contactRow(c, false)).join('')}</div>` : ''}</div>`);
+    },
+
+    async emergency() {
+      const list = await API.emergencies.list();
+      const tiles = EMERGENCY_TYPES.map(([k, i, l]) => `<button type="button" class="em-tile ${S.emType === k ? 'on' : ''}" data-act="emsel" data-k="${k}" aria-pressed="${S.emType === k}">${ic(i)}<span>${esc(l)}</span></button>`).join('');
+      const [, ci, cl] = S.emType ? emType(S.emType) : [0, 'siren', ''];
+      const confirm = S.emType ? `<form id="emform" class="em-confirm col" role="alertdialog" aria-label="Confirm emergency alert"><div class="row" style="gap:12px;flex-wrap:nowrap"><span class="tile lg em-ic">${ic(ci)}</span><h3 style="margin:0">Send ${esc(cl)} alert for Flat ${esc(S.me.flat)}?</h3></div>
+        <p class="em-warn" style="margin:0">${ic('warning')}The committee is alerted immediately. Only send this in a real emergency. Call the emergency services yourself if someone is in danger.</p>
+        <div class="field"><label for="emn">Add a note (optional)</label><textarea class="input" id="emn" name="note" maxlength="500" placeholder="Where you are, what is happening"></textarea></div>
+        <div class="row"><button class="btn btn-danger">${ic('siren')}Send alert</button><button type="button" class="btn btn-secondary" data-act="emcancel">Cancel</button></div></form>` : '';
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Emergency</h2><p style="margin:0;font-size:18px">Tap what is happening. You will be asked to confirm before the committee is alerted.</p>
+        <div class="em-grid">${tiles}</div>${confirm}
+        <h6 style="margin:var(--space-4) 0 0">Recent alerts for your flat</h6>${list.map(e => emCard(e)).join('') || '<p class="muted">No alerts raised.</p>'}</div>`);
+    },
+
+    async emergencies() {
+      const list = await API.emergencies.list();
+      const act = list.filter(e => e.status === 'active'), done = list.filter(e => e.status !== 'active');
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Emergencies</h2>
+        ${act.length ? `<div class="em-banner" role="alert">${ic('siren')}<b>${act.length} active emergenc${act.length > 1 ? 'ies' : 'y'}</b></div>${act.map(emCard).join('')}` : '<p class="callout" style="margin:0">No active emergencies.</p>'}
+        <h6 style="margin:var(--space-4) 0 0">Resolved</h6>${done.map(emCard).join('') || '<p class="muted">Nothing resolved yet.</p>'}</div>`);
+    },
+
+    async contacts() {
+      const cs = await API.contacts.list();
+      const icons = (CONTACT_ICONS.length ? CONTACT_ICONS : ['phone']).map(c => Array.isArray(c) ? c : [c, c]);
+      if (!isAdmin()) return page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Who to call</h2>${cs.map(c => contactRow(c, false)).join('') || '<p class="muted">No contacts yet.</p>'}</div>`);
+      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,440px)"><div class="col"><h2>Society contacts</h2><p class="muted" style="margin:0">Residents see these under "Who to call".</p>${cs.map(c => contactRow(c, true)).join('') || '<p class="muted">No contacts yet.</p>'}</div>
+        <form id="cform" class="col"><h3>Add contact</h3><div class="field"><label for="cn">Name</label><input class="input" id="cn" name="name" required maxlength="100"></div><div class="field"><label for="cr">Role</label><input class="input" id="cr" name="role" required maxlength="100" placeholder="Security desk"></div>
+        <div class="field"><label for="cp">Phone</label><input class="input" id="cp" name="phone" required maxlength="20" inputmode="tel"></div>
+        <div class="field"><label for="ci">Icon</label><select class="input" id="ci" name="icon">${icons.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select></div>
+        <p class="err" id="cerr" role="alert"></p><div><button class="btn btn-primary">Add contact</button></div></form></div>`);
     },
 
     async notices() {
@@ -199,6 +243,7 @@
 
     async dashboard() {
       const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
+      const em = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active');
       const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id).length;
       const panels = [{ l: 'Pending approvals', v: String(s.pending_users), s: 'New residents to verify', icon: 'user-check', go: 'approvals' }, { l: 'Unassigned', v: String(unassigned), s: 'Need a vendor today', icon: 'user-gear', go: 'requests' },
         { l: 'Average rating', v: s.avg_rating ? s.avg_rating.toFixed(1) + ' / 5' : '–', s: 'All rated requests', icon: 'star', go: 'dashboard' }, { l: 'Notices, 30 days', v: String(s.notices_30d), s: `${s.households} households reached`, icon: 'megaphone', go: 'notices' }];
@@ -210,7 +255,7 @@
         <td>${esc(r.flat)}</td><td class="${overdue(r) ? 'late' : ''}">${ageLabel(r.created_at)}</td><td>${statusTag(r)}</td>
         <td><select class="input" data-change="assign" data-id="${r.id}" aria-label="Assign ${esc(r.title)}">${vendorOptions(vendors, r.vendor_id)}</select></td>
         <td>${r.vendor_id ? `<button class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</td></tr>`).join('');
-      page(`<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests</span><span class="chip">${a.overdue} past 48h SLA</span></div>
+      page(`${em.length ? `<button class="em-banner" data-act="nav" data-page="emergencies" role="alert">${ic('siren')}<b>${em.length} active emergenc${em.length > 1 ? 'ies' : 'y'}</b><span>${esc(em.map(e => emType(e.type)[2] + ' · ' + e.flat).join(', '))}</span><span class="em-go">View</span></button>` : ''}<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests</span><span class="chip">${a.overdue} past 48h SLA</span></div>
         <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><div class="fig" style="font-size:72px">${a.open.length} open requests</div><div class="soft" style="font-weight:600;margin-top:8px">${unassigned} unassigned · ${s.awaiting_rating} waiting for resident rating · oldest ${a.oldest}</div></div>
         <div class="ring" style="background:${ring(a.pct)}"><div><b>${a.pct}%</b><span>within 48h SLA</span></div></div></div>${heroPanels(panels)}</div>
         <section class="col"><h3>Open by category</h3><div class="cat-tiles">${tiles}</div></section>
@@ -245,7 +290,7 @@
 
     async vendors() {
       const vs = await API.vendors.list();
-      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Vendors</h2>${vs.map(v => `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(v.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(v.name)}</span><span class="muted sm">${esc(v.trade)}</span></span><span class="sm">${esc(v.phone || '')}</span></div>`).join('') || '<p class="muted">No vendors yet.</p>'}</div>
+      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Vendors</h2>${S.vErr ? `<p class="err" role="alert">${esc(S.vErr)}</p>` : ''}${vs.map(vendorRow).join('') || '<p class="muted">No vendors yet.</p>'}</div>
         <form id="vform" class="col"><h3>Add vendor</h3><div class="field"><label for="vn">Name</label><input class="input" id="vn" name="name" required maxlength="100"></div><div class="field"><label for="vt">Trade</label><input class="input" id="vt" name="trade" required maxlength="50" placeholder="plumbing"></div>
         <div class="field"><label for="vp">Phone</label><input class="input" id="vp" name="phone" maxlength="20"></div><div><button class="btn btn-primary">Add vendor</button></div></form></div>`);
     },
@@ -256,6 +301,13 @@
     },
   };
   PAGES.adminNotices = PAGES.notices;
+  const vendorRow = v => S.editVendor === v.id
+    ? `<form class="member veform" data-id="${v.id}" style="grid-template-columns:minmax(0,1fr);gap:var(--space-2)"><div class="three"><div class="field"><label for="ven${v.id}">Name</label><input class="input" id="ven${v.id}" name="name" required maxlength="100" value="${esc(v.name)}"></div>
+      <div class="field"><label for="vet${v.id}">Trade</label><input class="input" id="vet${v.id}" name="trade" required maxlength="50" value="${esc(v.trade)}"></div><div class="field"><label for="vep${v.id}">Phone</label><input class="input" id="vep${v.id}" name="phone" maxlength="20" value="${esc(v.phone || '')}"></div></div>
+      <div class="row"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-act="vcancel">Cancel</button></div></form>`
+    : `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(v.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(v.name)}</span><span class="muted sm">${esc(v.trade)}</span></span><span class="sm">${esc(v.phone || '')}</span>
+      <span class="row" style="gap:var(--space-1);flex-wrap:nowrap">${S.delVendor === v.id ? `<button class="btn btn-danger" data-act="vdel" data-id="${v.id}">Delete ${esc(v.name)}?</button><button class="btn btn-secondary" data-act="vcancel">Keep</button>`
+      : `<button class="btn btn-secondary" data-act="vedit" data-id="${v.id}" aria-label="Edit ${esc(v.name)}">${ic('pencil-simple')}Edit</button><button class="btn btn-secondary" data-act="vask" data-id="${v.id}" aria-label="Delete ${esc(v.name)}">${ic('trash')}</button>`}</span></div>`;
   const leaseForm = t => `<form id="leaseform" class="form-card" data-id="${t.user_id}"><div class="row" style="justify-content:space-between"><h3>${esc(t.name)} · Flat ${esc(t.flat)}</h3><span class="ok" id="leaseok"></span></div>
     <div class="two"><div class="field"><label for="ls">Lease starts</label><input class="input" id="ls" name="start_date" type="date" required value="${esc(t.start_date || '')}"></div>
     <div class="field"><label for="le">Lease ends</label><input class="input" id="le" name="end_date" type="date" required value="${esc(t.end_date || '')}"></div></div>
@@ -283,6 +335,16 @@
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved. The resident can now rate it.' : 'Work started'); render(); },
+    emsel: el => { S.emType = el.dataset.k; render().then(() => { const n = $('#emn'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); } }); },
+    emcancel: () => { S.emType = null; render(); },
+    emresolve: async el => { await API.emergencies.resolve(el.dataset.id); toast('Marked resolved'); render(); },
+    cask: el => { S.delContact = Number(el.dataset.id); render(); },
+    ccancel: () => { S.delContact = null; render(); },
+    cdel: async el => { S.delContact = null; await API.contacts.remove(el.dataset.id); toast('Contact deleted'); render(); },
+    vedit: el => { S.editVendor = Number(el.dataset.id); S.delVendor = null; S.vErr = ''; render(); },
+    vask: el => { S.delVendor = Number(el.dataset.id); S.editVendor = null; S.vErr = ''; render(); },
+    vcancel: () => { S.delVendor = S.editVendor = null; S.vErr = ''; render(); },
+    vdel: async el => { try { await API.vendors.remove(el.dataset.id); S.delVendor = null; S.vErr = ''; toast('Vendor deleted'); } catch (x) { S.delVendor = null; S.vErr = x.message; } render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
@@ -314,6 +376,9 @@
       await API.household.add(d); toast('Sent to the committee for approval'); render();
     } else if (f.id === 'leaseform') { await API.admin.setLease(f.dataset.id, d); toast('Lease saved. Tenant notified.'); render();
     } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
+    else if (f.id === 'emform') { await API.emergencies.raise(S.emType, (d.note || '').trim()); S.emType = null; toast('Alert sent. The committee has been notified.'); render(); }
+    else if (f.id === 'cform') { try { await API.contacts.create(d); toast('Contact added'); render(); } catch (x) { $('#cerr').textContent = x.message; } }
+    else if (f.classList.contains('veform')) { try { await API.vendors.update(f.dataset.id, d); S.editVendor = null; S.vErr = ''; toast('Vendor saved'); } catch (x) { S.vErr = x.message; } render(); }
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
   }));
 

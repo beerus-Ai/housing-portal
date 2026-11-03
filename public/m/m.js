@@ -1,16 +1,16 @@
 // Mobile app (installable PWA). Same API and data as the web app, laid out for a 390px phone with a bottom tab bar.
 (() => {
   const { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, stamp, day, ageLabel, isOpen, overdue, initials, firstName,
-    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, CONTACTS, leaseInfo } = HP;
+    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, leaseInfo } = HP;
+  const EMERGENCY_TYPES = HP.EMERGENCY_TYPES || [];
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/m/sw.js').catch(() => {});
   const app = $('#app');
-  const S = { me: null, leaseId: null, tab: 'home', sub: null, selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login' };
+  const S = { me: null, leaseId: null, tab: 'home', sub: null, selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', sheet: null, note: '', pf: null, emgActive: 0, idx: { reqs: [], notices: [] } };
   const isAdmin = () => S.me.role === 'admin';
   const TABS = {
-    resident: () => [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise', 'plus-circle'],
-      S.me.resident_type === 'owner' ? ['household', 'Household', 'users-three'] : S.me.resident_type === 'tenant' ? ['lease', 'Lease', 'file-text'] : ['notices', 'Notices', 'megaphone']],
-    admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone']],
+    resident: () => [['home', 'Home', 'house'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['profile', 'Profile', 'user-circle']],
+    admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone']],
   };
   const go = (tab, selId = null, sub = null) => { S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
@@ -23,13 +23,31 @@
     <span class="col" style="gap:2px"><span class="list-title" style="font-size:15px">${esc(r.title)}</span><span class="muted xs">${rid(r)} · ${esc(r.flat)} · ${esc(day(r.created_at))}</span><span style="align-self:flex-start">${statusTag(r)}</span></span>
     ${isAdmin() && isOpen(r) ? `<span class="${overdue(r) ? 'late' : ''} sm">${ageLabel(r.created_at)}</span>` : ''}</button>`;
 
+  const searchBox = () => `<div class="m-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="hs" type="search" placeholder="Search requests and notices" autocomplete="off" aria-label="Search requests and notices"></div><div id="hres" class="col" style="gap:8px"></div>`;
+  const searchResults = q => {
+    q = q.trim().toLowerCase(); if (!q) return '';
+    const rs = S.idx.reqs.filter(r => (r.title || '').toLowerCase().includes(q)).slice(0, 5), ns = S.idx.notices.filter(n => (n.title || '').toLowerCase().includes(q)).slice(0, 5);
+    return rs.map(r => `<button class="list-row m-card m-hit" data-act="open" data-id="${r.id}"><span class="tile">${ic(catIcon(r.category))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(r.title)}</span><span class="muted xs">Request ${rid(r)}</span></span></button>`).join('')
+      + ns.map(n => `<button class="list-row m-card m-hit" data-act="quick" data-k="notices-sub"><span class="tile">${ic(noticeIcon(n))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n.title)}</span><span class="muted xs">Notice</span></span></button>`).join('')
+      || '<p class="muted sm">No matches.</p>';
+  };
+  const emgType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', k];
+  const emgTag = e => e.status === 'active' ? '<span class="tag tag-accent-2">Active</span>' : '<span class="tag tag-neutral">Resolved</span>';
+  const emgRow = (e, admin) => { const t = emgType(e.type); return `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="tile lg" style="width:48px;height:48px;border-radius:16px;font-size:26px">${ic(t[1])}</span>
+    <span class="col grow" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(t[2])}</span><span class="muted xs">${admin ? esc(e.flat) + ' · ' + esc(e.user_name || '') + ' · ' : ''}${esc(stamp(e.created_at))}</span>${e.note ? `<span class="sm">${esc(e.note)}</span>` : ''}</span>${emgTag(e)}</div>
+    ${admin && e.status === 'active' ? `<button class="btn btn-primary btn-lg" data-act="emgresolve" data-id="${e.id}">${ic('check-circle')}Mark resolved</button>` : ''}</div>`; };
+
   async function render() {
     if (!S.me) return authView();
     const tabs = TABS[isAdmin() ? 'admin' : 'resident']();
     let pending = 0;
-    if (isAdmin()) pending = (await API.admin.users('pending').catch(() => [])).length;
-    const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}</button>`).join('');
-    app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main><nav class="tabbar" aria-label="Main">${bar}</nav></div>`;
+    if (isAdmin()) {
+      pending = (await API.admin.users('pending').catch(() => [])).length;
+      S.emgActive = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active').length;
+    }
+    const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
+    const fab = !isAdmin() && !S.sub && S.tab !== 'raise' ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
+    app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const screen = h => { $('#screen').innerHTML = h; };
@@ -64,12 +82,13 @@
       let p2 = ['Notices', String(notices.length), ['quick', 'data-k="notices-sub"']];
       if (t === 'owner') p2 = ['Household', String((await API.household.list()).length), ['tab', 'data-tab="household"']];
       if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); p2 = ['Lease ends', li ? li.left + 'd' : '–', ['tab', 'data-tab="lease"']]; }
-      const n0 = notices[0];
+      const n0 = notices[0]; S.idx = { reqs, notices };
       const quick = [['plus-circle', 'Raise', 'raise'], ['list-checks', 'Requests', 'requests'], ['megaphone', 'Notices', 'notices-sub'], ['address-book', 'Contacts', 'contacts-sub']]
         .map(([i, l, k]) => `<button data-act="quick" data-k="${k}"><span class="tile">${ic(i)}</span>${l}</button>`).join('');
       screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span>
         <div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · ${esc(S.me.flat)}</span><span class="list-title" style="font-size:20px">${greet()}, ${esc(firstName(S.me.name))}</span></div>
         <button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div>
+        ${searchBox()}
         <div class="hero m-hero"><div class="hero-head soft sm">${ic('wrench')}Your requests<span class="chip">${toRate.length ? toRate.length + ' to rate' : 'Up to date'}</span></div>
         <div class="fig">${open.length} open</div><div class="panels" style="--cols:3">
           <button class="panel" data-act="tab" data-tab="requests"><div class="l soft">To rate</div><div class="v">${toRate.length}</div></button>
@@ -77,7 +96,7 @@
           <button class="panel" data-act="quick" data-k="notices-sub"><div class="l soft">Notices</div><div class="v">${notices.length}</div></button></div></div>
         <div class="quick">${quick}</div>
         ${n0 ? `<div class="row" style="flex-wrap:nowrap;align-items:center"><div style="width:96px;height:96px;border-radius:14px;overflow:hidden;flex:none">${photoSlot('', noticeIcon(n0))}</div><div class="col" style="gap:2px"><span class="kicker">Notice · ${esc(day(n0.created_at))}</span><span class="list-title" style="font-size:16px">${esc(n0.title)}</span></div></div>` : ''}
-        <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
+        `);
     },
 
     async requests() {
@@ -112,7 +131,7 @@
       const ms = await API.household.list();
       const open = S.sub === 'add';
       const tiles = [['family', 'users', 'Family member'], ['tenant', 'house-line', 'Tenant']].map(([k, i, l]) => `<button type="button" class="type-tile ${S.rtype === k ? 'on' : ''}" style="align-items:center" data-act="rtype" data-t="${k}">${ic(i)}<b style="font-size:14px">${l}</b></button>`).join('');
-      screen(`<h2>Household</h2><span class="muted sm">Flat ${esc(S.me.flat)}</span>${ms.map((m, i) => `<div class="member" style="grid-template-columns:44px minmax(0,1fr);padding:12px;border-radius:20px"><span class="avatar ${i ? 'blue' : ''}" style="width:44px;height:44px">${esc(initials(m.name))}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(m.name)}</span><span class="row xs" style="gap:6px">${esc(TYPE[m.resident_type] || '')}<span class="tag ${m.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${m.status === 'approved' ? 'Active' : 'Pending approval'}</span></span></span></div>`).join('')}
+      screen(`${back('Profile', 'profile')}<h2>Household</h2><span class="muted sm">Flat ${esc(S.me.flat)}</span>${ms.map((m, i) => `<div class="member" style="grid-template-columns:44px minmax(0,1fr);padding:12px;border-radius:20px"><span class="avatar ${i ? 'blue' : ''}" style="width:44px;height:44px">${esc(initials(m.name))}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(m.name)}</span><span class="row xs" style="gap:6px">${esc(TYPE[m.resident_type] || '')}<span class="tag ${m.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${m.status === 'approved' ? 'Active' : 'Pending approval'}</span></span></span></div>`).join('')}
         <form id="hhform" class="col"><h3>Add someone</h3><div class="type-tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">${tiles}</div>
         <div class="field"><label for="hn">Full name</label><input class="input" id="hn" name="name" required maxlength="100"></div><div class="field"><label for="hp">Mobile</label><input class="input" id="hp" name="phone" inputmode="tel" maxlength="20"></div>
         <div class="field"><label for="he">Email</label><input class="input" id="he" name="email" type="email" required></div><div class="field"><label for="hw">Temporary password (8+)</label><input class="input" id="hw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
@@ -147,11 +166,14 @@
     },
 
     async dashboard() {
-      const [s, reqs] = await Promise.all([API.admin.stats(), API.requests.list()]);
+      const [s, reqs, notices, emg] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => [])]);
+      S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active').length;
       const a = adminSummary(reqs, s), un = a.open.filter(r => !r.vendor_id).length, max = Math.max(1, ...a.weeks);
       const stat = (i, l, v, tab) => `<button class="stat" data-act="tab" data-tab="${tab}"><div class="l">${ic(i)}${l}</div><div class="v">${esc(v)}</div></button>`;
       screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span><div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · Committee</span>
         <span class="list-title" style="font-size:20px">${greet()}, ${esc(firstName(S.me.name))}</span></div><button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div>
+        ${act ? `<button class="emg-banner" data-act="tab" data-tab="emergency">${ic('siren')}<span class="col grow" style="gap:0;text-align:left"><b>${act} active emergenc${act === 1 ? 'y' : 'ies'}</b><span class="sm">Tap to respond</span></span>${ic('caret-right')}</button>` : ''}
+        ${searchBox()}
         <div class="hero m-hero"><div class="hero-head soft sm">${ic('clipboard-text')}Open requests<span class="chip">${a.overdue} past 48h</span></div>
         <div class="row" style="justify-content:space-between;flex-wrap:nowrap;margin-top:8px"><span class="fig" style="margin:0">${a.open.length}</span><span class="ring" style="width:76px;height:76px;background:${ring(a.pct)}"><div style="width:56px;height:56px"><b style="font-size:14px">${a.pct}%</b></div></span></div>
         <div class="soft sm" style="margin-top:6px">${un} unassigned · oldest ${a.oldest} · within 48h SLA ${a.pct}%</div></div>
@@ -161,13 +183,50 @@
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
     },
 
-    async alerts() { return SUB.alerts(); },
+    async alerts() { return SUB.alerts(!isAdmin()); },
+
+    async emergency() {
+      const list = await API.emergencies.list().catch(() => []);
+      if (isAdmin()) {
+        const sorted = [...list.filter(e => e.status === 'active'), ...list.filter(e => e.status !== 'active')];
+        return screen(`<h2>Emergencies</h2>${S.emgActive ? `<div class="emg-banner static">${ic('siren')}<b>${S.emgActive} active</b></div>` : '<p class="callout">No active emergencies.</p>'}${sorted.map(e => emgRow(e, true)).join('')}`);
+      }
+      const sel = S.sheet ? emgType(S.sheet) : null;
+      const tiles = EMERGENCY_TYPES.map(([k, i, l]) => `<button class="emg-tile" data-act="emgpick" data-k="${esc(k)}"><span class="tile lg">${ic(i)}</span><b>${esc(l)}</b></button>`).join('');
+      const sheet = sel ? `<div class="sheet-back" data-act="emgcancel"></div><form id="emgform" class="sheet" role="dialog" aria-label="Confirm emergency alert"><span class="tile lg" style="align-self:center">${ic(sel[1])}</span><h3 style="text-align:center">Send ${esc(sel[2])} alert?</h3>
+        <p class="muted sm" style="text-align:center;margin:0">The committee and security will be told it is from Flat ${esc(S.me.flat)}.</p>
+        <div class="field"><label for="enote">Note (optional)</label><textarea class="input" id="enote" name="note" maxlength="300" style="min-height:80px">${esc(S.note)}</textarea></div>
+        <button class="btn btn-primary btn-lg emg-send">${ic('paper-plane-tilt')}Send alert</button><button type="button" class="btn btn-secondary btn-lg" data-act="emgcancel">Cancel</button></form>` : '';
+      screen(`<h2>Emergency</h2><p class="muted sm" style="margin:0">Tap what is happening. The committee is alerted straight away.</p><div class="emg-grid">${tiles}</div>
+        <h3>Recent alerts for your flat</h3>${list.map(e => emgRow(e, false)).join('') || '<p class="muted">No alerts raised.</p>'}${sheet}`);
+    },
+
+    async profile() {
+      const m = S.me, ms = await API.household.list().catch(() => []);
+      const pct = Math.round([m.name, m.phone, m.flat, m.email].filter(v => v && String(v).trim()).length / 4 * 100);
+      const row = (i, k, v) => `<div class="row" style="flex-wrap:nowrap;padding:8px 0;gap:var(--space-2)">${ic(i)}<span class="col" style="gap:0"><span class="muted xs">${k}</span><span class="sm" style="font-weight:600">${v ? esc(v) : 'Not added'}</span></span></div>`;
+      const f = S.pf === 'edit' ? `<form id="profform" class="m-card"><div class="field"><label for="pn1">Full name</label><input class="input" id="pn1" name="name" required maxlength="100" value="${esc(m.name)}" autocomplete="name"></div>
+        <div class="field"><label for="pp1">Mobile</label><input class="input" id="pp1" name="phone" maxlength="20" inputmode="tel" value="${esc(m.phone || '')}" autocomplete="tel"></div><p class="err" id="perr" role="alert"></p>
+        <div class="two"><button class="btn btn-primary btn-lg">Save</button><button type="button" class="btn btn-secondary btn-lg" data-act="pform" data-f="">Cancel</button></div></form>` : '';
+      const pw = S.pf === 'pw' ? `<form id="pwform" class="m-card"><div class="field"><label for="pc">Current password</label><input class="input" id="pc" name="current" type="password" required autocomplete="current-password"></div>
+        <div class="field"><label for="pnw">New password (8+ characters)</label><input class="input" id="pnw" name="next" type="password" required minlength="8" autocomplete="new-password"></div><p class="err" id="perr" role="alert"></p>
+        <div class="two"><button class="btn btn-primary btn-lg">Update</button><button type="button" class="btn btn-secondary btn-lg" data-act="pform" data-f="">Cancel</button></div></form>` : '';
+      screen(`<div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(m.name))}</span><h2 style="margin:0">${esc(m.name)}</h2><span class="muted sm">Flat ${esc(m.flat)} · ${esc(TYPE[m.resident_type] || '')}</span></div>
+        <div class="m-card"><b class="sm">Profile ${pct}% complete</b><div class="pbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>${pct < 100 ? '<span class="muted xs">Add the missing details below.</span>' : ''}</div>
+        <div class="soft-card" style="padding:4px 14px;border-radius:20px">${row('user', 'Name', m.name)}${row('house', 'Flat', m.flat)}${row('identification-badge', 'Resident type', TYPE[m.resident_type] || '')}${row('phone', 'Phone', m.phone)}${row('envelope-simple', 'Email', m.email)}</div>
+        ${f || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="edit">' + ic('pencil-simple') + 'Edit details</button>'}
+        <div class="m-card"><h3>Household</h3>${ms.map(x => `<div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar blue" style="width:36px;height:36px;font-size:13px">${esc(initials(x.name))}</span><span class="sm">${esc(x.name)} · ${esc(TYPE[x.resident_type] || '')}</span></div>`).join('') || '<span class="muted sm">No other members yet.</span>'}
+          <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="household">${ic('users-three')}Manage household</button></div>
+        <button class="btn btn-secondary btn-lg" data-act="quick" data-k="contacts-sub">${ic('address-book')}Who to call</button>
+        ${pw || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="pw">' + ic('lock-key') + 'Change password</button>'}
+        <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
+    },
   };
   // committee: the Requests tab is the assignment queue; reuse the same list/detail screen.
   const SUB = {
-    async alerts() {
+    async alerts(tab) {
       const ns = await API.notifications.list();
-      screen(`${back('Back', 'home')}<h2>Alerts</h2>${ns.map(n => `<div class="m-card"><span class="sm">${esc(n.message)}</span><span class="muted xs">${n.is_read ? '' : 'New · '}${esc(stamp(n.created_at))}</span></div>`).join('') || '<p class="muted">No alerts.</p>'}`);
+      screen(`${tab === true ? '' : back('Back', 'home')}<h2>Alerts</h2>${ns.map(n => `<div class="m-card"><span class="sm">${esc(n.message)}</span><span class="muted xs">${n.is_read ? '' : '<span class="tag tag-accent-2">New</span> '}${esc(stamp(n.created_at))}</span></div>`).join('') || '<p class="muted">No alerts.</p>'}`);
       await API.notifications.markRead();
     },
     async 'leases-sub'() {
@@ -189,18 +248,23 @@
     },
     async 'notices-sub'() { const ns = await API.notices.list(); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
     async 'contacts-sub'() {
-      screen(`${back('Home', 'home')}<h2>Who to call</h2>${CONTACTS.length ? CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('') : '<p class="muted">The committee has not added any contacts yet.</p>'}`);
+      const CONTACTS = (await API.contacts.list().catch(() => [])).map(c => [c.icon || 'phone', c.name, c.role, c.phone || '']);
+      screen(`${back('Back', isAdmin() ? 'home' : 'profile')}<h2>Who to call</h2>${CONTACTS.length ? CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('') : '<p class="muted">The committee has not added any contacts yet.</p>'}`);
     },
   };
 
   // ---------- events
   const ACT = {
-    tab: el => go(el.dataset.tab === 'alerts' ? S.tab : el.dataset.tab, null, el.dataset.tab === 'alerts' ? 'alerts' : null),
+    tab: el => (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
+    emgpick: el => { S.sheet = el.dataset.k; S.note = ''; render(); },
+    emgcancel: () => { S.sheet = null; S.note = ''; render(); },
+    emgresolve: async el => { await API.emergencies.resolve(el.dataset.id); toast('Marked resolved'); render(); },
+    pform: el => { S.pf = el.dataset.f || null; render(); },
     quick: el => (el.dataset.k.endsWith('-sub') ? go('home', null, el.dataset.k) : go(el.dataset.k)),
     leaseopen: el => { S.leaseId = Number(el.dataset.id); go('home', null, 'lease-edit'); },
     leasesback: () => go('home', null, 'leases-sub'),
     open: el => go('requests', Number(el.dataset.id)),
-    logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
+    logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; S.tab = 'home'; S.sub = null; S.pf = null; S.sheet = null; render(); },
     mode: () => { S.mode = S.mode === 'login' ? 'join' : 'login'; render(); },
     regtype: el => { S.regType = el.dataset.t; document.querySelectorAll('[data-act=regtype]').forEach(b => b.classList.toggle('on', b === el)); },
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
@@ -211,6 +275,10 @@
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
+  document.addEventListener('input', e => {
+    if (e.target.id === 'hs') { const r = $('#hres'); if (r) r.innerHTML = searchResults(e.target.value); }
+    else if (e.target.id === 'enote') S.note = e.target.value;
+  });
   document.addEventListener('change', guard(async e => {
     if (e.target.id !== 'photo') return;
     S.photo = e.target.files[0] || null; $('#pn').textContent = S.photo ? S.photo.name : 'JPG, PNG or WebP, up to 5 MB';
@@ -233,6 +301,15 @@
       fd.set('description', [d.where ? 'Where: ' + d.where : '', d.description].filter(Boolean).join('\n'));
       if (S.photo) fd.set('photo', S.photo);
       const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
+    } else if (f.id === 'emgform') {
+      const t = S.sheet; await API.emergencies.raise(t, (d.note || '').trim()); S.sheet = null; S.note = ''; toast('Alert sent to the committee'); render();
+    } else if (f.id === 'profform' || f.id === 'pwform') {
+      const err = $('#perr'); err.textContent = '';
+      try {
+        if (f.id === 'profform') { const u = await API.profile.update({ name: d.name, phone: d.phone }); S.me = { ...S.me, ...u }; toast('Details saved'); }
+        else { await API.profile.changePassword(d.current, d.next); toast('Password changed'); }
+        S.pf = null; render();
+      } catch (x) { err.textContent = x.message; }
     } else if (f.id === 'hhform') {
       d.consent = f.consent.checked; d.resident_type = S.rtype; await API.household.add(d); toast('Sent to the committee for approval'); render();
     } else if (f.id === 'leaseform') { await API.admin.setLease(f.dataset.id, d); toast('Lease saved. Tenant notified.'); go('home', null, 'leases-sub');
