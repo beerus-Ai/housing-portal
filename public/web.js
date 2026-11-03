@@ -7,7 +7,7 @@
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '' };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '', settings: null };
   // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
   const NAVKEY = 'hp.nav';
   const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
@@ -28,11 +28,17 @@
     tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
     family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['approvals', 'Approvals', 'user-check'], ['contacts', 'Contacts', 'phone-call'], ['notices', 'Notices', 'megaphone'],
-      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise']],
+      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six']],
     guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise']],
   };
   const isGuard = () => S.me.role === 'guard';
-  const navFor = () => NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner;
+  // Feature flags (GET /api/me features{}) and permissions (permissions[]) decide what a person sees. Missing data means allowed.
+  const feat = f => !S.me || !S.me.features || S.me.features[f] !== false;
+  const can = p => !S.me || S.me.role === 'admin' || !Array.isArray(S.me.permissions) || S.me.permissions.includes(p);
+  const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
+    household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view') };
+  const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
+  const navFor = () => (NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner).filter(([k]) => isGuard() || allowed(k));
   const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
   const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
@@ -48,7 +54,7 @@
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
       <aside class="sidebar">
-        <div class="side-brand"><span class="tile lg side-logo">${ic('buildings')}</span>
+        <div class="side-brand"><span class="side-logo">${HP.logo(44)}</span>
           <div class="col side-t" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
         <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
         <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
@@ -69,21 +75,29 @@
   // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
   const authField = (id, label, icon, input) => `<div class="field af"><label for="${id}">${label}</label><div class="af-wrap"><span class="af-ic">${ic(icon)}</span>${input}</div></div>`;
   const pwField = (login) => `<div class="field af"><label for="pw">Password${login ? '' : ' (8+ characters)'}</label><div class="af-wrap"><span class="af-ic">${ic('lock-key')}</span><input class="input" id="pw" name="password" type="password" required minlength="${login ? 1 : 8}" autocomplete="${login ? 'current-password' : 'new-password'}"><button type="button" class="af-eye" data-act="pwtoggle" aria-label="Show password" aria-pressed="false">${ic('eye')}</button></div></div>`;
+  let gsiLoad = null;
+  const loadGsi = () => gsiLoad || (gsiLoad = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = ok; s.onerror = () => { gsiLoad = null; no(new Error('Google sign-in could not load')); }; document.head.appendChild(s); }));
+  async function initGoogle() {
+    const box = $('#gbtn'); if (!box || !S.gid) return;
+    try {
+      await loadGsi(); if (!$('#gbtn') || !window.google || !google.accounts) throw new Error('Google sign-in could not load');
+      google.accounts.id.initialize({ client_id: S.gid, callback: async resp => {
+        const err = $('#autherr'); if (err) err.textContent = '';
+        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message); }
+      } });
+      google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(360, box.clientWidth || 360) });
+    } catch (x) { const b = $('#gbtn'); if (b) { b.textContent = x.message; b.classList.add('err'); } }
+  }
   function authView() {
     const login = S.mode === 'login';
     const tiles = [['owner', 'key', 'Owner', 'Holds the sale deed'], ['tenant', 'house-line', 'Tenant', 'Rent agreement'], ['family', 'users', 'Family', 'Added by owner']]
       .map(([k, i, l, s]) => `<button type="button" class="type-tile ${S.regType === k ? 'on' : ''}" data-act="regtype" data-t="${k}">${ic(i)}<b>${l}</b><span>${s}</span></button>`).join('');
-    const perks = [['list-checks', 'Raise and track work requests', 'Photos, vendors and a clear five-step tracker'], ['siren', 'Emergency alerts', 'One tap tells the committee and the gate'], ['qr-code', 'Visitor gate passes', 'QR codes and codes your guests can show'], ['megaphone', 'Notices and household', 'Stay informed, manage your flat']]
-      .map(([i, t, d]) => `<li><span class="tile">${ic(i)}</span><span class="col" style="gap:0"><b>${t}</b><span class="soft sm">${d}</span></span></li>`).join('');
-    root.innerHTML = `<div class="auth"><section class="auth-art"><span class="eyebrow" style="color:var(--color-accent-300)">${esc(SOCIETY.kind)}</span>
-      <h1>Welcome to ${esc(SOCIETY.name)}</h1>
-      <p class="soft auth-lead">One portal for residents, the committee and the gate.</p>
-      <ul class="auth-perks">${perks}</ul>
-      <div class="hero-anim" data-lottie="building" role="img" aria-label="Animated apartment building"></div></section>
-      <section class="auth-form"><div class="auth-card">
-      <div class="auth-seg" role="tablist" aria-label="Sign in or join"><button type="button" role="tab" aria-selected="${login}" class="${login ? 'on' : ''}" data-act="mode" ${login ? 'tabindex="-1"' : ''}>Sign in</button><button type="button" role="tab" aria-selected="${!login}" class="${!login ? 'on' : ''}" data-act="mode" ${!login ? 'tabindex="-1"' : ''}>Join your society</button></div>
-      <h2>${login ? 'Welcome back' : 'Create your account'}</h2>
-      <p class="muted auth-sub">${login ? 'Sign in to continue to your portal.' : 'The committee approves new residents before you can sign in.'}</p>
+    const google = login && S.gid ? `<div id="gbtn" class="am-google" aria-label="Continue with Google"></div><div class="am-or" role="separator"><span>or</span></div>` : '';
+    root.innerHTML = `<div class="auth auth-min"><div class="am-card">
+      <div class="am-brand">${HP.logo(64)}<span class="am-name">${esc(SOCIETY.name)}</span></div>
+      <h2>${login ? 'Welcome back' : 'Join your society'}</h2>
+      ${login ? '' : `<p class="muted am-sub">The committee approves new residents before you can sign in.</p>`}
+      ${google}
       <form id="authform" class="col" novalidate>
         ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
           <div class="two">${authField('n', 'Full name', 'user', '<input class="input" id="n" name="name" required maxlength="100" autocomplete="name">')}
@@ -94,7 +108,9 @@
         ${login ? '' : `<label class="consent"><input type="checkbox" name="consent" required>I consent to ${esc(SOCIETY.name)} storing these details to manage society services, as required under the DPDP Act, 2023.</label>`}
         <p class="err" id="autherr" role="alert"></p>
         <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
-      </form></div></section></div>`;
+      </form>
+      <p class="am-switch">${login ? 'New here?' : 'Already have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p></div></div>`;
+    initGoogle();
   }
 
   // ---------- helpers
@@ -118,30 +134,6 @@
 
   // ---------- pages
   const PAGES = {
-    async home() {
-      const [reqs, notices] = await Promise.all([API.requests.list(), API.notices.list()]);
-      const { open, toRate, track } = residentSummary(reqs, S.me, notices);
-      const t = S.me.resident_type, n0 = notices[0];
-      let extra = [];
-      if (t === 'owner') extra = [{ l: 'Household', v: String((await API.household.list()).length), s: 'Members on ' + S.me.flat, icon: 'users-three', go: 'household' }];
-      if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); extra = [{ l: 'Lease ends', v: li ? li.ends.replace(/ \d{4}$/, '') : '–', s: li ? li.left + ' days left' : 'No lease on file', icon: 'calendar-check', go: 'lease' }]; }
-      const notePanel = { l: 'New notices', v: String(notices.length), s: n0 ? n0.title : 'Nothing new', icon: 'megaphone', go: t === 'family' ? 'notices' : 'home' };
-      const panels = t === 'family'
-        ? [{ l: 'Raised by you', v: String(reqs.filter(r => r.user_id === S.me.id).length), s: 'You can raise and track', icon: 'note-pencil', go: 'requests' },
-          { l: 'Awaiting owner rating', v: String(reqs.filter(r => r.status === 'closed' && !r.rating).length), s: 'The flat owner rates the work', icon: 'star', go: 'requests' }, notePanel]
-        : [{ l: 'To rate', v: String(toRate.length), s: toRate[0] ? toRate[0].title : 'Nothing to rate', icon: 'star', go: 'requests', sel: toRate[0] ? toRate[0].id : '' }, ...extra, notePanel];
-      let trackHtml = '<p class="muted">You have no requests yet.</p>';
-      if (track) { const d = await API.requests.get(track.id);
-        trackHtml = `<div class="row" style="align-items:baseline"><h3>${esc(track.title)}</h3><span class="muted sm">${rid(track)} · ${esc(track.vendor_name || 'Not yet assigned')}</span></div>${stepper(track, d.history)}`; }
-      page(`<div class="g2"><div class="hero"><div class="hero-head">${`<span class="tile">${ic('wrench')}</span>`}<span class="soft">Flat ${esc(S.me.flat)} · ${t === 'family' ? 'household requests' : 'your requests'}</span>
-          <span class="chip">${toRate.length ? toRate.length + ' waiting for your rating' : 'All up to date'}</span><button class="btn em-sos" data-act="nav" data-page="emergency">${ic('siren')}Emergency</button></div>
-          <div class="fig">${open.length} open</div><div class="soft" style="font-weight:600;margin-top:8px">${track ? `${esc(track.title)} · ${esc(track.vendor_name || 'not yet assigned')} · raised ${esc(day(track.created_at))}` : 'Nothing open'}</div>
-          ${heroPanels(panels)}</div><div class="hero-photo">${photoSlot('Sahyadri Heights')}</div></div>
-        <section class="col"><h6 style="margin:0">Track your current request</h6>${trackHtml}</section>
-        <div class="split-2"><div class="lead">${n0 ? `<article class="col" style="gap:var(--space-2)"><span class="kicker row" style="gap:6px">${ic('megaphone')}Notice · ${esc(day(n0.created_at))}</span><h1>${esc(n0.title)}</h1><p style="font-size:17px;margin:0">${esc(n0.body)}</p><span class="muted sm">Posted by ${esc(n0.author)}</span></article><div style="height:220px;border-radius:14px;overflow:hidden">${photoSlot('Notice', 'megaphone')}</div>` : '<p class="muted">No notices yet.</p>'}</div>
-          <aside class="col"><h6 style="margin:0">Also on the board</h6>${notices.slice(1, 5).map(noticeRow).join('')}<button class="btn btn-primary" data-act="nav" data-page="raise" style="align-self:flex-start">${ic('plus-circle')}Raise a request</button></aside></div>`);
-    },
-
     async requests() {
       const [all, vendors] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter } : {}), isAdmin() ? API.vendors.list() : []]);
       const reqs = (S.catFilter ? all.filter(isOpen) : all).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
@@ -297,47 +289,10 @@
       await refreshGateLog();
     },
 
-    async guards() {
-      const gs = await API.admin.guards();
-      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Gate guards</h2>${S.gdErr ? `<p class="err" role="alert">${esc(S.gdErr)}</p>` : ''}
-        ${gs.map(g => `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(g.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(g.name)}</span><span class="muted sm">${esc(g.email)}</span></span>
-          <span class="row" style="gap:var(--space-1);flex-wrap:nowrap">${S.gdDel === g.id ? `<button class="btn btn-danger" data-act="gddel" data-id="${g.id}">Remove ${esc(g.name)}?</button><button class="btn btn-secondary" data-act="gddkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gddask" data-id="${g.id}" aria-label="Remove ${esc(g.name)}">${ic('trash')}Remove</button>`}</span></div>`).join('') || '<p class="muted">No guards yet.</p>'}</div>
-        <form id="gdform" class="form-card col"><h3>Add guard</h3><div class="field"><label for="gdn">Name</label><input class="input" id="gdn" name="name" required maxlength="100"></div>
-          <div class="field"><label for="gde">Email</label><input class="input" id="gde" name="email" type="email" required autocomplete="off"></div>
-          <div class="field"><label for="gdp">Temporary password (at least 8 characters)</label><input class="input" id="gdp" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
-          <p class="err" id="gderr" role="alert"></p><div><button class="btn btn-primary">Add guard</button></div></form></div>`);
-    },
-
     async alerts() {
       const ns = await API.notifications.list();
       page(`<div class="col" style="max-width:none"><h2>Alerts</h2>${ns.map(n => `<p class="row" style="gap:8px;margin:0">${n.is_read ? '' : '<span class="tag tag-accent-2">new</span>'}<span>${esc(n.message)}</span><span class="muted xs">${esc(stamp(n.created_at))}</span></p>`).join('') || '<p class="muted">No alerts.</p>'}</div>`);
       await API.notifications.markRead();
-    },
-
-    async dashboard() {
-      const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
-      const em = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active');
-      const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id).length;
-      const panels = [{ l: 'Pending approvals', v: String(s.pending_users), s: 'New residents to verify', icon: 'user-check', go: 'approvals' }, { l: 'Unassigned', v: String(unassigned), s: 'Need a vendor today', icon: 'user-gear', go: 'requests' },
-        { l: 'Average rating', v: s.avg_rating ? s.avg_rating.toFixed(1) + ' / 5' : '–', s: 'All rated requests', icon: 'star', go: 'dashboard' }, { l: 'Notices, 30 days', v: String(s.notices_30d), s: `${s.households} households reached`, icon: 'megaphone', go: 'notices' }];
-      const max = Math.max(1, ...a.weeks);
-      const tiles = CATS.map(([k, l, i]) => { const c = s.by_category.find(x => x.category === k) || { open: 0, raised_30d: 0 }; const top = Math.max(1, ...s.by_category.map(x => x.raised_30d));
-        return `<button class="cat-tile" data-act="catfilter" data-c="${k}" aria-label="Show open ${l} requests"><div class="row" style="gap:8px;font-weight:600;font-size:14px">${ic(i)}${l}</div><div class="n">${c.open}</div><div class="sm" style="opacity:.82">${c.raised_30d} raised in 30 days</div><div class="bar"><span class="${c.open > 1 ? 'hot' : ''}" style="width:${Math.round(c.raised_30d / top * 100)}%"></span></div></button>`; }).join('');
-      const vr = s.vendor_ratings.map(v => `<div class="vbar"><span class="avatar light" style="width:40px;height:40px">${esc(initials(v.name))}</span><span class="col" style="gap:4px"><span class="sm" style="font-weight:600">${esc(v.name)}</span><span class="track"><span style="width:${v.avg ? v.avg / 5 * 100 : 0}%"></span></span></span><span class="list-title" style="text-align:right">${v.avg || '–'}</span></div>`).join('') || '<p class="muted">No vendors yet.</p>';
-      const rows = a.open.map(r => `<tr><td>${rid(r)}</td><td><span class="row" style="flex-wrap:nowrap;gap:var(--space-2)"><span style="font-size:22px;color:var(--color-accent-700)">${ic(catIcon(r.category))}</span><span class="col" style="gap:0"><button class="link-btn" style="font-weight:600;text-align:left" data-act="open" data-id="${r.id}" data-page="requests">${esc(r.title)}</button><span class="muted xs">${esc(catLabel(r.category))} · ${esc(r.resident_name)}</span></span></span></td>
-        <td>${esc(r.flat)}</td><td class="${overdue(r) ? 'late' : ''}">${ageLabel(r.created_at)}</td><td>${statusTag(r)}</td>
-        <td><select class="input" data-change="assign" data-id="${r.id}" aria-label="Assign ${esc(r.title)}">${vendorOptions(vendors, r.vendor_id)}</select></td>
-        <td>${r.vendor_id ? `<button class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</td></tr>`).join('');
-      page(`${em.length ? `<button class="em-banner" data-act="nav" data-page="emergencies" role="alert">${ic('siren')}<b>${em.length} active emergenc${em.length > 1 ? 'ies' : 'y'}</b><span>${esc(em.map(e => emType(e.type)[2] + ' · ' + e.flat).join(', '))}</span><span class="em-go">View</span></button>` : ''}<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests</span><span class="chip">${a.overdue} past 48h SLA</span></div>
-        <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><div class="fig" style="font-size:72px">${a.open.length} open requests</div><div class="soft" style="font-weight:600;margin-top:8px">${unassigned} unassigned · ${s.awaiting_rating} waiting for resident rating · oldest ${a.oldest}</div></div>
-        <div class="ring" style="background:${ring(a.pct)}"><div><b>${a.pct}%</b><span>within 48h SLA</span></div></div></div>${heroPanels(panels)}</div>
-        <section class="col"><h3>Open by category</h3><div class="cat-tiles">${tiles}</div></section>
-        <div class="dash-mid"><section class="col"><div class="row" style="justify-content:space-between"><h3>Requests raised per week</h3><span class="muted sm">Last 8 weeks</span></div>
-          <div class="bars">${a.weeks.map(n => `<div><span>${n}</span><span class="b" style="height:${Math.round(n / max * 140)}px"></span></div>`).join('')}</div>
-          <div class="bars" style="height:auto">${a.weeks.map((_, i) => `<span class="muted xs" style="text-align:center">${i === 7 ? 'This wk' : (7 - i) + 'w ago'}</span>`).join('')}</div></section>
-          <section class="col"><h3>Vendor ratings</h3>${vr}</section></div>
-        <section class="col"><h3>Open requests</h3><div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Request</th><th>Flat</th><th>Age</th><th>Status</th><th>Assign to</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">All clear.</td></tr>'}</tbody></table></div></section>
-        <section class="col" style="max-width:none"><div class="row" style="justify-content:space-between"><h4>Audit trail</h4><button class="link-btn" data-act="nav" data-page="audit">View all</button></div>${audit.slice(0, 6).map(x => `<div class="hist"><span class="muted">${esc(stamp(x.created_at))}</span><span><strong style="font-weight:600">${esc(x.action.replace('_', ' '))}</strong> · ${esc(x.entity)} ${esc(x.entity_id)} — ${esc(x.actor || 'system')}</span></div>`).join('')}</section>`);
     },
 
     async approvals() {
@@ -481,9 +436,6 @@
     gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
-    gddask: el => { S.gdDel = Number(el.dataset.id); render(); },
-    gddkeep: () => { S.gdDel = null; render(); },
-    gddel: async el => { S.gdDel = null; try { await API.admin.removeGuard(el.dataset.id); S.gdErr = ''; toast('Guard removed'); } catch (x) { S.gdErr = x.message; } render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
@@ -520,13 +472,15 @@
     else if (f.classList.contains('veform')) { try { await API.vendors.update(f.dataset.id, d); S.editVendor = null; S.vErr = ''; toast('Vendor saved'); } catch (x) { S.vErr = x.message; } render(); }
     else if (f.id === 'gpform') { try { const r = await API.gate.pass({ visitor_name: (d.visitor_name || '').trim(), purpose: (d.purpose || '').trim(), valid_from: new Date(d.valid_from).toISOString(), valid_until: new Date(d.valid_until).toISOString() }); S.gpSel = r.id; S.gpNew = r; S.gpCancel = null; toast('Gate pass created'); render(); } catch (x) { $('#gperr').textContent = x.message; } }
     else if (f.id === 'gvform') { const inp = $('#gcode'); const v = (inp.value || '').trim(); if (!v) { inp.focus(); return; } await gateVerify(/^[\d\s]+$/.test(v) ? { code: v.replace(/\s+/g, '') } : { token: v }); }
-    else if (f.id === 'gdform') { try { await API.admin.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); S.gdErr = ''; toast('Guard added'); render(); } catch (x) { $('#gderr').textContent = x.message; } }
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
   }));
+
+  window.HPWeb = { S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, home0, reqRow, noticeRow, emType, emCard, vendorOptions };
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
   const poller = HP.live(async () => {
     if (!S.me) return;
+    if (S.page === 'settings' || S.page === 'guards') return; // unsaved toggles and inline forms must not be wiped
     if (S.page === 'gate') return refreshGateLog(); // never redraw the gate page: it would wipe the typed code and the result card
     const pg = $('#page'), top = pg ? pg.scrollTop : 0;
     await render();
@@ -534,7 +488,9 @@
   });
 
   (async () => {
-    try { S.me = await API.auth.me(); S.page = home0(); } catch { S.me = null; }
+    const [st, me] = await Promise.all([API.settings.public().catch(() => null), API.auth.me().catch(() => null)]);
+    if (st) { S.settings = st; S.gid = st.google_client_id || ''; Object.assign(SOCIETY, { name: st.society_name || SOCIETY.name, kind: st.society_kind || SOCIETY.kind }); document.title = SOCIETY.name + ' Portal'; }
+    if (me) { S.me = me; S.page = home0(); }
     render();
   })();
 })();

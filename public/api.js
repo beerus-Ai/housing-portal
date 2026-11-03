@@ -11,6 +11,7 @@ window.API = (() => {
       logout: () => call('POST', '/api/logout'),
       register: body => call('POST', '/api/register', body),
       pulse: () => call('GET', '/api/pulse'),
+      google: credential => call('POST', '/api/auth/google', { credential }), // Google Identity Services ID token; signs in an EXISTING approved account matched by verified email
     },
     profile: {
       update: body => call('PATCH', '/api/me', body), // { name, phone }
@@ -63,6 +64,9 @@ window.API = (() => {
       addGuard: body => call('POST', '/api/admin/guards', body), // committee: { name, email, password }
       removeGuard: gid => call('DELETE', `/api/admin/guards/${id(gid)}`),
     },
+    settings: {
+      public: () => call('GET', '/api/settings'), // no sign-in needed: { society_name, society_kind, google_client_id ('' when off), features: { emergency, gate, contacts, notices } }
+    },
     lease: { get: () => call('GET', '/api/lease') },
     vendors: {
       list: () => call('GET', '/api/vendors'),
@@ -79,6 +83,14 @@ window.API = (() => {
       stats: () => call('GET', '/api/admin/stats'),
       audit: () => call('GET', '/api/admin/audit'),
       exportUrl: '/api/admin/export.csv',
+      settings: () => call('GET', '/api/admin/settings'), // same shape as settings.public plus any extra admin-only keys
+      setSettings: body => call('PUT', '/api/admin/settings', body), // { society_name?, society_kind?, google_client_id?, features?: { emergency?, gate?, contacts?, notices? } }
+      access: () => call('GET', '/api/admin/access'), // { roles: ['owner','tenant','family'], permissions: [{ key, label }], matrix: { owner: { 'gate.pass': true, ... }, ... } }
+      setAccess: matrix => call('PUT', '/api/admin/access', { matrix }),
+      allUsers: params => call('GET', '/api/admin/users' + qs(params)), // { status?, q? }
+      patchUser: (uid, body) => call('PATCH', `/api/admin/users/${id(uid)}`, body), // { resident_type?, flat?, name?, phone?, status?: 'approved'|'suspended' }
+      resetPassword: (uid, password) => call('POST', `/api/admin/users/${id(uid)}/reset-password`, { password }),
+      removeUser: uid => call('DELETE', `/api/admin/users/${id(uid)}`),
     },
   };
 })();
