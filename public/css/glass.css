@@ -1,60 +1,71 @@
-/* Glassmorphism layer: frosted translucent surfaces over a soft colour backdrop. Loaded after ui.css and mobile.css so it wins.
-   Falls back to the solid surfaces where backdrop-filter is unsupported. */
+/* Glassmorphism for icons and movement only. Surfaces, cards and backgrounds stay solid (see ui.css / app.css).
+   Icon tiles get frosted-glass gloss; icons and controls get smooth, springy motion. */
 :root {
-  --glass-bg: color-mix(in srgb, #ffffff 52%, transparent);
-  --glass-bg-strong: color-mix(in srgb, #ffffff 70%, transparent);
-  --glass-dark: color-mix(in srgb, var(--color-accent-900) 78%, transparent);
-  --glass-line: color-mix(in srgb, #ffffff 65%, transparent);
-  --glass-shadow: 0 8px 32px color-mix(in srgb, #0a303e 18%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 70%, transparent);
-  --glass-blur: blur(18px) saturate(160%);
+  --glass-icon-bg: linear-gradient(135deg, color-mix(in srgb, #ffffff 82%, transparent), color-mix(in srgb, var(--color-accent-300) 38%, transparent));
+  --glass-icon-line: color-mix(in srgb, #ffffff 80%, transparent);
+  --glass-icon-shadow: 0 6px 16px color-mix(in srgb, var(--color-accent-800) 20%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 90%, transparent), inset 0 -2px 6px color-mix(in srgb, var(--color-accent-300) 35%, transparent);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
 }
 
-/* backdrop: soft colour blobs so the glass has something to frost */
-html { background: var(--color-bg); }
-body, body.mob {
-  background:
-    radial-gradient(60vmax 60vmax at 8% 0%, color-mix(in srgb, var(--color-accent-300) 75%, transparent), transparent 60%),
-    radial-gradient(55vmax 55vmax at 100% 18%, color-mix(in srgb, var(--color-accent-2-300) 70%, transparent), transparent 55%),
-    radial-gradient(70vmax 70vmax at 40% 100%, color-mix(in srgb, var(--color-accent-200) 85%, transparent), transparent 60%),
-    var(--color-bg);
-  background-attachment: fixed;
+/* ---- glass icon tiles ---- */
+.tile, .avatar.light {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: var(--glass-icon-bg);
+  border: 1px solid var(--glass-icon-line);
+  box-shadow: var(--glass-icon-shadow);
+  -webkit-backdrop-filter: blur(10px) saturate(170%); backdrop-filter: blur(10px) saturate(170%);
+  transition: transform .3s var(--spring), box-shadow .3s;
 }
-.web.side-shell, .web.top-shell, .side-shell > .page, .top-shell > .page, .phone, .screen, .auth-form { background: transparent; }
-.side-shell > .page { box-shadow: none; border-radius: 0; }
-
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  /* light glass panels */
-  .soft-card, .notice-card, .member, .m-card, .table-wrap, .callout, .empty, .cat, .type-tile, .vbar, .sidebar, .tabbar, .auth-form, .field .input, .btn-secondary, .btn-ghost.side-tool {
-    background: var(--glass-bg);
-    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-line);
-    box-shadow: var(--glass-shadow);
-  }
-  .sidebar { background: var(--glass-bg-strong); border-radius: 0 26px 26px 0; border-left: 0; }
-  .top-shell .sidebar { border-radius: 0 0 26px 26px; border-top: 0; }
-  .tabbar { background: var(--glass-bg-strong); border-radius: 26px 26px 0 0; border-bottom: 0; }
-  .input, select.input, textarea.input { background: color-mix(in srgb, #ffffff 60%, transparent); border: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-  .input:focus { background: color-mix(in srgb, #ffffff 85%, transparent); }
-  .type-tile.on, .cat.on { background: var(--glass-bg-strong); box-shadow: 0 0 0 3px var(--color-accent), var(--glass-shadow); }
-  .side-link { background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .side-link:hover { background: color-mix(in srgb, #ffffff 55%, transparent); }
-  .side-link.on, .side-link.on:hover { background: var(--glass-dark); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid color-mix(in srgb, #ffffff 25%, transparent); }
-
-  /* dark glass: hero cards, category tiles, toast, reveal button */
-  .hero, .m-hero, .cat-tile, #toast, .auth-art, .btn-primary, .nav-reveal {
-    background: var(--glass-dark);
-    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
-    border: 1px solid color-mix(in srgb, #ffffff 22%, transparent);
-    box-shadow: 0 10px 36px color-mix(in srgb, #0a303e 32%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
-  }
-  .cat-tile { background: color-mix(in srgb, var(--color-accent-700) 72%, transparent); }
-  .btn-primary { background: color-mix(in srgb, var(--color-accent) 82%, transparent); }
-  .panel { background: color-mix(in srgb, #ffffff 12%, transparent); border: 1px solid color-mix(in srgb, #ffffff 22%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-  .auth-art { border-radius: 0 32px 32px 0; }
-  .hero-anim { background: color-mix(in srgb, #ffffff 14%, transparent); border: 1px solid color-mix(in srgb, #ffffff 25%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+/* moving light sweep across the glass */
+.tile::after, .avatar.light::after {
+  content: ""; position: absolute; inset: -40% auto -40% -80%; width: 60%; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, transparent, color-mix(in srgb, #ffffff 85%, transparent), transparent);
+  transform: skewX(-18deg); transition: none;
 }
-.soft-card, .notice-card, .member, .m-card, .table-wrap, .empty { border-radius: 24px; }
-.table th, .table td { background: transparent; }
-.tile { background: color-mix(in srgb, #ffffff 55%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 70%, transparent); }
-.mob .tab::before { background: color-mix(in srgb, var(--color-accent) 22%, transparent); border: 1px solid var(--glass-line); }
-@media (prefers-reduced-transparency: reduce) { :root { --glass-bg: var(--color-surface); --glass-bg-strong: var(--color-surface); --glass-blur: none; } }
+.tile:hover::after, a:hover > .tile::after, .member:hover .tile::after, .notice-card:hover .tile::after, .m-card:hover .tile::after, .cat:hover .tile::after { animation: sweep .9s ease; }
+@keyframes sweep { from { left: -80%; } to { left: 140%; } }
+
+/* tiles on dark hero cards: lighter, see-through glass */
+.hero .tile, .hero-head .tile, .m-hero .tile, .cat-tile .tile {
+  background: linear-gradient(135deg, color-mix(in srgb, #ffffff 26%, transparent), color-mix(in srgb, #ffffff 8%, transparent));
+  border-color: color-mix(in srgb, #ffffff 34%, transparent); color: inherit;
+  box-shadow: 0 6px 16px color-mix(in srgb, #000 18%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 40%, transparent);
+}
+
+/* ---- icon movement ---- */
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.tile.lg { animation: float 4.2s ease-in-out infinite; }
+.notice-card:nth-child(even) .tile.lg, .member:nth-child(even) .tile.lg { animation-delay: -2s; }
+.tile:hover, .member:hover .tile, .notice-card:hover .tile, .m-card:hover .tile { transform: translateY(-3px) scale(1.1) rotate(-4deg); animation-play-state: paused; }
+.tile i, .btn i, .side-link i, .tab i, .cat i, .type-tile i, .panel i { display: inline-block; transition: transform .3s var(--spring); }
+.btn:hover i { transform: translateX(3px) scale(1.15); }
+.side-link:hover i { transform: scale(1.2) rotate(-8deg); }
+.side-link.on i { animation: pop .5s var(--spring); }
+.cat:hover i, .type-tile:hover i, .panel:hover i { transform: translateY(-3px) scale(1.2); }
+.cat:active i, .type-tile:active i, .btn:active i { transform: scale(.85); }
+@keyframes pop { 0% { transform: scale(.6) rotate(-20deg); } 100% { transform: scale(1) rotate(0); } }
+
+/* bottom tab bar (phone): glass pill behind the active icon, springy bounce */
+.mob .tab::before {
+  background: var(--glass-icon-bg); border: 1px solid var(--glass-icon-line); box-shadow: var(--glass-icon-shadow);
+  -webkit-backdrop-filter: blur(10px) saturate(170%); backdrop-filter: blur(10px) saturate(170%);
+  transition: transform .4s var(--spring), opacity .2s;
+}
+.mob .tab[aria-current="page"] i, .mob .tab.on i { animation: pop .55s var(--spring); }
+
+/* star ratings and bell: playful */
+.star:hover { transform: scale(1.3) rotate(-10deg); }
+@keyframes ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(14deg); } 30% { transform: rotate(-12deg); } 45% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } }
+.side-link:hover .ph-bell, [aria-label="Alerts"]:hover i { animation: ring .8s ease; }
+
+/* page and card entrance: gentle glassy fade and rise */
+@keyframes glass-in { from { opacity: 0; transform: translateY(16px) scale(.98); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+.page > *, .screen > * { animation: glass-in .55s var(--ease, ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile.lg, .tile:hover::after, .side-link.on i, .mob .tab i { animation: none !important; }
+  .tile, .tile i, .btn i, .side-link i { transition: none; }
+}
+
+/* keep the dark brand logo tile dark, with a glassy edge */
+.tile.side-logo, .side-logo { background: linear-gradient(135deg, var(--color-accent-800), var(--color-accent-900)); color: var(--color-bg); border-color: color-mix(in srgb, #ffffff 30%, transparent); box-shadow: 0 6px 16px color-mix(in srgb, var(--color-accent-900) 35%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 35%, transparent); }
