@@ -85,10 +85,31 @@
   };
   ACT.dpass = el => { S.gpSel = Number(el.dataset.id); S.gpCancel = null; go('gatepass', null); };
 
+  // ---------- committee: Estate at a glance (one overview call; skipped silently when it failed)
+  const num = v => Number(v) || 0;
+  const gcard = (icon, n, label, sub, pg, bar) => `<button type="button" class="eg-card" data-act="nav" data-page="${pg}"><span class="eg-ic">${ic(icon)}</span><span class="eg-n">${esc(n)}</span><span class="eg-l">${esc(label)}</span><span class="eg-s">${esc(sub)}</span>${bar == null ? '' : `<span class="eg-bar" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, bar))}%"></i></span>`}</button>`;
+  function glance(o) {
+    if (!o || typeof o !== 'object') return '';
+    try {
+      const r = o.residents || {}, q = o.requests || {}, g = o.gate || {}, e = o.estate || {}, l = o.leases || {}, n = o.notices || {};
+      const gateOn = feat('gate'), parkOn = feat('parking');
+      const pend = num(r.pending), tot = num(e.parking_total), asg = num(e.parking_assigned);
+      const c = [gcard('users', num(r.approved), 'Residents', `${num(r.owners)} owners · ${num(r.tenants)} tenants · ${num(r.family)} family${pend ? ` · ${pend} pending` : ''}`, pend ? 'approvals' : 'users'),
+        gcard('buildings', num(r.flats), 'Flats', 'occupied', 'users'),
+        gcard('list-checks', num(q.open), 'Open requests', `${num(q.unassigned)} unassigned · ${num(q.in_progress)} in progress`, 'requests')];
+      if (gateOn) c.push(gcard('shield-check', num(g.admitted_today), 'Gate today', `${num(g.denied_today)} denied`, 'gate'), gcard('qr-code', num(g.active_passes), 'Active passes', 'visitor passes', 'gate'), gcard('identification-card', num(g.guards), 'Guards', 'on the roster', 'guards'));
+      if (parkOn) c.push(gcard('car', num(e.vehicles), 'Vehicles', 'registered', 'vehicles'), gcard('garage', `${asg}/${tot}`, 'Parking', `${Math.max(0, tot - asg)} free`, 'parking', tot ? asg / tot * 100 : 0));
+      c.push(gcard('hard-hat', num(e.workers_active), 'Workers', `${num(e.workers_inactive)} inactive`, 'workers'), gcard('toolbox', num(e.vendors), 'Vendors', 'on the list', 'vendors'),
+        gcard('file-text', num(l.ending_60d), 'Leases ending in 60 days', `${num(l.tenants_without_lease)} tenants without a lease`, 'leases'), gcard('megaphone', num(n.last_30d), 'Notices', 'last 30 days', 'notices'));
+      return section('Estate at a glance', `<div class="eg-grid">${c.join('')}</div>`);
+    } catch { return ''; }
+  }
+
   // ---------- committee Dashboard
   PAGES.dashboard = async () => {
     const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
     const em = feat('emergency') ? (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active') : [];
+    const ov = await API.admin.overview().catch(() => null);
     const people = await API.admin.allUsers().catch(() => []);
     D.reqs = reqs; D.people = Array.isArray(people) ? people : []; D.notices = await API.notices.list().catch(() => []);
     const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id);
@@ -115,6 +136,7 @@
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">${esc(todayLabel())}</p></div><div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${a.open.length} open requests</span></div></header>
       ${search('Search requests, notices and residents')}${chips(chipList)}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
+      ${glance(ov)}
       ${section('Requests this week', chart)}
       ${section('Open requests', carousel(openCards.length ? openCards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">All clear</span><span class="ds-meta">No open requests.</span></span></div>'], 'Open requests'), 'requests')}
       ${section('By category', carousel(catCards, 'Requests by category'))}

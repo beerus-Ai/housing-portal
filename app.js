@@ -802,6 +802,54 @@ function createApp(opts = {}) {
     FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 100`)));
 
   // ---- gate overview (guard or committee). "today" is the UTC calendar day (SQLite 'now'), same clock gate_log uses.
+  // One call for the committee dashboard: every headline number across residents, requests, safety, gate, estate and leases.
+  app.get('/api/admin/overview', auth, admin, (req, res) => {
+    const n = (sql, ...p) => one(sql, ...p).n;
+    const people = "role='resident'";
+    const today = new Date().toISOString().slice(0, 10);
+    const in60 = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
+    res.json({
+      residents: {
+        approved: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='approved'`),
+        pending: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='pending'`),
+        suspended: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='suspended'`),
+        owners: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='approved' AND resident_type='owner'`),
+        tenants: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='approved' AND resident_type='tenant'`),
+        family: n(`SELECT COUNT(*) AS n FROM users WHERE ${people} AND status='approved' AND resident_type='family'`),
+        flats: n(`SELECT COUNT(DISTINCT flat) AS n FROM users WHERE ${people} AND status='approved' AND flat IS NOT NULL AND flat!=''`),
+      },
+      requests: {
+        open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"),
+        unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL"),
+        in_progress: n("SELECT COUNT(*) AS n FROM requests WHERE status='in_progress'"),
+        closed_30d: n("SELECT COUNT(*) AS n FROM requests WHERE status='closed' AND updated_at >= datetime('now','-30 days')"),
+      },
+      emergencies: {
+        active: n("SELECT COUNT(*) AS n FROM emergencies WHERE status='active'"),
+        resolved_30d: n("SELECT COUNT(*) AS n FROM emergencies WHERE status='resolved' AND created_at >= datetime('now','-30 days')"),
+      },
+      gate: {
+        admitted_today: n("SELECT COUNT(*) AS n FROM gate_log WHERE result='allowed' AND date(created_at)=date('now')"),
+        denied_today: n("SELECT COUNT(*) AS n FROM gate_log WHERE result='denied' AND date(created_at)=date('now')"),
+        active_passes: n("SELECT COUNT(*) AS n FROM gate_passes WHERE status='active' AND valid_until>=?", ts(new Date())),
+        guards: n("SELECT COUNT(*) AS n FROM users WHERE role='guard' AND status='approved'"),
+      },
+      estate: {
+        vehicles: n('SELECT COUNT(*) AS n FROM vehicles'),
+        parking_total: n('SELECT COUNT(*) AS n FROM parking_slots'),
+        parking_assigned: n("SELECT COUNT(*) AS n FROM parking_slots WHERE flat IS NOT NULL AND flat!=''"),
+        workers_active: n("SELECT COUNT(*) AS n FROM workers WHERE status='active'"),
+        workers_inactive: n("SELECT COUNT(*) AS n FROM workers WHERE status!='active'"),
+        vendors: n('SELECT COUNT(*) AS n FROM vendors'),
+      },
+      leases: {
+        ending_60d: n('SELECT COUNT(*) AS n FROM leases WHERE end_date>=? AND end_date<=?', today, in60),
+        tenants_without_lease: n(`SELECT COUNT(*) AS n FROM users u WHERE u.role='resident' AND u.status='approved' AND u.resident_type='tenant' AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.user_id=u.id)`),
+      },
+      notices: { last_30d: n("SELECT COUNT(*) AS n FROM notices WHERE created_at >= datetime('now','-30 days')") },
+    });
+  });
+
   app.get('/api/gate/overview', auth, gate, (req, res) => {
     const t = one(`SELECT COALESCE(SUM(result='allowed'),0) AS allowed, COALESCE(SUM(result='denied'),0) AS denied,
       COALESCE(SUM(result='allowed' AND kind='visitor'),0) AS visitors, COALESCE(SUM(result='allowed' AND kind='resident'),0) AS residents
