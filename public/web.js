@@ -6,7 +6,21 @@
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '' };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '' };
+  // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
+  const NAVKEY = 'hp.nav';
+  const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
+  const saveNav = () => { try { localStorage.setItem(NAVKEY, JSON.stringify(S.nav)); } catch (e) { /* storage blocked: choice lasts for this visit only */ } };
+  S.nav = loadNav();
+  const applyNav = () => {
+    const w = document.querySelector('.web'); if (!w) return;
+    w.classList.toggle('top-shell', S.nav.pos === 'top'); w.classList.toggle('side-shell', S.nav.pos !== 'top'); w.classList.toggle('nav-hidden', S.nav.hidden);
+    const pos = document.querySelector('[data-act=navpos]'), hide = document.querySelector('.side-tools [data-act=navhide]'), show = document.querySelector('.nav-reveal');
+    if (pos) { const top = S.nav.pos === 'top'; pos.title = top ? 'Move menu to the side' : 'Move menu to the top'; pos.setAttribute('aria-label', pos.title); pos.querySelector('i').className = 'ph-duotone ' + (top ? 'ph-sidebar-simple' : 'ph-align-top-simple'); pos.querySelector('.side-tt').textContent = top ? 'Menu to side' : 'Menu to top'; }
+    if (hide) hide.setAttribute('aria-expanded', String(!S.nav.hidden));
+    if (show) show.hidden = !S.nav.hidden;
+    const aside = document.querySelector('.sidebar'); if (aside) aside.inert = S.nav.hidden;
+  };
   const isAdmin = () => S.me.role === 'admin';
   const NAV = {
     owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three']],
@@ -27,16 +41,21 @@
     const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : '')).join('');
     const who = isAdmin() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
     root.innerHTML = `<div class="web side-shell">
+      <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
       <aside class="sidebar">
         <div class="side-brand"><span class="tile lg side-logo">${ic('buildings')}</span>
           <div class="col side-t" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
         <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
         <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
+        <div class="side-tools" role="group" aria-label="Menu layout">
+          <button class="btn btn-ghost side-tool" data-act="navpos" title="Move menu to the top" aria-label="Move menu to the top">${ic('align-top-simple')}<span class="side-t side-tt">Menu to top</span></button>
+          <button class="btn btn-ghost side-tool" data-act="navhide" title="Hide menu" aria-label="Hide menu" aria-expanded="true">${ic('caret-double-left')}<span class="side-t">Hide menu</span></button></div>
         <div class="side-user"><span class="avatar" title="${esc(who)}">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(who)}</span>
           <button class="btn btn-secondary side-out" data-act="logout" title="Sign out">${ic('sign-out')}<span class="side-t">Sign out</span></button>
           <a class="side-t xs muted" href="/m/">Open the mobile app</a></div>
       </aside>
       <main id="page" class="page"></main></div>`;
+    applyNav();
     try { await PAGES[S.page](); } catch (e) { $('#page').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const page = h => { $('#page').innerHTML = h; };
@@ -252,6 +271,8 @@
     catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
     lease: el => { S.leaseId = Number(el.dataset.id); render(); },
+    navpos: () => { S.nav.pos = S.nav.pos === 'top' ? 'side' : 'top'; saveNav(); applyNav(); },
+    navhide: () => { S.nav.hidden = !S.nav.hidden; saveNav(); applyNav(); if (!S.nav.hidden) { const f = document.querySelector('.side-link.on'); if (f) f.focus(); } },
     nav: el => go(el.dataset.page, el.dataset.sel ? Number(el.dataset.sel) : null),
     open: el => go(el.dataset.page || 'requests', Number(el.dataset.id)),
     logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
