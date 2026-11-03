@@ -44,7 +44,8 @@ export function pageAllowed(me: Me, key: string): boolean {
 
 export function navFor(me: Me): NavItem[] {
   const list = NAV[me.role === 'admin' ? 'admin' : me.role === 'guard' ? 'guard' : me.resident_type ?? 'owner'] ?? NAV.owner;
-  return list.filter((i) => me.role === 'guard' || pageAllowed(me, i.key));
+  const mine = list.filter((i) => me.role === 'guard' || pageAllowed(me, i.key));
+  return me.role === 'guard' ? mine : [...mine, I('profile', 'Profile', 'user-circle')];
 }
 
 export const NAV_KEY = 'hp.nav';
