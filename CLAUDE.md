@@ -4,17 +4,16 @@ MBA assignment (BPA Using AI, Session 3 brief). Resident onboarding, work reques
 
 ## Stack (and why)
 - Node 22.5+ (built with 24), Express, `node:sqlite` (no native build step; swap for hosted Postgres in production), bcryptjs, express-session, multer.
-- Vanilla JS frontend in `public/` (no build step, strict CSP: no inline scripts). Fonts (Outfit, Plus Jakarta Sans) and Phosphor duotone icons are self-hosted in `public/vendor/`, so the CSP stays `'self'` only.
+- Vanilla JS frontend in `public/` (no build step, strict CSP: no inline scripts). The menu can sit on the side or on top and can be hidden; the choice is kept in localStorage (`hp.nav`). Animations are small Lottie JSON files in `public/anim/` played by `lottie-web` (`public/ui.js`). Fonts (Outfit, Plus Jakarta Sans) and Phosphor duotone icons are self-hosted in `public/vendor/`, so the CSP stays `'self'` only.
 - Two clients on one API: the **web app** (`/`, desktop-first and responsive) and the **mobile app** (`/m/`, installable PWA with a bottom tab bar). Phones opening `/` are sent to `/m/` (add `?web` to stay). Design source: Claude Design handoff `Housing Portal.dc.html` (tokens in `public/css/tokens.css`, base components in `public/css/ds.css`).
 
 ## Run
-- `npm start` → http://localhost:3000. Default synthetic admin: `admin@society.test` / `Admin@1234` (override with `ADMIN_EMAIL`, `ADMIN_PASSWORD`).
-- `npm run seed` → synthetic Sahyadri Heights demo data (run on an empty DB, e.g. `DB_FILE=demo.db npm run seed`). Residents use password `Demo@1234`: `ananya@sahyadri.test` (owner), `aarav@sahyadri.test` (family), `rohit@sahyadri.test` (tenant). Committee: the admin above.
+- `npm start` → http://localhost:3000. The database starts empty except for the committee admin (`admin@society.test`; set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, required and 12+ characters in production). There is no demo data: register residents through the UI and enter only the minimum data when testing.
 - `npm test` → API end-to-end tests (`node:test`). Every story ships with a test; testing leads sign off.
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).
 
 ## Layout
-- `app.js` routes + rules, `db.js` schema + admin seed, `seed.js` demo data, `server.js` entry, `test/` tests.
+- `app.js` routes + rules, `db.js` schema + admin seed, `server.js` entry, `test/` tests.
 - `public/index.html` + `web.js` web app; `public/m/` mobile app (`m.js`, `sw.js`, manifest); `public/common.js` shared helpers (api, escaping, tracker, status mapping); `public/css/` styles.
 
 ## Rules
