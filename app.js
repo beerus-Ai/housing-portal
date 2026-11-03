@@ -5,11 +5,17 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { openDb } = require('./db');
+const { openDb, PERMISSIONS, ACCESS_ROLES } = require('./db');
 
 const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping', 'other'];
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 const RESIDENT_TYPES = ['owner', 'tenant', 'family'];
+const FEATURES = ['emergency', 'gate', 'contacts', 'notices'];
+const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '' };
+const CSP_BASE = {
+  'default-src': ["'self'"], 'img-src': ["'self'", 'data:'], 'style-src': ["'self'", "'unsafe-inline'"], 'script-src': ["'self'"],
+  'object-src': ["'none'"], 'base-uri': ["'self'"], 'form-action': ["'self'"], 'frame-ancestors': ["'none'"],
+};
 const ORDER = { open: 0, assigned: 1, in_progress: 2, closed: 3 };
 
 function createApp(opts = {}) {
@@ -22,12 +28,30 @@ function createApp(opts = {}) {
   if (prod && !process.env.SESSION_SECRET) throw new Error('SESSION_SECRET must be set in production');
   app.use(express.json({ limit: '100kb' }));
   app.use((req, res, next) => { if (!req.body || typeof req.body !== 'object') req.body = {}; next(); });
+  const getSetting = k => { const r = db.prepare('SELECT value FROM settings WHERE key=?').get(k); return r ? r.value : SETTING_DEFAULTS[k]; };
+  const getFeatures = () => {
+    let f = {};
+    try { f = JSON.parse(getSetting('features') || '{}'); } catch { /* use defaults */ }
+    return Object.fromEntries(FEATURES.map(k => [k, f[k] !== false]));
+  };
+  const publicSettings = () => ({ society_name: getSetting('society_name'), society_kind: getSetting('society_kind'), google_client_id: getSetting('google_client_id'), features: getFeatures() });
+  const cspHeader = () => {
+    const d = Object.fromEntries(Object.entries(CSP_BASE).map(([k, v]) => [k, [...v]]));
+    if (getSetting('google_client_id')) {
+      d['script-src'].push('https://accounts.google.com/gsi/client');
+      d['connect-src'] = ["'self'", 'https://accounts.google.com/gsi/'];
+      d['frame-src'] = ['https://accounts.google.com/gsi/'];
+      d['style-src'].push('https://accounts.google.com/gsi/style');
+      d['img-src'].push('https://*.googleusercontent.com');
+    }
+    return Object.entries(d).map(([k, v]) => `${k} ${v.join(' ')}`).join('; ');
+  };
   app.use((req, res, next) => {
     res.set({
       'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin',
-      'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      'Content-Security-Policy': cspHeader(),
       'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
     });
     if (prod) res.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
     if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
@@ -55,11 +79,28 @@ function createApp(opts = {}) {
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
   const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, status: u.status };
 
+  // Session is bound to the current password hash, so a password reset signs the user out everywhere.
+  const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
   const auth = (req, res, next) => {
     const u = req.session.uid && one('SELECT * FROM users WHERE id=?', req.session.uid);
-    if (!u || u.status !== 'approved') return res.status(401).json({ error: 'Not signed in' });
+    if (!u || u.status !== 'approved' || req.session.pf !== pwFp(u)) return res.status(401).json({ error: 'Not signed in' });
+    // Guards get a strict allow-list so no resident/committee route can ever leak data to them.
+    if (u.role === 'guard') {
+      const p = req.path, m = req.method;
+      const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
+        (m === 'GET' && (p === '/api/gate/log' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
+      if (!okGuard) return res.status(403).json({ error: 'Not allowed for guard accounts' });
+    }
     req.user = u; next();
   };
+  const gate = (req, res, next) => (['guard', 'admin'].includes(req.user.role) ? next() : res.status(403).json({ error: 'Gate staff only' }));
+  const feat = name => (req, res, next) => (req.user.role === 'admin' || getFeatures()[name] ? next() : res.status(403).json({ error: 'This feature is turned off' }));
+  const allowedKeys = u => {
+    if (u.role === 'admin') return PERMISSIONS.map(p => p.key);
+    if (u.role !== 'resident' || !ACCESS_ROLES.includes(u.resident_type)) return [];
+    return q('SELECT permission FROM role_permissions WHERE role=? AND allowed=1', u.resident_type).map(r => r.permission).filter(k => PERMISSIONS.some(p => p.key === k));
+  };
+  const can = key => (req, res, next) => (allowedKeys(req.user).includes(key) ? next() : res.status(403).json({ error: 'Your role does not have access to this' }));
   const admin = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }));
 
   const fails = new Map();
@@ -95,6 +136,11 @@ function createApp(opts = {}) {
     res.status(201).json({ message: 'Registered. An admin will review your account.' });
   });
 
+  const statusBlock = u => ({
+    pending: 'Your account is awaiting admin approval',
+    suspended: 'Your account is suspended. Contact the committee.',
+    removed: 'This account is no longer active. Contact the committee.',
+  })[u.status] || (u.status !== 'approved' ? 'Your registration was not approved' : null);
   app.post('/api/login', (req, res) => {
     const email = str(req.body && req.body.email, 200).toLowerCase();
     const key = req.ip + '|' + email, ipKey = 'ip|' + req.ip;
@@ -106,11 +152,41 @@ function createApp(opts = {}) {
       fail(key); fail(ipKey);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    if (u.status === 'pending') return res.status(403).json({ error: 'Your account is awaiting admin approval' });
-    if (u.status !== 'approved') return res.status(403).json({ error: 'Your registration was not approved' });
+    const blocked = statusBlock(u);
+    if (blocked) return res.status(403).json({ error: blocked });
     fails.delete(key);
-    req.session.regenerate(() => { req.session.uid = u.id; log(u.id, 'user', u.id, 'login'); res.json(publicUser(u)); });
+    req.session.regenerate(() => { req.session.uid = u.id; req.session.pf = pwFp(u); log(u.id, 'user', u.id, 'login'); res.json(publicUser(u)); });
   });
+
+  // Google sign-in: only ever signs in an EXISTING approved account, matched on the verified email.
+  const googleVerify = opts.googleVerify || (async credential => {
+    const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential), { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error('token rejected');
+    return r.json();
+  });
+  app.post('/api/auth/google', async (req, res) => {
+    const ipKey = 'ip|' + req.ip;
+    if (throttled(ipKey, 30)) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    const clientId = getSetting('google_client_id');
+    if (!clientId) return res.status(404).json({ error: 'Google sign-in is not set up' });
+    const cred = req.body && req.body.credential;
+    if (typeof cred !== 'string' || !cred || cred.length > 4096) return res.status(400).json({ error: 'Missing Google credential' });
+    let c;
+    try { c = await googleVerify(cred); } catch { c = null; }
+    const verified = c && (c.email_verified === true || c.email_verified === 'true');
+    const expOk = c && Number(c.exp) * 1000 > Date.now();
+    const issOk = c && ['accounts.google.com', 'https://accounts.google.com'].includes(c.iss);
+    if (!c || c.aud !== clientId || !issOk || !verified || !expOk || typeof c.email !== 'string') {
+      fail(ipKey);
+      return res.status(401).json({ error: 'Google sign-in could not be verified' });
+    }
+    const u = one('SELECT * FROM users WHERE email=?', c.email.trim().toLowerCase());
+    if (!u) return res.status(404).json({ error: 'No account for this Google email. Join first, then sign in.' });
+    const blocked = statusBlock(u);
+    if (blocked) return res.status(403).json({ error: blocked });
+    req.session.regenerate(() => { req.session.uid = u.id; req.session.pf = pwFp(u); log(u.id, 'user', u.id, 'login', 'method google'); res.json(publicUser(u)); });
+  });
+  app.get('/api/settings', (req, res) => res.json(publicSettings()));
   app.patch('/api/me', auth, (req, res) => {
     const name = str(req.body && req.body.name, 100) || req.user.name, phone = req.body && 'phone' in req.body ? str(req.body.phone, 20) : req.user.phone;
     run('UPDATE users SET name=?, phone=? WHERE id=?', name, phone, req.user.id);
@@ -124,17 +200,26 @@ function createApp(opts = {}) {
     if (!bcrypt.compareSync(cur.slice(0, 128), req.user.password_hash)) { fail(pk); return res.status(403).json({ error: 'Current password is wrong' }); }
     fails.delete(pk);
     if (next.length < 8 || next.length > 128) return res.status(400).json({ error: 'New password must be at least 8 characters' });
-    run('UPDATE users SET password_hash=? WHERE id=?', bcrypt.hashSync(next, 10), req.user.id);
+    const nh = bcrypt.hashSync(next, 10);
+    run('UPDATE users SET password_hash=? WHERE id=?', nh, req.user.id);
+    req.session.pf = pwFp({ password_hash: nh });
     log(req.user.id, 'user', req.user.id, 'password_changed');
     res.json({ ok: true });
   });
   app.post('/api/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
-  app.get('/api/me', auth, (req, res) => res.json(publicUser(req.user)));
+  app.get('/api/me', auth, (req, res) => res.json({ ...publicUser(req.user), permissions: allowedKeys(req.user), features: getFeatures() }));
 
   // ---- admin: users
   app.get('/api/admin/users', auth, admin, (req, res) => {
-    const s = req.query.status;
-    res.json(q(`SELECT id,name,email,phone,flat,resident_type,role,status,created_at FROM users ${s ? 'WHERE status=?' : ''} ORDER BY id DESC`, ...(s ? [s] : [])));
+    const s = typeof req.query.status === 'string' && req.query.status ? req.query.status : '';
+    const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
+    const where = [], p = [];
+    if (s) { where.push('status=?'); p.push(s); } else where.push("role!='guard'");
+    if (term) {
+      const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
+      where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
+    }
+    res.json(q(`SELECT id,name,email,phone,flat,resident_type,role,status,created_at FROM users WHERE ${where.join(' AND ')} ORDER BY id DESC`, ...p));
   });
   app.get('/api/admin/users/:id', auth, admin, (req, res) => {
     const u = one('SELECT id,name,email,phone,flat,resident_type,role,status,consent_at,created_at FROM users WHERE id=?', req.params.id);
@@ -150,6 +235,110 @@ function createApp(opts = {}) {
       res.json({ ok: true });
     });
   }
+
+  const residentTarget = (req, includeGuard) => {
+    const u = one('SELECT * FROM users WHERE id=?', req.params.id);
+    return u && u.status !== 'removed' && (u.role === 'resident' || (includeGuard && u.role === 'guard')) ? u : null;
+  };
+  app.patch('/api/admin/users/:id', auth, admin, (req, res) => {
+    const u = residentTarget(req);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    const b = req.body || {}, ch = {};
+    if ('resident_type' in b) { if (!RESIDENT_TYPES.includes(b.resident_type)) return res.status(400).json({ error: 'Choose owner, tenant or family' }); ch.resident_type = b.resident_type; }
+    if ('flat' in b) { const v = typeof b.flat === 'string' ? b.flat.trim() : ''; if (!v || v.length > 20) return res.status(400).json({ error: 'Flat is required (up to 20 characters)' }); ch.flat = v; }
+    if ('name' in b) { const v = typeof b.name === 'string' ? b.name.trim() : ''; if (!v || v.length > 100) return res.status(400).json({ error: 'Name is required (up to 100 characters)' }); ch.name = v; }
+    if ('phone' in b) { const v = typeof b.phone === 'string' ? b.phone.trim() : ''; if (v.length > 20) return res.status(400).json({ error: 'Phone must be 20 characters or fewer' }); ch.phone = v; }
+    if ('status' in b) { if (!['approved', 'suspended'].includes(b.status)) return res.status(400).json({ error: "Status must be 'approved' or 'suspended'" }); ch.status = b.status; }
+    const keys = Object.keys(ch).filter(k => ch[k] !== (u[k] == null ? '' : u[k]));
+    for (const k of keys) {
+      run(`UPDATE users SET ${k}=? WHERE id=?`, ch[k], u.id); // k comes from the fixed whitelist above
+      log(req.user.id, 'user', u.id, k === 'status' ? (ch[k] === 'suspended' ? 'suspended' : 'reinstated') : 'updated', k === 'status' ? `${u.status} -> ${ch[k]}` : `${k}: ${u[k] == null ? '' : u[k]} -> ${ch[k]}`);
+    }
+    if (keys.includes('status')) notify(u.id, ch.status === 'suspended' ? 'Your account was suspended by the committee' : 'Your account was reinstated by the committee');
+    res.json(one('SELECT id,name,email,phone,flat,resident_type,role,status,created_at FROM users WHERE id=?', u.id));
+  });
+  app.post('/api/admin/users/:id/reset-password', auth, admin, (req, res) => {
+    const u = residentTarget(req, true);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    const pw = req.body && typeof req.body.password === 'string' ? req.body.password : '';
+    if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
+    run('UPDATE users SET password_hash=? WHERE id=?', bcrypt.hashSync(pw, 10), u.id); // existing sessions stop matching pwFp
+    fails.delete('pw|' + u.id);
+    log(req.user.id, 'user', u.id, 'password_reset');
+    notify(u.id, 'The committee reset your password. Sign in with the new password.');
+    res.json({ ok: true });
+  });
+  app.delete('/api/admin/users/:id', auth, admin, (req, res) => {
+    const u = residentTarget(req);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    run("UPDATE users SET status='removed' WHERE id=?", u.id);
+    log(req.user.id, 'user', u.id, 'removed', `${u.name} (${u.status})`);
+    res.json({ ok: true });
+  });
+
+  // ---- admin: settings & access control
+  app.get('/api/admin/settings', auth, admin, (req, res) => res.json(publicSettings()));
+  app.put('/api/admin/settings', auth, admin, (req, res) => {
+    const b = req.body || {}, cur = publicSettings(), next = { ...cur, features: { ...cur.features } };
+    for (const k of ['society_name', 'society_kind']) if (k in b) {
+      const v = typeof b[k] === 'string' ? b[k].trim() : '';
+      if (!v || v.length > 100) return res.status(400).json({ error: `${k === 'society_name' ? 'Society name' : 'Society type'} is required (up to 100 characters)` });
+      next[k] = v;
+    }
+    if ('google_client_id' in b) {
+      const v = typeof b.google_client_id === 'string' ? b.google_client_id.trim() : null;
+      if (v === null || !/^[A-Za-z0-9._-]{0,200}$/.test(v)) return res.status(400).json({ error: 'Google client ID has invalid characters' });
+      next.google_client_id = v;
+    }
+    if ('features' in b) {
+      const f = b.features;
+      if (!f || typeof f !== 'object' || Array.isArray(f)) return res.status(400).json({ error: 'Features must be an object' });
+      for (const [k, v] of Object.entries(f)) {
+        if (!FEATURES.includes(k) || typeof v !== 'boolean') return res.status(400).json({ error: 'Features must be known names set to true or false' });
+        next.features[k] = v;
+      }
+    }
+    const put = db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+    for (const k of ['society_name', 'society_kind', 'google_client_id']) if (next[k] !== cur[k]) {
+      put.run(k, next[k]);
+      log(req.user.id, 'settings', null, 'updated', k === 'google_client_id' ? 'google_client_id changed' : `${k}: ${cur[k]} -> ${next[k]}`);
+    }
+    for (const k of FEATURES) if (next.features[k] !== cur.features[k]) log(req.user.id, 'settings', null, 'feature_' + (next.features[k] ? 'on' : 'off'), k);
+    put.run('features', JSON.stringify(next.features));
+    res.json(publicSettings());
+  });
+  const accessMatrix = () => {
+    const m = Object.fromEntries(ACCESS_ROLES.map(r => [r, Object.fromEntries(PERMISSIONS.map(p => [p.key, false]))]));
+    for (const r of q('SELECT role,permission,allowed FROM role_permissions')) if (m[r.role] && r.permission in m[r.role]) m[r.role][r.permission] = r.allowed === 1;
+    return m;
+  };
+  app.get('/api/admin/access', auth, admin, (req, res) => res.json({ roles: ACCESS_ROLES, permissions: PERMISSIONS, matrix: accessMatrix() }));
+  app.put('/api/admin/access', auth, admin, (req, res) => {
+    const m = req.body && req.body.matrix;
+    if (!m || typeof m !== 'object' || Array.isArray(m)) return res.status(400).json({ error: 'matrix is required' });
+    const cur = accessMatrix(), next = JSON.parse(JSON.stringify(cur));
+    for (const [role, perms] of Object.entries(m)) {
+      if (!ACCESS_ROLES.includes(role) || !perms || typeof perms !== 'object' || Array.isArray(perms)) return res.status(400).json({ error: 'Unknown role' });
+      for (const [k, v] of Object.entries(perms)) {
+        if (!PERMISSIONS.some(p => p.key === k)) return res.status(400).json({ error: 'Unknown permission' });
+        if (typeof v !== 'boolean') return res.status(400).json({ error: 'Permissions must be true or false' });
+        next[role][k] = v;
+      }
+    }
+    const diffs = [];
+    db.exec('BEGIN');
+    try {
+      run('DELETE FROM role_permissions');
+      const ins = db.prepare('INSERT INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
+      for (const r of ACCESS_ROLES) for (const p of PERMISSIONS) {
+        ins.run(r, p.key, next[r][p.key] ? 1 : 0);
+        if (next[r][p.key] !== cur[r][p.key]) diffs.push(`${r} ${p.key}: ${cur[r][p.key]} -> ${next[r][p.key]}`);
+      }
+      for (const d of diffs) log(req.user.id, 'access', null, 'changed', d);
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+    res.json({ roles: ACCESS_ROLES, permissions: PERMISSIONS, matrix: next });
+  });
 
   // ---- vendors
   app.get('/api/vendors', auth, admin, (req, res) => res.json(q('SELECT * FROM vendors ORDER BY trade,name')));
@@ -182,7 +371,7 @@ function createApp(opts = {}) {
   const EMERGENCY_TYPES = ['lift', 'medical', 'fire', 'theft', 'threat', 'violence', 'other'];
   const EMERGENCY_SELECT = `SELECT e.id, e.type, e.note, e.status, u.flat, u.name AS user_name, e.created_at, e.resolved_at
     FROM emergencies e JOIN users u ON u.id=e.user_id`;
-  app.post('/api/emergencies', auth, (req, res) => {
+  app.post('/api/emergencies', auth, feat('emergency'), can('emergency.raise'), (req, res) => {
     const type = req.body.type;
     if (!EMERGENCY_TYPES.includes(type)) return res.status(400).json({ error: 'Choose a valid emergency type' });
     if (req.body.note != null && typeof req.body.note !== 'string') return res.status(400).json({ error: 'Note must be text' });
@@ -198,11 +387,11 @@ function createApp(opts = {}) {
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, msg);
     res.status(201).json({ id });
   });
-  app.get('/api/emergencies', auth, (req, res) => {
+  app.get('/api/emergencies', auth, feat('emergency'), (req, res) => {
     if (req.user.role === 'admin') return res.json(q(`${EMERGENCY_SELECT} ORDER BY e.id DESC`));
     res.json(q(`${EMERGENCY_SELECT} WHERE u.flat=? ORDER BY e.id DESC`, req.user.flat));
   });
-  app.post('/api/emergencies/:id/resolve', auth, admin, (req, res) => {
+  app.post('/api/emergencies/:id/resolve', auth, admin, feat('emergency'), (req, res) => {
     const e = one('SELECT * FROM emergencies WHERE id=?', req.params.id);
     if (!e) return res.status(404).json({ error: 'Emergency not found' });
     if (e.status === 'resolved') return res.status(409).json({ error: 'Emergency is already resolved' });
@@ -214,7 +403,7 @@ function createApp(opts = {}) {
 
   // ---- society contacts
   const CONTACT_ICONS = ['phone', 'briefcase', 'shield-check', 'wrench', 'elevator', 'first-aid', 'fire', 'drop'];
-  app.get('/api/contacts', auth, (req, res) => res.json(q('SELECT id,name,role,phone,icon FROM contacts ORDER BY name')));
+  app.get('/api/contacts', auth, feat('contacts'), can('contacts.read'), (req, res) => res.json(q('SELECT id,name,role,phone,icon FROM contacts ORDER BY name')));
   app.post('/api/contacts', auth, admin, (req, res) => {
     const name = str(req.body.name, 100), role = str(req.body.role, 100), phone = str(req.body.phone, 40);
     const icon = req.body.icon == null || req.body.icon === '' ? 'phone' : req.body.icon;
@@ -262,7 +451,7 @@ function createApp(opts = {}) {
     ((r.user_id === u.id && u.resident_type !== 'family') || (u.resident_type === 'owner' && r.flat === u.flat));
   const shape = (r, u) => { const { photo, ...rest } = r; return { ...rest, has_photo: !!photo, can_rate: !!u && canRate(u, r) }; };
 
-  app.post('/api/requests', auth,
+  app.post('/api/requests', auth, can('request.create'),
     (req, res, next) => upload.single('photo')(req, res, err => (err ? res.status(400).json({ error: err.message }) : next())),
     (req, res) => {
       if (req.file && !validImage(req.file)) { fs.unlink(req.file.path, () => {}); return res.status(400).json({ error: 'File is not a valid JPEG, PNG or WebP image' }); }
@@ -354,9 +543,9 @@ function createApp(opts = {}) {
   // ---- household (owner adds family members / tenants to their flat; committee approves)
   app.get('/api/household', auth, (req, res) => {
     if (!req.user.flat) return res.json([]);
-    res.json(q("SELECT id,name,resident_type,status,phone FROM users WHERE flat=? AND role!='admin' AND status!='rejected' ORDER BY (resident_type='owner') DESC, id", req.user.flat));
+    res.json(q("SELECT id,name,resident_type,status,phone FROM users WHERE flat=? AND role!='admin' AND status NOT IN ('rejected','removed') ORDER BY (resident_type='owner') DESC, id", req.user.flat));
   });
-  app.post('/api/household', auth, (req, res) => {
+  app.post('/api/household', auth, can('household.manage'), (req, res) => {
     if (req.user.resident_type !== 'owner') return res.status(403).json({ error: 'Only the flat owner can add household members' });
     const b = req.body || {};
     const name = str(b.name, 100), email = str(b.email, 200).toLowerCase(), phone = str(b.phone, 20), rtype = b.resident_type;
@@ -375,7 +564,7 @@ function createApp(opts = {}) {
   });
 
   // ---- tenant lease (set by the committee, read by the tenant)
-  app.get('/api/lease', auth, (req, res) => res.json(one('SELECT * FROM leases WHERE user_id=?', req.user.id) || null));
+  app.get('/api/lease', auth, can('lease.view'), (req, res) => res.json(one('SELECT * FROM leases WHERE user_id=?', req.user.id) || null));
   app.put('/api/admin/users/:id/lease', auth, admin, (req, res) => {
     const u = one("SELECT * FROM users WHERE id=? AND resident_type='tenant'", req.params.id);
     if (!u) return res.status(404).json({ error: 'Tenant not found' });
@@ -398,6 +587,7 @@ function createApp(opts = {}) {
   // ---- live updates: clients poll this and only redraw when the token changes (no data is returned, just a version string)
   app.get('/api/pulse', auth, (req, res) => {
     const u = req.user;
+    if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
       return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
     }
@@ -446,7 +636,7 @@ function createApp(opts = {}) {
   });
 
   // ---- notices & notifications
-  app.get('/api/notices', auth, (req, res) => res.json(q('SELECT n.*,u.name AS author FROM notices n JOIN users u ON u.id=n.author_id ORDER BY n.id DESC')));
+  app.get('/api/notices', auth, feat('notices'), can('notice.read'), (req, res) => res.json(q('SELECT n.*,u.name AS author FROM notices n JOIN users u ON u.id=n.author_id ORDER BY n.id DESC')));
   app.post('/api/notices', auth, admin, (req, res) => {
     const title = str(req.body.title, 150), body = str(req.body.body, 5000);
     if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
@@ -465,6 +655,151 @@ function createApp(opts = {}) {
   app.get('/api/notifications/unread-count', auth, (req, res) => res.json({ n: one('SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND is_read=0', req.user.id).n }));
   app.get('/api/notifications', auth, (req, res) => res.json(q('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50', req.user.id)));
   app.post('/api/notifications/read', auth, (req, res) => { run('UPDATE notifications SET is_read=1 WHERE user_id=?', req.user.id); res.json({ ok: true }); });
+
+  // ---- guards (committee creates gate staff accounts)
+  app.post('/api/admin/guards', auth, admin, (req, res) => {
+    const b = req.body || {};
+    const name = str(b.name, 100), email = str(b.email, 200).toLowerCase(), pw = typeof b.password === 'string' ? b.password : '';
+    if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
+    if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
+    if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });
+    const r = run("INSERT INTO users(name,email,password_hash,role,status,consent_at) VALUES(?,?,?,'guard','approved',datetime('now'))", name, email, bcrypt.hashSync(pw, 10));
+    log(req.user.id, 'user', r.lastInsertRowid, 'guard_created', email);
+    res.status(201).json({ id: Number(r.lastInsertRowid) });
+  });
+  app.get('/api/admin/guards', auth, admin, (req, res) => res.json(q("SELECT id,name,email,status,created_at FROM users WHERE role='guard' ORDER BY id DESC")));
+  app.delete('/api/admin/guards/:id', auth, admin, (req, res) => {
+    const g = one("SELECT * FROM users WHERE id=? AND role='guard'", req.params.id);
+    if (!g) return res.status(404).json({ error: 'Guard not found' });
+    run('DELETE FROM notifications WHERE user_id=?', g.id);
+    run('DELETE FROM users WHERE id=?', g.id);
+    log(req.user.id, 'user', g.id, 'guard_deleted', g.email);
+    res.json({ ok: true });
+  });
+
+  // ---- gate access
+  const ts = d => d.toISOString().slice(0, 19).replace('T', ' ');
+  const parseTime = v => {
+    if (typeof v !== 'string') return null;
+    let s = v.trim().replace(' ', 'T');
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/.test(s)) return null;
+    if (!/(Z|[+-]\d{2}:\d{2})$/.test(s)) s += 'Z';
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  };
+  const residentOnly = (req, res, next) => (req.user.role === 'resident' && req.user.flat ? next() : res.status(403).json({ error: 'Only residents with a flat can use this' }));
+  const glog = (kind, subject, flat, result, reason, guardId) =>
+    run('INSERT INTO gate_log(kind,subject,flat,result,reason,guard_id) VALUES(?,?,?,?,?,?)', kind, subject || null, flat || null, result, reason || null, guardId);
+  const passRow = r => ({
+    id: r.id, flat: r.flat, visitor_name: r.visitor_name, purpose: r.purpose, code: r.code, qr: 'HSP:' + r.token,
+    valid_from: r.valid_from, valid_until: r.valid_until,
+    status: r.status === 'active' && r.valid_until < ts(new Date()) ? 'expired' : r.status,
+    created_by_name: r.created_by_name, used_at: r.used_at,
+  });
+  const PASS_SELECT = 'SELECT p.*, u.name AS created_by_name FROM gate_passes p JOIN users u ON u.id=p.created_by';
+  const MAX_ACTIVE_PASSES = 10;
+
+  app.post('/api/gate/passes', auth, feat('gate'), can('gate.pass'), residentOnly, (req, res) => {
+    const b = req.body || {};
+    const visitor = typeof b.visitor_name === 'string' ? b.visitor_name.trim() : '';
+    if (!visitor || visitor.length > 100) return res.status(400).json({ error: 'Visitor name is required (up to 100 characters)' });
+    if (b.purpose != null && typeof b.purpose !== 'string') return res.status(400).json({ error: 'Purpose must be text' });
+    const purpose = (b.purpose || '').trim();
+    if (purpose.length > 200) return res.status(400).json({ error: 'Purpose must be 200 characters or fewer' });
+    const now = new Date();
+    let from = now, until;
+    if (b.valid_from != null && b.valid_from !== '') { from = parseTime(b.valid_from); if (!from) return res.status(400).json({ error: 'valid_from is not a valid date and time' }); }
+    if (b.valid_until != null && b.valid_until !== '') { until = parseTime(b.valid_until); if (!until) return res.status(400).json({ error: 'valid_until is not a valid date and time' }); }
+    else until = new Date(from.getTime() + 24 * 3600e3);
+    if (until <= from) return res.status(400).json({ error: 'valid_until must be after valid_from' });
+    if (until - from > 7 * 24 * 3600e3) return res.status(400).json({ error: 'A pass can be valid for at most 7 days' });
+    const active = one("SELECT COUNT(*) AS n FROM gate_passes WHERE flat=? AND status='active' AND valid_until>=?", req.user.flat, ts(now)).n;
+    if (active >= MAX_ACTIVE_PASSES) return res.status(429).json({ error: `Your flat already has ${MAX_ACTIVE_PASSES} active visitor passes. Cancel one or wait for it to expire.` });
+    let code;
+    do { code = String(crypto.randomInt(0, 1000000)).padStart(6, '0'); } while (one("SELECT id FROM gate_passes WHERE code=? AND status='active'", code));
+    const token = crypto.randomBytes(12).toString('hex');
+    const r = run('INSERT INTO gate_passes(flat,created_by,visitor_name,purpose,token,code,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?)',
+      req.user.flat, req.user.id, visitor, purpose || null, token, code, ts(from), ts(until));
+    const id = Number(r.lastInsertRowid);
+    log(req.user.id, 'gate_pass', id, 'created', `${visitor} flat ${req.user.flat} ${ts(from)} to ${ts(until)}`);
+    res.status(201).json({ id, token, code, qr: 'HSP:' + token });
+  });
+  app.get('/api/gate/passes', auth, feat('gate'), (req, res) => {
+    if (req.user.role === 'admin') return res.json(q(`${PASS_SELECT} ORDER BY p.id DESC LIMIT 500`).map(passRow));
+    if (req.user.role !== 'resident' || !req.user.flat) return res.status(403).json({ error: 'Only residents with a flat can use this' });
+    res.json(q(`${PASS_SELECT} WHERE p.flat=? ORDER BY p.id DESC LIMIT 200`, req.user.flat).map(passRow));
+  });
+  app.post('/api/gate/passes/:id/cancel', auth, feat('gate'), (req, res) => {
+    const p = one('SELECT * FROM gate_passes WHERE id=?', req.params.id);
+    const u = req.user;
+    if (!p || (u.role !== 'admin' && p.flat !== u.flat)) return res.status(404).json({ error: 'Pass not found' });
+    if (u.role !== 'admin' && p.created_by !== u.id && u.resident_type !== 'owner') return res.status(403).json({ error: 'Only the creator, the flat owner or the committee can cancel this pass' });
+    if (p.status !== 'active') return res.status(409).json({ error: `Pass is already ${p.status}` });
+    const r = run("UPDATE gate_passes SET status='cancelled' WHERE id=? AND status='active'", p.id);
+    if (!r.changes) return res.status(409).json({ error: 'Pass is no longer active' });
+    log(u.id, 'gate_pass', p.id, 'cancelled', p.visitor_name);
+    res.json({ ok: true });
+  });
+  const myToken = uid => {
+    let t = one('SELECT token FROM resident_tokens WHERE user_id=?', uid);
+    if (!t) {
+      run('INSERT OR IGNORE INTO resident_tokens(user_id,token) VALUES(?,?)', uid, crypto.randomBytes(12).toString('hex'));
+      t = one('SELECT token FROM resident_tokens WHERE user_id=?', uid);
+    }
+    return { token: t.token, qr: 'HSP:' + t.token, nfc: 'HSP:' + t.token };
+  };
+  app.get('/api/gate/me', auth, feat('gate'), residentOnly, (req, res) => res.json(myToken(req.user.id)));
+  app.post('/api/gate/me/rotate', auth, feat('gate'), residentOnly, (req, res) => {
+    const token = crypto.randomBytes(12).toString('hex');
+    run(`INSERT INTO resident_tokens(user_id,token) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token, created_at=datetime('now')`, req.user.id, token);
+    log(req.user.id, 'resident_token', req.user.id, 'rotated');
+    res.json({ token, qr: 'HSP:' + token, nfc: 'HSP:' + token });
+  });
+
+  const VERIFY_MAX_DENIED = 10;
+  app.post('/api/gate/verify', auth, gate, (req, res) => {
+    const gid = req.user.id, b = req.body || {};
+    const hasToken = typeof b.token === 'string' && b.token.trim() !== '';
+    const hasCode = (typeof b.code === 'string' || typeof b.code === 'number') && String(b.code).trim() !== '';
+    if (!hasToken && !hasCode) return res.status(400).json({ error: 'Provide a code or a token' });
+    if (one("SELECT COUNT(*) AS n FROM gate_log WHERE guard_id=? AND result='denied' AND created_at >= datetime('now','-10 minutes')", gid).n >= VERIFY_MAX_DENIED)
+      return res.status(429).json({ error: 'Too many failed checks. Wait a few minutes and try again.' });
+    const deny = (reason, p) => {
+      glog(p ? 'visitor' : 'unknown', p && p.visitor_name, p && p.flat, 'denied', reason, gid);
+      res.json(p ? { result: 'denied', reason, kind: 'visitor', name: p.visitor_name, flat: p.flat, purpose: p.purpose } : { result: 'denied', reason });
+    };
+    let pass = null;
+    if (hasToken) {
+      const tok = String(b.token).trim().replace(/^HSP:/i, '').trim().slice(0, 64);
+      pass = one('SELECT * FROM gate_passes WHERE token=?', tok);
+      if (!pass) {
+        const rt = one('SELECT u.* FROM resident_tokens t JOIN users u ON u.id=t.user_id WHERE t.token=?', tok);
+        if (rt && rt.status === 'approved' && rt.role === 'resident') {
+          glog('resident', rt.name, rt.flat, 'allowed', null, gid);
+          return res.json({ result: 'allowed', kind: 'resident', name: rt.name, flat: rt.flat });
+        }
+        return deny('unknown');
+      }
+    } else {
+      const code = String(b.code).trim().slice(0, 12);
+      if (!/^\d{6}$/.test(code)) return deny('unknown');
+      pass = one("SELECT * FROM gate_passes WHERE code=? ORDER BY (status='active') DESC, id DESC LIMIT 1", code);
+      if (!pass) return deny('unknown');
+    }
+    if (pass.status === 'cancelled') return deny('cancelled', pass);
+    if (pass.status === 'used') return deny('used', pass);
+    const now = ts(new Date());
+    if (now < pass.valid_from) return deny('not_yet_valid', pass);
+    if (now > pass.valid_until) return deny('expired', pass);
+    const r = run("UPDATE gate_passes SET status='used', used_at=?, used_by=? WHERE id=? AND status='active'", now, gid, pass.id);
+    if (!r.changes) return deny('used', pass);
+    glog('visitor', pass.visitor_name, pass.flat, 'allowed', null, gid);
+    log(gid, 'gate_pass', pass.id, 'used', `${pass.visitor_name} flat ${pass.flat}`);
+    notify(pass.created_by, `Your visitor ${pass.visitor_name} has entered`);
+    res.json({ result: 'allowed', kind: 'visitor', name: pass.visitor_name, flat: pass.flat, purpose: pass.purpose });
+  });
+  app.get('/api/gate/log', auth, gate, (req, res) => res.json(q(`SELECT l.id,l.kind,l.subject,l.flat,l.result,l.reason,u.name AS guard_name,l.created_at
+    FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 100`)));
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   app.use(express.static(path.join(__dirname, 'public')));

@@ -50,3 +50,34 @@
 .emg-send { background: #c62828; border-color: #c62828; color: #fff; }
 .pbar { height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 12%, transparent); overflow: hidden; }
 .pbar span { display: block; height: 100%; background: var(--color-accent-700); border-radius: 6px; }
+
+/* Leave room under every screen so the floating + button never covers the last item */
+.phone > .screen, .phone > form.screen { padding-bottom: 120px; }
+
+/* ===== HSP-24 gate access (appended) ===== */
+.mob .tabbar.three { grid-template-columns: repeat(3, 1fr); }
+.gp-card { align-items: stretch; gap: 12px; }
+.gp-qr { align-self: center; width: 100%; background: #fff; padding: 16px; border-radius: 20px; display: flex; justify-content: center; box-sizing: border-box; }
+.gp-qr svg { width: 100%; max-width: 300px; height: auto; aspect-ratio: 1; background: #fff; display: block; }
+.gp-code { text-align: center; font-size: 44px; font-weight: 800; letter-spacing: 8px; font-variant-numeric: tabular-nums; }
+.gate-code { height: 88px; text-align: center; font-size: 48px; font-weight: 800; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
+.gate-go { min-height: 64px; font-size: 20px; }
+.gate-cam { width: 100%; border-radius: 20px; background: #000; max-height: 60vh; object-fit: cover; }
+.gate-res { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 28px 16px; border-radius: 24px; color: #fff; font-size: 18px; }
+.gate-res.ok { background: #1b7f3b; }
+.gate-res.no { background: #c62828; }
+.gate-big { font-size: 48px; line-height: 1.1; letter-spacing: 2px; }
+.gate-name { font-size: 24px; font-weight: 700; }
+
+/* ===== Login redesign (phone) ===== */
+.auth-phone { background: linear-gradient(180deg, var(--color-accent-900) 0, var(--color-accent-800) 36%, var(--color-bg) 36%); }
+.auth-top { flex: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: max(18px, env(safe-area-inset-top)) 20px 44px; color: var(--color-bg); }
+.auth-top .eyebrow { color: var(--color-accent-300); }
+.auth-top h1 { margin: 0; font-size: 30px; color: var(--color-bg); }
+.auth-top-anim { width: 104px; height: 104px; border-radius: 28px; padding: 8px; background: color-mix(in srgb, #fff 12%, transparent); border: 1px solid color-mix(in srgb, #fff 24%, transparent); margin-bottom: 6px; }
+.auth-sheet { background: var(--color-bg); border-radius: 30px 30px 0 0; margin-top: -26px; padding-top: 22px; box-shadow: 0 -10px 30px color-mix(in srgb, #0a303e 25%, transparent); position: relative; }
+.auth-sheet h2 { margin: 2px 0 4px; }
+.auth-phone .auth-seg button { min-height: 52px; }
+.auth-phone .input { min-height: 56px; }
+.auth-phone .auth-go { min-height: 60px; font-size: 19px; }
+.auth-phone > form.screen { padding-bottom: 28px; }

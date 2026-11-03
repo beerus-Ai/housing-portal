@@ -11,6 +11,7 @@ window.API = (() => {
       logout: () => call('POST', '/api/logout'),
       register: body => call('POST', '/api/register', body),
       pulse: () => call('GET', '/api/pulse'),
+      google: credential => call('POST', '/api/auth/google', { credential }), // Google Identity Services ID token; signs in an EXISTING approved account matched by verified email
     },
     profile: {
       update: body => call('PATCH', '/api/me', body), // { name, phone }
@@ -51,6 +52,21 @@ window.API = (() => {
       create: body => call('POST', '/api/contacts', body), // committee: { name, role, phone, icon }
       remove: cid => call('DELETE', `/api/contacts/${id(cid)}`),
     },
+    gate: {
+      pass: body => call('POST', '/api/gate/passes', body), // resident: { visitor_name, purpose?, valid_from?, valid_until? } -> { id, token, code, qr: 'HSP:<token>' }
+      passes: () => call('GET', '/api/gate/passes'), // resident: own flat; committee: all. [{ id, flat, visitor_name, purpose, code, qr, valid_from, valid_until, status: 'active'|'used'|'cancelled'|'expired', created_by_name, used_at }]
+      cancel: pid => call('POST', `/api/gate/passes/${id(pid)}/cancel`),
+      me: () => call('GET', '/api/gate/me'), // resident's permanent gate token: { token, qr: 'HSP:<token>', nfc: 'HSP:<token>' }
+      rotate: () => call('POST', '/api/gate/me/rotate'),
+      verify: body => call('POST', '/api/gate/verify', body), // guard/committee: { code } or { token } (token may carry the 'HSP:' prefix) -> { result: 'allowed'|'denied', kind, name, flat, purpose, reason }
+      log: () => call('GET', '/api/gate/log'), // guard/committee: latest 100 [{ id, kind, subject, flat, result, reason, guard_name, created_at }]
+      guards: () => call('GET', '/api/admin/guards'),
+      addGuard: body => call('POST', '/api/admin/guards', body), // committee: { name, email, password }
+      removeGuard: gid => call('DELETE', `/api/admin/guards/${id(gid)}`),
+    },
+    settings: {
+      public: () => call('GET', '/api/settings'), // no sign-in needed: { society_name, society_kind, google_client_id ('' when off), features: { emergency, gate, contacts, notices } }
+    },
     lease: { get: () => call('GET', '/api/lease') },
     vendors: {
       list: () => call('GET', '/api/vendors'),
@@ -67,6 +83,14 @@ window.API = (() => {
       stats: () => call('GET', '/api/admin/stats'),
       audit: () => call('GET', '/api/admin/audit'),
       exportUrl: '/api/admin/export.csv',
+      settings: () => call('GET', '/api/admin/settings'), // same shape as settings.public plus any extra admin-only keys
+      setSettings: body => call('PUT', '/api/admin/settings', body), // { society_name?, society_kind?, google_client_id?, features?: { emergency?, gate?, contacts?, notices? } }
+      access: () => call('GET', '/api/admin/access'), // { roles: ['owner','tenant','family'], permissions: [{ key, label }], matrix: { owner: { 'gate.pass': true, ... }, ... } }
+      setAccess: matrix => call('PUT', '/api/admin/access', { matrix }),
+      allUsers: params => call('GET', '/api/admin/users' + qs(params)), // { status?, q? }
+      patchUser: (uid, body) => call('PATCH', `/api/admin/users/${id(uid)}`, body), // { resident_type?, flat?, name?, phone?, status?: 'approved'|'suspended' }
+      resetPassword: (uid, password) => call('POST', `/api/admin/users/${id(uid)}/reset-password`, { password }),
+      removeUser: uid => call('DELETE', `/api/admin/users/${id(uid)}`),
     },
   };
 })();
