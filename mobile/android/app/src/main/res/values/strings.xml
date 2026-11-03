@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sahyadri Heights</string>
+    <string name="title_activity_main">Sahyadri Heights</string>
+    <string name="package_name">com.sahyadri.heights</string>
+    <string name="custom_url_scheme">com.sahyadri.heights</string>
+</resources>
