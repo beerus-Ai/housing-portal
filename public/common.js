@@ -101,6 +101,8 @@ window.HP = (() => {
   const EMERGENCY_TYPES = [['lift', 'elevator', 'Stuck in lift'], ['medical', 'first-aid', 'Medical'], ['fire', 'fire', 'Fire'], ['theft', 'mask-sad', 'Theft'], ['threat', 'warning', 'Threat'], ['violence', 'hand-fist', 'Violence'], ['other', 'siren', 'Other']];
   // Icons a committee contact can use.
   const CONTACT_ICONS = ['phone', 'briefcase', 'shield-check', 'wrench', 'elevator', 'first-aid', 'fire', 'drop'];
+  // QR code as an inline SVG string (vendored qrcode-generator). Payload convention: 'HSP:' + token.
+  const qrSvg = (text, px = 220) => { if (!window.qrcode) return ''; const q = window.qrcode(0, 'M'); q.addData(String(text)); q.make(); const svg = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); return svg.replace('<svg', `<svg width="${px}" height="${px}" role="img" aria-label="QR code"`); };
   const dateLong = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? '' : `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`; };
   // Lease numbers for the tenant screens.
   function leaseInfo(l) {
@@ -140,5 +142,5 @@ window.HP = (() => {
   async function fileToUpload(form) { const fd = new FormData(form); const f = fd.get('photo'); if (f && !f.size) fd.delete('photo'); return fd; }
 
   return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, dateLong, leaseInfo, live, liveBadge };
+    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, dateLong, leaseInfo, live, liveBadge };
 })();

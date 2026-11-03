@@ -51,6 +51,18 @@ window.API = (() => {
       create: body => call('POST', '/api/contacts', body), // committee: { name, role, phone, icon }
       remove: cid => call('DELETE', `/api/contacts/${id(cid)}`),
     },
+    gate: {
+      pass: body => call('POST', '/api/gate/passes', body), // resident: { visitor_name, purpose?, valid_from?, valid_until? } -> { id, token, code, qr: 'HSP:<token>' }
+      passes: () => call('GET', '/api/gate/passes'), // resident: own flat; committee: all. [{ id, flat, visitor_name, purpose, code, qr, valid_from, valid_until, status: 'active'|'used'|'cancelled'|'expired', created_by_name, used_at }]
+      cancel: pid => call('POST', `/api/gate/passes/${id(pid)}/cancel`),
+      me: () => call('GET', '/api/gate/me'), // resident's permanent gate token: { token, qr: 'HSP:<token>', nfc: 'HSP:<token>' }
+      rotate: () => call('POST', '/api/gate/me/rotate'),
+      verify: body => call('POST', '/api/gate/verify', body), // guard/committee: { code } or { token } (token may carry the 'HSP:' prefix) -> { result: 'allowed'|'denied', kind, name, flat, purpose, reason }
+      log: () => call('GET', '/api/gate/log'), // guard/committee: latest 100 [{ id, kind, subject, flat, result, reason, guard_name, created_at }]
+      guards: () => call('GET', '/api/admin/guards'),
+      addGuard: body => call('POST', '/api/admin/guards', body), // committee: { name, email, password }
+      removeGuard: gid => call('DELETE', `/api/admin/guards/${id(gid)}`),
+    },
     lease: { get: () => call('GET', '/api/lease') },
     vendors: {
       list: () => call('GET', '/api/vendors'),
