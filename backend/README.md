@@ -52,3 +52,10 @@ Flyway runs `src/main/resources/db/migration` on start (`V1__schema.sql` creates
   `feature(user, name)`, `permission(user, key)` (= `can`). `AuditService.log` and `NotificationService.notify` are the
   `log()` / `notify()` helpers.
 - Google sign-in: implement or replace the `GoogleTokenVerifier` bean (tests inject a fake); the default calls Google tokeninfo.
+
+## Phase 3 (safety, gate and estate)
+`GET|POST /api/emergencies`, `POST /api/emergencies/{id}/resolve`, `GET|POST /api/contacts`, `DELETE /api/contacts/{id}`,
+`POST|GET /api/gate/passes`, `POST /api/gate/passes/{id}/cancel`, `GET /api/gate/me`, `POST /api/gate/me/rotate`,
+`POST /api/gate/verify`, `GET /api/gate/log`, `GET /api/gate/overview`, `POST|GET /api/admin/guards`, `DELETE /api/admin/guards/{id}`,
+`GET|POST /api/vehicles`, `DELETE /api/vehicles/{id}`, `GET|POST /api/parking`, `POST /api/parking/{id}/assign|free`,
+`DELETE /api/parking/{id}`, `GET|POST /api/admin/workers`, `PUT|DELETE /api/admin/workers/{id}`, `GET /api/admin/overview`.

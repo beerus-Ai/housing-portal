@@ -27,7 +27,7 @@ public class GuardAllowListFilter extends OncePerRequestFilter {
             String m = req.getMethod();
             boolean ok = (m.equals("GET") && p.equals("/api/me"))
                     || (m.equals("POST") && (p.equals("/api/me/password") || p.equals("/api/gate/verify")))
-                    || (m.equals("GET") && (p.equals("/api/gate/log") || p.equals("/api/pulse")))
+                    || (m.equals("GET") && (p.equals("/api/gate/log") || p.equals("/api/gate/overview") || p.equals("/api/pulse")))
                     || p.equals("/api/notifications") || p.startsWith("/api/notifications/");
             if (!ok) {
                 JsonErrors.write(res, 403, "Not allowed for guard accounts");
