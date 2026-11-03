@@ -58,3 +58,7 @@
 .am-auth .auth-go { min-height: 60px; border-radius: 999px; font-size: 19px; }
 .am-switch { text-align: center; margin: 0; font-size: 15px; }
 .am-switch .link-btn { display: inline; min-height: 44px; font-weight: 800; }
+
+/* Fix: children of the screen must never shrink (the scrolling chip row collapsed to a sliver in the flex column) */
+.phone > .screen > *, .phone > form.screen > * { flex-shrink: 0; }
+.am-chips { min-height: 104px; }
