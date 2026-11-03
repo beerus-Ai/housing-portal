@@ -9,6 +9,15 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import { Alerts, Approvals, ComingSoon, NotFound } from './pages/Misc';
 
+import { RequestDetailPage, RequestList } from './pages/Requests';
+import Raise from './pages/Raise';
+import Notices from './pages/Notices';
+import Household from './pages/Household';
+import { Leases, MyLease } from './pages/Leases';
+import Vendors from './pages/Vendors';
+import Audit from './pages/Audit';
+import Profile from './pages/Profile';
+
 const Settings = lazy(() => import('./pages/Settings'));
 
 function Index() {
@@ -19,7 +28,7 @@ function Index() {
   return <Home />;
 }
 
-const LATER = ['requests', 'raise', 'household', 'contacts', 'gatepass', 'emergency', 'lease', 'notices', 'emergencies', 'leases', 'vendors', 'gate', 'gatelog', 'audit'];
+const LATER = ['contacts', 'gatepass', 'emergency', 'emergencies', 'gate', 'gatelog'];
 
 export function App() {
   return (
@@ -31,6 +40,16 @@ export function App() {
         <Route element={<Shell />}>
           <Route index element={<Index />} />
           <Route path="alerts" element={<Alerts />} />
+          <Route path="requests" element={<RequireRole page="requests"><RequestList /></RequireRole>} />
+          <Route path="requests/:id" element={<RequireRole page="requests"><RequestDetailPage /></RequireRole>} />
+          <Route path="raise" element={<RequireRole page="raise"><Raise /></RequireRole>} />
+          <Route path="notices" element={<RequireRole page="notices"><Notices /></RequireRole>} />
+          <Route path="household" element={<RequireRole page="household"><Household /></RequireRole>} />
+          <Route path="lease" element={<RequireRole page="lease"><MyLease /></RequireRole>} />
+          <Route path="leases" element={<RequireRole role="admin"><Leases /></RequireRole>} />
+          <Route path="vendors" element={<RequireRole role="admin"><Vendors /></RequireRole>} />
+          <Route path="audit" element={<RequireRole role="admin"><Audit /></RequireRole>} />
+          <Route path="profile" element={<Profile />} />
           <Route path="approvals" element={<RequireRole role="admin"><Approvals /></RequireRole>} />
           <Route path="settings" element={
             <RequireRole role="admin">

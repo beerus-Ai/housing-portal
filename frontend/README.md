@@ -31,7 +31,7 @@ VITE_API_TARGET=http://localhost:8080 npm run dev
 - `src/auth/` auth context (`/api/me`, login, Google, logout), route guards, lazy Google Identity Services loader.
 - `src/nav.ts` role, permission and feature filtering of menu items, and the `hp.nav` preference (`{pos:'side'|'top', hidden}`; same format as the existing web app).
 - `src/pages/` Login (and Join), Home (resident), Dashboard (committee), Approvals, Alerts, Settings (General, Access control, Users, Features, Guards, Sign-in).
-- Other menu items (requests, gate pass, vendors, ...) show a "coming in a later phase" page until phases 2 and 3.
+- Phase 2 pages: Requests (list, detail, tracker, rating, committee actions), Raise, Notices, Household, Vendors, Leases and My lease, Audit trail (CSV export), Profile. Remaining items show a "coming in a later phase" page until phase 3.
 - `public/` is copied from the existing app: logo, Outfit and Plus Jakarta Sans fonts, Phosphor duotone icon font. `src/styles/tokens.css` is `public/css/tokens.css` with a 24px card radius.
 
 ## Notes

@@ -176,3 +176,85 @@ export interface Emergency {
   created_at: string;
   resolved_at: string | null;
 }
+
+export interface HistoryItem {
+  action: string;
+  detail: string | null;
+  created_at: string;
+  actor: string | null;
+}
+export interface RequestDetail extends ServiceRequest {
+  history: HistoryItem[];
+}
+export interface Comment {
+  id: number;
+  body: string;
+  created_at: string;
+  author: string;
+  role: Role;
+}
+
+export interface NoticeBody {
+  title: string;
+  body: string;
+}
+export interface HouseholdBody {
+  name: string;
+  email: string;
+  phone: string;
+  resident_type: 'family' | 'tenant';
+  password: string;
+  consent: boolean;
+}
+
+export interface Vendor {
+  id: number;
+  name: string;
+  trade: string;
+  phone: string | null;
+}
+export interface VendorBody {
+  name: string;
+  trade: string;
+  phone: string;
+}
+
+export interface LeaseBody {
+  start_date: string;
+  end_date: string;
+  owner_name: string;
+  owner_phone: string;
+  police_verified_on: string;
+  agreement: string;
+  parking: string;
+}
+/** GET /api/lease (null until the committee sets it) */
+export interface Lease extends LeaseBody {
+  id: number;
+  user_id: number;
+}
+/** GET /api/admin/leases: one row per approved tenant, lease fields are null when not set yet */
+export interface LeaseRow {
+  user_id: number;
+  name: string;
+  flat: string | null;
+  email: string;
+  phone: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  owner_name: string | null;
+  owner_phone: string | null;
+  police_verified_on: string | null;
+  agreement: string | null;
+  parking: string | null;
+}
+
+export interface AuditRow {
+  id: number;
+  entity: string;
+  entity_id: number | null;
+  action: string;
+  detail: string | null;
+  created_at: string;
+  actor: string | null;
+}
