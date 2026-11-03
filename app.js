@@ -85,6 +85,20 @@ function createApp(opts = {}) {
     fails.delete(key);
     req.session.regenerate(() => { req.session.uid = u.id; log(u.id, 'user', u.id, 'login'); res.json(publicUser(u)); });
   });
+  app.patch('/api/me', auth, (req, res) => {
+    const name = str(req.body && req.body.name, 100) || req.user.name, phone = req.body && 'phone' in req.body ? str(req.body.phone, 20) : req.user.phone;
+    run('UPDATE users SET name=?, phone=? WHERE id=?', name, phone, req.user.id);
+    log(req.user.id, 'user', req.user.id, 'profile_updated');
+    res.json(publicUser(one('SELECT * FROM users WHERE id=?', req.user.id)));
+  });
+  app.post('/api/me/password', auth, (req, res) => {
+    const cur = typeof (req.body && req.body.current) === 'string' ? req.body.current : '', next = typeof (req.body && req.body.next) === 'string' ? req.body.next : '';
+    if (!bcrypt.compareSync(cur, req.user.password_hash)) return res.status(403).json({ error: 'Current password is wrong' });
+    if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    run('UPDATE users SET password_hash=? WHERE id=?', bcrypt.hashSync(next, 10), req.user.id);
+    log(req.user.id, 'user', req.user.id, 'password_changed');
+    res.json({ ok: true });
+  });
   app.post('/api/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
   app.get('/api/me', auth, (req, res) => res.json(publicUser(req.user)));
 
@@ -92,6 +106,11 @@ function createApp(opts = {}) {
   app.get('/api/admin/users', auth, admin, (req, res) => {
     const s = req.query.status;
     res.json(q(`SELECT id,name,email,phone,flat,resident_type,role,status,created_at FROM users ${s ? 'WHERE status=?' : ''} ORDER BY id DESC`, ...(s ? [s] : [])));
+  });
+  app.get('/api/admin/users/:id', auth, admin, (req, res) => {
+    const u = one('SELECT id,name,email,phone,flat,resident_type,role,status,consent_at,created_at FROM users WHERE id=?', req.params.id);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    res.json({ ...u, lease: one('SELECT * FROM leases WHERE user_id=?', u.id) || null });
   });
   for (const [act, status] of [['approve', 'approved'], ['reject', 'rejected']]) {
     app.post(`/api/admin/users/:id/${act}`, auth, admin, (req, res) => {
@@ -111,6 +130,23 @@ function createApp(opts = {}) {
     const r = run('INSERT INTO vendors(name,trade,phone) VALUES(?,?,?)', name, trade, phone);
     log(req.user.id, 'vendor', r.lastInsertRowid, 'created', name);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
+  });
+
+  app.put('/api/vendors/:id', auth, admin, (req, res) => {
+    const v = one('SELECT * FROM vendors WHERE id=?', req.params.id);
+    if (!v) return res.status(404).json({ error: 'Vendor not found' });
+    const name = str(req.body.name, 100) || v.name, trade = str(req.body.trade, 50) || v.trade, phone = 'phone' in req.body ? str(req.body.phone, 20) : v.phone;
+    run('UPDATE vendors SET name=?, trade=?, phone=? WHERE id=?', name, trade, phone, v.id);
+    log(req.user.id, 'vendor', v.id, 'updated', name);
+    res.json({ ok: true });
+  });
+  app.delete('/api/vendors/:id', auth, admin, (req, res) => {
+    const v = one('SELECT * FROM vendors WHERE id=?', req.params.id);
+    if (!v) return res.status(404).json({ error: 'Vendor not found' });
+    if (one('SELECT id FROM requests WHERE vendor_id=? LIMIT 1', v.id)) return res.status(409).json({ error: 'This vendor has requests on record and cannot be deleted' });
+    run('DELETE FROM vendors WHERE id=?', v.id);
+    log(req.user.id, 'vendor', v.id, 'deleted', v.name);
+    res.json({ ok: true });
   });
 
   // ---- requests
@@ -167,6 +203,22 @@ function createApp(opts = {}) {
     res.sendFile(path.join(uploadDir, path.basename(r.photo)));
   });
 
+  app.get('/api/requests/:id/comments', auth, (req, res) => {
+    const r = one(`${REQ_SELECT} WHERE r.id=?`, req.params.id);
+    if (!r || !canSee(req.user, r)) return res.status(404).json({ error: 'Request not found' });
+    res.json(q('SELECT c.id,c.body,c.created_at,u.name AS author,u.role FROM comments c JOIN users u ON u.id=c.user_id WHERE c.request_id=? ORDER BY c.id', r.id));
+  });
+  app.post('/api/requests/:id/comments', auth, (req, res) => {
+    const r = one(`${REQ_SELECT} WHERE r.id=?`, req.params.id);
+    if (!r || !canSee(req.user, r)) return res.status(404).json({ error: 'Request not found' });
+    const body = str(req.body && req.body.body, 1000);
+    if (!body) return res.status(400).json({ error: 'Write a message first' });
+    const c = run('INSERT INTO comments(request_id,user_id,body) VALUES(?,?,?)', r.id, req.user.id, body);
+    log(req.user.id, 'request', r.id, 'commented', body.slice(0, 80));
+    if (req.user.role === 'admin') { if (r.user_id !== req.user.id) notify(r.user_id, `The committee replied on "${r.title}"`); }
+    else for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New message on request "${r.title}" from flat ${req.user.flat}`);
+    res.status(201).json({ id: Number(c.lastInsertRowid) });
+  });
   app.post('/api/requests/:id/assign', auth, admin, (req, res) => {
     const r = one('SELECT * FROM requests WHERE id=?', req.params.id);
     const v = one('SELECT * FROM vendors WHERE id=?', req.body.vendor_id);
@@ -307,6 +359,14 @@ function createApp(opts = {}) {
     for (const u of q("SELECT id FROM users WHERE status='approved' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
+  app.delete('/api/notices/:id', auth, admin, (req, res) => {
+    const n = one('SELECT * FROM notices WHERE id=?', req.params.id);
+    if (!n) return res.status(404).json({ error: 'Notice not found' });
+    run('DELETE FROM notices WHERE id=?', n.id);
+    log(req.user.id, 'notice', n.id, 'deleted', n.title);
+    res.json({ ok: true });
+  });
+  app.get('/api/notifications/unread-count', auth, (req, res) => res.json({ n: one('SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND is_read=0', req.user.id).n }));
   app.get('/api/notifications', auth, (req, res) => res.json(q('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50', req.user.id)));
   app.post('/api/notifications/read', auth, (req, res) => { run('UPDATE notifications SET is_read=1 WHERE user_id=?', req.user.id); res.json({ ok: true }); });
 

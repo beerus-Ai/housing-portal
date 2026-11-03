@@ -125,7 +125,7 @@ window.HP = (() => {
     async function tick() {
       if (busy || document.hidden) return; busy = true;
       try {
-        const p = await api('GET', '/api/pulse');
+        const p = await API.auth.pulse();
         if (last !== null && p.v !== last && !editing()) { await redraw(); }
         if (last === null || !editing()) last = p.v;
         mark();

@@ -48,7 +48,7 @@ h1, h2, h3, h4 { margin: 0; text-wrap: pretty; }
 .ring b { font-family: var(--font-heading); font-size: 32px; } .ring span { font-size: 12px; opacity: .75; }
 
 /* tracker */
-.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 980px; }
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: none; }
 .step { display: flex; flex-direction: column; gap: 4px; }
 .step-top { display: flex; align-items: center; }
 .step .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; background: var(--color-neutral-300); color: var(--color-bg); flex: none; }
@@ -135,7 +135,7 @@ h1, h2, h3, h4 { margin: 0; text-wrap: pretty; }
 
 /* ================= mobile app ================= */
 body.mob { background: var(--color-surface); }
-.phone { max-width: 480px; min-height: 100dvh; margin: 0 auto; background: var(--color-bg); display: flex; flex-direction: column; position: relative; box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text) 8%, transparent); }
+.phone { width: 100%; min-height: 100dvh; margin: 0; background: var(--color-bg); display: flex; flex-direction: column; position: relative; box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text) 8%, transparent); }
 .screen { flex: 1; padding: max(var(--space-4), env(safe-area-inset-top)) 20px 24px; display: flex; flex-direction: column; gap: var(--space-3); }
 .screen h2 { font-size: 28px; } .screen h3 { font-size: 22px; }
 .tabbar { position: sticky; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px 12px max(10px, env(safe-area-inset-bottom)); background: var(--color-surface); border-top: 1px solid var(--color-divider); }
@@ -173,7 +173,7 @@ button.stat { all: unset; box-sizing: border-box; cursor: pointer; padding: 14px
 /* ===== viewport fit: the app is a full-height shell, only the content area scrolls ===== */
 html, body { height: 100%; overflow: hidden; }
 .web { height: 100dvh; max-width: none; padding: 14px clamp(14px, 3vw, 48px) 0; gap: 12px; overflow: hidden; }
-.web > * { width: 100%; max-width: 1360px; margin-inline: auto; }
+.web > * { width: 100%; }
 .web > header { flex: none; }
 .web > .page { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 4px 32px; gap: var(--space-6); scrollbar-gutter: stable; }
 .web > .foot { flex: none; padding: 6px 0 8px; }
@@ -206,5 +206,4 @@ html, body { height: 100%; overflow: hidden; }
 .phone > form.screen { overflow-y: auto; }
 .tabbar { position: static; flex: none; }
 .m-hero-photo { height: clamp(120px, 24dvh, 200px); }
-@media (min-width: 520px) { body.mob { display: grid; place-items: center; } .phone { width: 430px; height: min(100dvh, 920px); border-radius: 28px; box-shadow: var(--shadow-lg); } }
 @media (max-height: 640px) { .m-hero .fig { font-size: 32px; } .quick .tile { width: 44px; height: 44px; font-size: 22px; } }

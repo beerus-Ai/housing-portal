@@ -27,7 +27,7 @@
     if (!S.me) return authView();
     const tabs = TABS[isAdmin() ? 'admin' : 'resident']();
     let pending = 0;
-    if (isAdmin()) pending = (await api('GET', '/api/admin/users?status=pending').catch(() => [])).length;
+    if (isAdmin()) pending = (await API.admin.users('pending').catch(() => [])).length;
     const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}</button>`).join('');
     app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main><nav class="tabbar" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
@@ -58,12 +58,12 @@
     async home() { return isAdmin() ? SCREENS.dashboard() : SCREENS.residentHome(); },
 
     async residentHome() {
-      const [reqs, notices] = await Promise.all([api('GET', '/api/requests'), api('GET', '/api/notices')]);
+      const [reqs, notices] = await Promise.all([API.requests.list(), API.notices.list()]);
       const { open, toRate } = residentSummary(reqs, S.me, notices);
       const t = S.me.resident_type;
       let p2 = ['Notices', String(notices.length), ['quick', 'data-k="notices-sub"']];
-      if (t === 'owner') p2 = ['Household', String((await api('GET', '/api/household')).length), ['tab', 'data-tab="household"']];
-      if (t === 'tenant') { const li = leaseInfo(await api('GET', '/api/lease')); p2 = ['Lease ends', li ? li.left + 'd' : '–', ['tab', 'data-tab="lease"']]; }
+      if (t === 'owner') p2 = ['Household', String((await API.household.list()).length), ['tab', 'data-tab="household"']];
+      if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); p2 = ['Lease ends', li ? li.left + 'd' : '–', ['tab', 'data-tab="lease"']]; }
       const n0 = notices[0];
       const quick = [['plus-circle', 'Raise', 'raise'], ['list-checks', 'Requests', 'requests'], ['megaphone', 'Notices', 'notices-sub'], ['address-book', 'Contacts', 'contacts-sub']]
         .map(([i, l, k]) => `<button data-act="quick" data-k="${k}"><span class="tile">${ic(i)}</span>${l}</button>`).join('');
@@ -81,17 +81,17 @@
     },
 
     async requests() {
-      const reqs = (await api('GET', '/api/requests')).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
+      const reqs = (await API.requests.list()).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
       if (S.selId) {
-        const d = await api('GET', '/api/requests/' + S.selId);
-        const vendors = isAdmin() ? await api('GET', '/api/vendors') : [];
+        const d = await API.requests.get(S.selId);
+        const vendors = isAdmin() ? await API.vendors.list() : [];
         const next = { open: [], assigned: ['in_progress', 'closed'], in_progress: ['closed'], closed: [] }[d.status];
         const rate = d.can_rate ? `<div class="col callout" style="gap:var(--space-1)"><span class="list-title" style="font-size:16px">Rate the work to close it</span><div class="row" style="justify-content:space-between;gap:0;flex-wrap:nowrap">${stars('rate')}</div></div>`
           : d.status === 'closed' && !d.rating && !isAdmin() ? '<p class="callout sm" style="margin:0">Resolved. The flat owner rates the work to close it.</p>'
           : d.rating ? `<p class="row" style="gap:6px;margin:0">${ic('star')}You rated this <strong>${d.rating} of 5</strong>. Thank you.</p>` : '';
         const adm = isAdmin() && d.status !== 'closed' ? `<div class="m-card"><select class="input" id="vs" aria-label="Vendor">${vendorOpts(vendors, d.vendor_id)}</select><div class="two"><button class="btn btn-secondary" data-act="assign" data-id="${d.id}">Assign</button>
           ${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
-        return screen(`${back('Requests', 'requests')}<div class="m-photo">${d.has_photo ? `<img class="photo" alt="Photo attached by resident" src="/api/requests/${d.id}/photo">` : photoSlot('No photo attached', 'camera')}</div>
+        return screen(`${back('Requests', 'requests')}<div class="m-photo">${d.has_photo ? `<img class="photo" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : photoSlot('No photo attached', 'camera')}</div>
           <span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · ${esc(d.flat)}</span><h3>${esc(d.title)}</h3><p class="sm" style="margin:0;white-space:pre-line">${esc(d.description)}</p>
           ${stepper(d, d.history, true)}${adm}${rate}`);
       }
@@ -109,7 +109,7 @@
     },
 
     async household() {
-      const ms = await api('GET', '/api/household');
+      const ms = await API.household.list();
       const open = S.sub === 'add';
       const tiles = [['family', 'users', 'Family member'], ['tenant', 'house-line', 'Tenant']].map(([k, i, l]) => `<button type="button" class="type-tile ${S.rtype === k ? 'on' : ''}" style="align-items:center" data-act="rtype" data-t="${k}">${ic(i)}<b style="font-size:14px">${l}</b></button>`).join('');
       screen(`<h2>Household</h2><span class="muted sm">Flat ${esc(S.me.flat)}</span>${ms.map((m, i) => `<div class="member" style="grid-template-columns:44px minmax(0,1fr);padding:12px;border-radius:20px"><span class="avatar ${i ? 'blue' : ''}" style="width:44px;height:44px">${esc(initials(m.name))}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(m.name)}</span><span class="row xs" style="gap:6px">${esc(TYPE[m.resident_type] || '')}<span class="tag ${m.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${m.status === 'approved' ? 'Active' : 'Pending approval'}</span></span></span></div>`).join('')}
@@ -122,7 +122,7 @@
     },
 
     async lease() {
-      const li = leaseInfo(await api('GET', '/api/lease'));
+      const li = leaseInfo(await API.lease.get());
       screen(`<h2>Your lease</h2>${li ? `<div class="hero m-hero"><div class="soft sm" style="font-weight:600">Lease on ${esc(S.me.flat)}</div><div class="fig" style="font-size:36px;margin-top:6px">${li.left} days left</div><div class="soft sm" style="margin-top:4px">Ends ${esc(li.ends)}</div>
         <div style="height:6px;border-radius:6px;background:color-mix(in srgb,var(--color-bg) 22%,transparent);margin-top:12px;overflow:hidden"><span style="display:block;height:100%;width:${li.pct}%;background:var(--color-accent-300)"></span></div></div>
         <div class="soft-card" style="padding:4px 14px;border-radius:20px">${li.rows.map(([i, k, v]) => `<div class="row" style="flex-wrap:nowrap;padding:8px 0;gap:var(--space-2)">${ic(i).replace('<i ', '<i style="font-size:18px;color:var(--color-accent-700)" ')}<span class="col" style="gap:0"><span class="muted xs">${esc(k)}</span><span class="sm" style="font-weight:600">${esc(v)}</span></span></div>`).join('')}</div>`
@@ -131,14 +131,14 @@
     },
 
     async notices() {
-      const ns = await api('GET', '/api/notices');
+      const ns = await API.notices.list();
       const form = isAdmin() ? `<form id="nform" class="m-card"><h3>Post a notice</h3><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150"></div>
         <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><button class="btn btn-primary btn-lg">${ic('megaphone')}Post and notify</button></form>` : '';
       screen(`<h2>Notices</h2>${form}${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}${isAdmin() ? `<button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>` : ''}`);
     },
 
     async approvals() {
-      const us = (await api('GET', '/api/admin/users')).filter(u => u.role !== 'admin');
+      const us = (await API.admin.users()).filter(u => u.role !== 'admin');
       const rows = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 6)];
       screen(`<h2>Approvals</h2><span class="muted sm">Check against the flat register before approving.</span>${rows.map(u => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span>
         <span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(u.name)}</span><span class="muted xs">${esc(u.flat)} · ${esc(TYPE[u.resident_type] || '')} · ${esc(day(u.created_at))}</span></span></div>
@@ -147,7 +147,7 @@
     },
 
     async dashboard() {
-      const [s, reqs] = await Promise.all([api('GET', '/api/admin/stats'), api('GET', '/api/requests')]);
+      const [s, reqs] = await Promise.all([API.admin.stats(), API.requests.list()]);
       const a = adminSummary(reqs, s), un = a.open.filter(r => !r.vendor_id).length, max = Math.max(1, ...a.weeks);
       const stat = (i, l, v, tab) => `<button class="stat" data-act="tab" data-tab="${tab}"><div class="l">${ic(i)}${l}</div><div class="v">${esc(v)}</div></button>`;
       screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span><div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · Committee</span>
@@ -166,19 +166,19 @@
   // committee: the Requests tab is the assignment queue; reuse the same list/detail screen.
   const SUB = {
     async alerts() {
-      const ns = await api('GET', '/api/notifications');
+      const ns = await API.notifications.list();
       screen(`${back('Back', 'home')}<h2>Alerts</h2>${ns.map(n => `<div class="m-card"><span class="sm">${esc(n.message)}</span><span class="muted xs">${n.is_read ? '' : 'New · '}${esc(stamp(n.created_at))}</span></div>`).join('') || '<p class="muted">No alerts.</p>'}`);
-      await api('POST', '/api/notifications/read');
+      await API.notifications.markRead();
     },
     async 'leases-sub'() {
-      const ts = await api('GET', '/api/admin/leases');
+      const ts = await API.admin.leases();
       screen(`${back('Dashboard', 'home')}<h2>Tenant leases</h2>${ts.map(t => { const li = leaseInfo(t.end_date ? t : null);
         return `<button class="list-row m-card" style="grid-template-columns:44px minmax(0,1fr)" data-act="leaseopen" data-id="${t.user_id}"><span class="avatar light" style="width:44px;height:44px">${esc(initials(t.name))}</span>
           <span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(t.name)}</span><span class="muted xs">Flat ${esc(t.flat)}</span>
           <span style="align-self:flex-start">${li ? `<span class="tag ${li.left < 60 ? 'tag-accent-2' : 'tag-accent'}">${li.left} days left</span>` : '<span class="tag tag-neutral">No lease on file</span>'}</span></span></button>`; }).join('') || '<p class="callout">No approved tenants yet.</p>'}`);
     },
     async 'lease-edit'() {
-      const t = (await api('GET', '/api/admin/leases')).find(x => x.user_id === S.leaseId);
+      const t = (await API.admin.leases()).find(x => x.user_id === S.leaseId);
       if (!t) return go('home', null, 'leases-sub');
       const f = (id, label, name, val, extra = '') => `<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" name="${name}" value="${esc(val || '')}" ${extra}></div>`;
       screen(`<button class="back" data-act="leasesback">${ic('caret-left')}Leases</button><h3>${esc(t.name)} · ${esc(t.flat)}</h3>
@@ -187,7 +187,7 @@
         ${f('lv', 'Police verified on', 'police_verified_on', t.police_verified_on, 'type="date"')}${f('la', 'Rent agreement', 'agreement', t.agreement, 'maxlength="200"')}${f('lk', 'Parking', 'parking', t.parking, 'maxlength="100"')}
         <button class="btn btn-primary btn-lg">${ic('floppy-disk')}Save lease</button></form>`);
     },
-    async 'notices-sub'() { const ns = await api('GET', '/api/notices'); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
+    async 'notices-sub'() { const ns = await API.notices.list(); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
     async 'contacts-sub'() {
       screen(`${back('Home', 'home')}<h2>Who to call</h2>${CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('')}`);
     },
@@ -200,15 +200,15 @@
     leaseopen: el => { S.leaseId = Number(el.dataset.id); go('home', null, 'lease-edit'); },
     leasesback: () => go('home', null, 'leases-sub'),
     open: el => go('requests', Number(el.dataset.id)),
-    logout: async () => { await api('POST', '/api/logout'); S.me = null; S.mode = 'login'; render(); },
+    logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
     mode: () => { S.mode = S.mode === 'login' ? 'join' : 'login'; render(); },
     regtype: el => { S.regType = el.dataset.t; document.querySelectorAll('[data-act=regtype]').forEach(b => b.classList.toggle('on', b === el)); },
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
-    rate: async el => { await api('POST', `/api/requests/${S.selId}/rate`, { rating: Number(el.dataset.n) }); toast('Thank you. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await api('POST', `/api/requests/${el.dataset.id}/assign`, { vendor_id: Number(v) }); toast('Assigned'); render(); },
-    move: async el => { await api('POST', `/api/requests/${el.dataset.id}/status`, { status: el.dataset.s }); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
-    decide: async el => { await api('POST', `/api/admin/users/${el.dataset.id}/${el.dataset.d}`); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
+    rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thank you. Request closed.'); render(); },
+    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
+    decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
   document.addEventListener('change', guard(async e => {
@@ -223,20 +223,20 @@
     if (f.id === 'authform') {
       const err = $('#autherr'); err.textContent = '';
       try {
-        if (S.mode === 'login') { S.me = await api('POST', '/api/login', d); S.tab = 'home'; return render(); }
+        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.tab = 'home'; return render(); }
         d.consent = f.consent.checked; d.resident_type = S.regType;
-        const r = await api('POST', '/api/register', d); S.mode = 'login'; authView(); toast(r.message + ' You will be able to sign in once approved.');
+        const r = await API.auth.register(d); S.mode = 'login'; authView(); toast(r.message + ' You will be able to sign in once approved.');
       } catch (x) { err.textContent = x.message; }
     } else if (f.id === 'raiseform') {
       const fd = new FormData();
       fd.set('category', S.cat); fd.set('title', d.title);
       fd.set('description', [d.where ? 'Where: ' + d.where : '', d.description].filter(Boolean).join('\n'));
       if (S.photo) fd.set('photo', S.photo);
-      const r = await api('POST', '/api/requests', fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
+      const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
     } else if (f.id === 'hhform') {
-      d.consent = f.consent.checked; d.resident_type = S.rtype; await api('POST', '/api/household', d); toast('Sent to the committee for approval'); render();
-    } else if (f.id === 'leaseform') { await api('PUT', `/api/admin/users/${f.dataset.id}/lease`, d); toast('Lease saved. Tenant notified.'); go('home', null, 'leases-sub');
-    } else if (f.id === 'nform') { await api('POST', '/api/notices', d); toast('Posted. Residents notified.'); render(); }
+      d.consent = f.consent.checked; d.resident_type = S.rtype; await API.household.add(d); toast('Sent to the committee for approval'); render();
+    } else if (f.id === 'leaseform') { await API.admin.setLease(f.dataset.id, d); toast('Lease saved. Tenant notified.'); go('home', null, 'leases-sub');
+    } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
   }));
 
   HP.live(async () => {
@@ -246,5 +246,5 @@
     const n = $('#screen'); if (n) n.scrollTop = top;
   });
 
-  (async () => { try { S.me = await api('GET', '/api/me'); } catch { S.me = null; } render(); })();
+  (async () => { try { S.me = await API.auth.me(); } catch { S.me = null; } render(); })();
 })();

@@ -181,3 +181,52 @@ test('pulse token changes when visible data changes', async () => {
   assert.notEqual((await admin('GET', '/api/pulse')).body.v, a1);
   assert.notEqual((await res('GET', '/api/pulse')).body.v, r1);
 });
+
+test('profile, password, vendors, notices, comments and unread count', async () => {
+  const admin = client(), res = client(), stranger = client();
+  await admin('POST', '/api/login', { email: 'admin@society.test', password: 'Admin@1234' });
+  await res('POST', '/api/login', { email: reg.email, password: reg.password });
+  await stranger('POST', '/api/login', { email: 'other@example.test', password: reg.password });
+
+  // profile + password
+  assert.equal((await res('PATCH', '/api/me', { name: 'Test Resident Two', phone: '+91 90000 00000' })).body.name, 'Test Resident Two');
+  assert.equal((await res('POST', '/api/me/password', { current: 'wrong', next: 'NewPassw0rd!' })).status, 403);
+  assert.equal((await res('POST', '/api/me/password', { current: reg.password, next: 'short' })).status, 400);
+  assert.equal((await res('POST', '/api/me/password', { current: reg.password, next: 'NewPassw0rd!' })).status, 200);
+  assert.equal((await client()('POST', '/api/login', { email: reg.email, password: 'NewPassw0rd!' })).status, 200);
+  await res('POST', '/api/me/password', { current: 'NewPassw0rd!', next: reg.password }); // restore for other tests
+
+  // admin user detail
+  const uid = (await admin('GET', '/api/admin/users')).body.find(u => u.email === reg.email).id;
+  assert.equal((await admin('GET', `/api/admin/users/${uid}`)).body.email, reg.email);
+  assert.equal((await res('GET', `/api/admin/users/${uid}`)).status, 403);
+
+  // vendors: update, and delete only when unused
+  const v = (await admin('POST', '/api/vendors', { name: 'Temp Vendor', trade: 'other' })).body.id;
+  assert.equal((await admin('PUT', `/api/vendors/${v}`, { name: 'Temp Vendor 2', phone: '123' })).status, 200);
+  assert.equal((await res('PUT', `/api/vendors/${v}`, { name: 'x' })).status, 403);
+  assert.equal((await admin('DELETE', `/api/vendors/${v}`)).status, 200);
+  assert.equal((await admin('DELETE', `/api/vendors/${v}`)).status, 404);
+  const used = (await admin('GET', '/api/vendors')).body.find(x => x.name === 'Ravi Plumbing').id;
+  assert.equal((await admin('DELETE', `/api/vendors/${used}`)).status, 409);
+
+  // notices: delete is admin only
+  const nid = (await admin('POST', '/api/notices', { title: 'Delete me', body: 'x' })).body.id;
+  assert.equal((await res('DELETE', `/api/notices/${nid}`)).status, 403);
+  assert.equal((await admin('DELETE', `/api/notices/${nid}`)).status, 200);
+  assert.ok(!(await res('GET', '/api/notices')).body.some(n => n.id === nid));
+
+  // comments: visible to the requester and committee, not to another flat
+  const rid = (await res('GET', '/api/requests')).body[0].id;
+  assert.equal((await res('POST', `/api/requests/${rid}/comments`, { body: '' })).status, 400);
+  assert.equal((await res('POST', `/api/requests/${rid}/comments`, { body: 'Home after 6pm' })).status, 201);
+  assert.equal((await admin('POST', `/api/requests/${rid}/comments`, { body: 'Visit tomorrow' })).status, 201);
+  assert.deepEqual((await res('GET', `/api/requests/${rid}/comments`)).body.map(c => c.body), ['Home after 6pm', 'Visit tomorrow']);
+  assert.equal((await stranger('GET', `/api/requests/${rid}/comments`)).status, 404);
+  assert.equal((await stranger('POST', `/api/requests/${rid}/comments`, { body: 'hi' })).status, 404);
+
+  // unread count drops to zero after marking read
+  assert.ok((await res('GET', '/api/notifications/unread-count')).body.n > 0);
+  await res('POST', '/api/notifications/read');
+  assert.equal((await res('GET', '/api/notifications/unread-count')).body.n, 0);
+});

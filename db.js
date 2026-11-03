@@ -26,6 +26,9 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS notices(
     id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL,
     author_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS comments(
+    id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL REFERENCES requests(id), user_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   CREATE TABLE IF NOT EXISTS leases(
     user_id INTEGER PRIMARY KEY REFERENCES users(id), start_date TEXT NOT NULL, end_date TEXT NOT NULL,
     owner_name TEXT, owner_phone TEXT, police_verified_on TEXT, agreement TEXT, parking TEXT);
