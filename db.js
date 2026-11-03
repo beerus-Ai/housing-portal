@@ -1,6 +1,17 @@
 const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
 
+const PERMISSIONS = [
+  { key: 'request.create', label: 'Raise work requests' },
+  { key: 'emergency.raise', label: 'Raise emergency alerts' },
+  { key: 'gate.pass', label: 'Create visitor gate passes' },
+  { key: 'household.manage', label: 'Add household members' },
+  { key: 'notice.read', label: 'Read notices' },
+  { key: 'contacts.read', label: 'View society contacts' },
+  { key: 'lease.view', label: 'View own lease' },
+];
+const ACCESS_ROLES = ['owner', 'tenant', 'family'];
+
 function openDb(file) {
   const db = new DatabaseSync(file || process.env.DB_FILE || 'portal.db');
   db.exec(`
@@ -54,7 +65,16 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS gate_log(
     id INTEGER PRIMARY KEY, kind TEXT NOT NULL, subject TEXT, flat TEXT, result TEXT NOT NULL, reason TEXT,
     guard_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE IF NOT EXISTS role_permissions(
+    role TEXT NOT NULL, permission TEXT NOT NULL, allowed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(role, permission));
   `);
+  // Seed defaults only when empty, so committee changes are never overwritten.
+  if (!db.prepare('SELECT 1 FROM role_permissions LIMIT 1').get()) {
+    const ins = db.prepare('INSERT INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
+    const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view'] };
+    for (const role of Object.keys(off)) for (const k of PERMISSIONS.map(x => x.key)) ins.run(role, k, off[role].includes(k) ? 0 : 1);
+  }
   const admin =db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {
     // Synthetic default admin for dev/demo. Set ADMIN_EMAIL / ADMIN_PASSWORD in production.
@@ -67,4 +87,4 @@ function openDb(file) {
   }
   return db;
 }
-module.exports = { openDb };
+module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };

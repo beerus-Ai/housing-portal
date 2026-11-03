@@ -9,6 +9,10 @@
   const S = { me: null, leaseId: null, tab: 'home', sub: null, selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', sheet: null, note: '', pf: null, emgActive: 0, idx: { reqs: [], notices: [] } };
   const isAdmin = () => S.me.role === 'admin';
   const isGuard = () => S.me.role === 'guard';
+  // permission / feature gates from GET /api/me; anything missing counts as allowed
+  const can = k => isAdmin() || !Array.isArray(S.me.permissions) || S.me.permissions.includes(k);
+  const feat = k => !S.me.features || S.me.features[k] !== false;
+  S.set = { access: null, matrix: null, features: null, users: [], q: '', open: null, confirm: null, reset: false, guards: [], gconfirm: null };
   S.gp = { view: null, confirm: null, list: [] }; S.gRes = null;
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['profile', 'Profile', 'user-circle']],
@@ -26,7 +30,7 @@
     <span class="col" style="gap:2px"><span class="list-title" style="font-size:15px">${esc(r.title)}</span><span class="muted xs">${rid(r)} · ${esc(r.flat)} · ${esc(day(r.created_at))}</span><span style="align-self:flex-start">${statusTag(r)}</span></span>
     ${isAdmin() && isOpen(r) ? `<span class="${overdue(r) ? 'late' : ''} sm">${ageLabel(r.created_at)}</span>` : ''}</button>`;
 
-  const searchBox = () => `<div class="m-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="hs" type="search" placeholder="Search requests and notices" autocomplete="off" aria-label="Search requests and notices"></div><div id="hres" class="col" style="gap:8px"></div>`;
+  const searchBox = () => `<div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="hs" type="search" placeholder="Search requests and notices" autocomplete="off" aria-label="Search requests and notices"></div><div id="hres" class="col" style="gap:8px"></div>`;
   const searchResults = q => {
     q = q.trim().toLowerCase(); if (!q) return '';
     const rs = S.idx.reqs.filter(r => (r.title || '').toLowerCase().includes(q)).slice(0, 5), ns = S.idx.notices.filter(n => (n.title || '').toLowerCase().includes(q)).slice(0, 5);
@@ -34,6 +38,14 @@
       + ns.map(n => `<button class="list-row m-card m-hit" data-act="quick" data-k="notices-sub"><span class="tile">${ic(noticeIcon(n))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n.title)}</span><span class="muted xs">Notice</span></span></button>`).join('')
       || '<p class="muted sm">No matches.</p>';
   };
+  // ---------- airbnb-style building blocks
+  const amHead = (title, sub, adm) => `<div class="am-head">${HP.logo(44, 'am-logo')}<div class="col grow" style="gap:0;min-width:0"><span class="am-soc">${esc(SOCIETY.name)}</span><span class="muted xs">${esc(sub)}</span></div>
+    ${adm ? `<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="profile" aria-label="Profile" style="font-size:24px">${ic('user-circle')}</button>` : ''}<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div><h1 class="am-h1">${esc(title)}</h1>`;
+  const amChips = list => `<div class="am-chips" role="list">${list.filter(c => c[3]).map(([i, l, k]) => `<button class="am-chip" role="listitem" data-act="${['approvals', 'requests', 'emergency', 'notices'].includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${k}" data-k="${k}"><span class="am-chip-ic">${ic(i)}</span><span>${esc(l)}</span></button>`).join('')}</div>`;
+  const amSection = (t, cards) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2><div class="am-row">${cards}</div></section>`;
+  const amCard = (icon, title, sub, act, k, g) => `<button class="am-card g${(g % 6) + 1}" data-act="${act}" data-k="${esc(k)}"><span class="am-art">${ic(icon)}</span><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span></button>`;
+  const amReq = (r, i) => `<button class="am-card g${(i % 6) + 1}" data-act="open" data-id="${r.id}"><span class="am-art">${r.has_photo ? `<img src="${API.requests.photoUrl(r.id)}" alt="" loading="lazy">` : ic(catIcon(r.category))}</span>
+    <span class="am-t">${esc(r.title)}</span><span class="am-s">${rid(r)} · ${esc(day(r.created_at))}</span><span class="am-tag">${statusTag(r)}</span></button>`;
   const emgType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', k];
   const emgTag = e => e.status === 'active' ? '<span class="tag tag-accent-2">Active</span>' : '<span class="tag tag-neutral">Resolved</span>';
   const emgRow = (e, admin) => { const t = emgType(e.type); return `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="tile lg" style="width:48px;height:48px;border-radius:16px;font-size:26px">${ic(t[1])}</span>
@@ -65,20 +77,19 @@
     const login = S.mode === 'login';
     const tiles = [['owner', 'key', 'Owner'], ['tenant', 'house-line', 'Tenant'], ['family', 'users', 'Family']]
       .map(([k, i, l]) => `<button type="button" class="type-tile ${S.regType === k ? 'on' : ''}" style="align-items:center" data-act="regtype" data-t="${k}">${ic(i)}<b style="font-size:14px">${l}</b></button>`).join('');
-    app.innerHTML = `<div class="phone auth-phone"><div class="auth-top"><div class="auth-top-anim" data-lottie="building" role="img" aria-label="Animated apartment building"></div><span class="eyebrow">${esc(SOCIETY.kind)}</span><h1>${esc(SOCIETY.name)}</h1></div>
+    app.innerHTML = `<div class="phone auth-phone am-auth"><div class="auth-top">${HP.logo(72, 'am-auth-logo')}<h1>${esc(SOCIETY.name)}</h1></div>
       <form id="authform" class="screen auth-sheet" novalidate>
-      <div class="auth-seg" role="tablist" aria-label="Sign in or join"><button type="button" role="tab" aria-selected="${login}" class="${login ? 'on' : ''}" data-act="mode">Sign in</button><button type="button" role="tab" aria-selected="${!login}" class="${!login ? 'on' : ''}" data-act="mode">Join</button></div>
-      <h2>${login ? 'Welcome back' : 'Create your account'}</h2>
+      <h2>${login ? 'Welcome back' : 'Join'}</h2>
       ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
         ${authField('n', 'Full name', 'user', '<input class="input" id="n" name="name" required maxlength="100" autocomplete="name">')}
         <div class="two" style="grid-template-columns:1fr 1.4fr">${authField('f', 'Flat', 'house', '<input class="input" id="f" name="flat" required maxlength="20" placeholder="B-304">')}
         ${authField('p', 'Mobile', 'phone', '<input class="input" id="p" name="phone" maxlength="20" inputmode="tel" autocomplete="tel">')}</div>`}
       ${authField('e', 'Email', 'envelope-simple', '<input class="input" id="e" name="email" type="email" required autocomplete="username">')}
       ${pwField(login)}
-      ${login ? '' : `<label class="consent sm"><input type="checkbox" name="consent" required>I consent to these details being stored to manage society services (DPDP Act, 2023).</label>`}
+      ${login ? '' : `<label class="consent sm"><input type="checkbox" name="consent" required>I consent to my details being stored (DPDP Act, 2023).</label>`}
       <p class="err" id="autherr" role="alert"></p>
-      <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
-      ${(window.Capacitor || matchMedia('(display-mode: standalone)').matches) ? '' : `<p class="install muted">Add this page to your home screen to use it like an app. <a href="/?web">Open the website</a></p>`}</form></div>`;
+      <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
+      <p class="am-switch">${login ? 'New here?' : 'Have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p></form></div>`;
   }
 
   // ---------- resident + committee screens
@@ -86,27 +97,19 @@
     async home() { return isAdmin() ? SCREENS.dashboard() : SCREENS.residentHome(); },
 
     async residentHome() {
-      const [reqs, notices] = await Promise.all([API.requests.list(), API.notices.list()]);
-      const { open, toRate } = residentSummary(reqs, S.me, notices);
-      const t = S.me.resident_type;
-      let p2 = ['Notices', String(notices.length), ['quick', 'data-k="notices-sub"']];
-      if (t === 'owner') p2 = ['Household', String((await API.household.list()).length), ['tab', 'data-tab="household"']];
-      if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); p2 = ['Lease ends', li ? li.left + 'd' : '–', ['tab', 'data-tab="lease"']]; }
-      const n0 = notices[0]; S.idx = { reqs, notices };
-      const quick = [['plus-circle', 'Raise', 'raise'], ['list-checks', 'Requests', 'requests'], ['megaphone', 'Notices', 'notices-sub'], ['qr-code', 'Gate pass', 'gatepass']]
-        .map(([i, l, k]) => `<button data-act="quick" data-k="${k}"><span class="tile">${ic(i)}</span>${l}</button>`).join('');
-      screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span>
-        <div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · ${esc(S.me.flat)}</span><span class="list-title" style="font-size:20px">${greet()}, ${esc(firstName(S.me.name))}</span></div>
-        <button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div>
-        ${searchBox()}
-        <div class="hero m-hero"><div class="hero-head soft sm">${ic('wrench')}Your requests<span class="chip">${toRate.length ? toRate.length + ' to rate' : 'Up to date'}</span></div>
-        <div class="fig">${open.length} open</div><div class="panels" style="--cols:3">
-          <button class="panel" data-act="tab" data-tab="requests"><div class="l soft">To rate</div><div class="v">${toRate.length}</div></button>
-          <button class="panel" data-act="${p2[2][0]}" ${p2[2][1]}><div class="l soft">${esc(p2[0])}</div><div class="v">${esc(p2[1])}</div></button>
-          <button class="panel" data-act="quick" data-k="notices-sub"><div class="l soft">Notices</div><div class="v">${notices.length}</div></button></div></div>
-        <div class="quick">${quick}</div>
-        ${n0 ? `<div class="row" style="flex-wrap:nowrap;align-items:center"><div style="width:96px;height:96px;border-radius:14px;overflow:hidden;flex:none">${photoSlot('', noticeIcon(n0))}</div><div class="col" style="gap:2px"><span class="kicker">Notice · ${esc(day(n0.created_at))}</span><span class="list-title" style="font-size:16px">${esc(n0.title)}</span></div></div>` : ''}
-        `);
+      const gateOn = feat('gate') && can('gate.pass'), hhOn = can('household.manage') && S.me.resident_type === 'owner', noteOn = feat('notices') && can('notice.read');
+      const [reqs, notices, passes, hh] = await Promise.all([API.requests.list(), noteOn ? API.notices.list().catch(() => []) : [], gateOn ? API.gate.passes().catch(() => []) : [], hhOn ? API.household.list().catch(() => []) : []]);
+      const { open } = residentSummary(reqs, S.me, notices); S.idx = { reqs, notices };
+      const chips = [['list-checks', 'Requests', 'requests', true], ['plus-circle', 'Raise', 'raise', can('request.create')], ['siren', 'Emergency', 'emergency', feat('emergency') && can('emergency.raise')],
+        ['qr-code', 'Gate pass', 'gatepass', gateOn], ['users-three', 'Household', 'household', hhOn], ['address-book', 'Contacts', 'contacts-sub', feat('contacts') && can('contacts.read')], ['megaphone', 'Notices', 'notices-sub', noteOn]];
+      const sorted = [...reqs].sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id).slice(0, 8);
+      const secs = [
+        amSection('Your requests', sorted.map((r, i) => amReq(r, i)).join('') + (can('request.create') ? amCard('plus-circle', 'Raise a request', 'Takes a minute', 'quick', 'raise', sorted.length) : '')),
+        noteOn && notices.length ? amSection('Notices', notices.slice(0, 6).map((n, i) => amCard(noticeIcon(n), n.title, day(n.created_at), 'quick', 'notices-sub', i + 2)).join('')) : '',
+        gateOn ? amSection('Visitors and passes', passes.slice(0, 6).map((p, i) => amCard('qr-code', p.visitor_name, stamp(p.valid_until), 'quick', 'gatepass', i + 1)).join('') + amCard('user-plus', 'Invite a visitor', 'New gate pass', 'quick', 'gatepass', 4)) : '',
+        hhOn ? amSection('Household', hh.slice(0, 6).map((m, i) => amCard('user-circle', m.name, TYPE[m.resident_type] || '', 'quick', 'household', i + 3)).join('') + amCard('user-plus', 'Add someone', 'Family or tenant', 'quick', 'household', 5)) : ''].join('');
+      screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · ${S.me.flat}`, false)}${searchBox()}${amChips(chips)}
+        <p class="am-sum"><b>${open.length}</b> open request${open.length === 1 ? '' : 's'}</p>${secs}`);
     },
 
     // ---------- gate: resident passes
@@ -224,21 +227,18 @@
     },
 
     async dashboard() {
-      const [s, reqs, notices, emg] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => [])]);
-      S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active').length;
-      const a = adminSummary(reqs, s), un = a.open.filter(r => !r.vendor_id).length, max = Math.max(1, ...a.weeks);
-      const stat = (i, l, v, tab) => `<button class="stat" data-act="tab" data-tab="${tab}"><div class="l">${ic(i)}${l}</div><div class="v">${esc(v)}</div></button>`;
-      screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span><div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · Committee</span>
-        <span class="list-title" style="font-size:20px">${greet()}, ${esc(firstName(S.me.name))}</span></div><button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div>
-        ${act ? `<button class="emg-banner" data-act="tab" data-tab="emergency">${ic('siren')}<span class="col grow" style="gap:0;text-align:left"><b>${act} active emergenc${act === 1 ? 'y' : 'ies'}</b><span class="sm">Tap to respond</span></span>${ic('caret-right')}</button>` : ''}
-        ${searchBox()}
-        <div class="hero m-hero"><div class="hero-head soft sm">${ic('clipboard-text')}Open requests<span class="chip">${a.overdue} past 48h</span></div>
-        <div class="row" style="justify-content:space-between;flex-wrap:nowrap;margin-top:8px"><span class="fig" style="margin:0">${a.open.length}</span><span class="ring" style="width:76px;height:76px;background:${ring(a.pct)}"><div style="width:56px;height:56px"><b style="font-size:14px">${a.pct}%</b></div></span></div>
-        <div class="soft sm" style="margin-top:6px">${un} unassigned · oldest ${a.oldest} · within 48h SLA ${a.pct}%</div></div>
-        <div class="stat-grid">${stat('user-check', 'Pending approvals', s.pending_users, 'approvals')}${stat('user-gear', 'Unassigned', un, 'requests')}${stat('star', 'Average rating', s.avg_rating ? s.avg_rating.toFixed(1) : '–', 'requests')}${stat('megaphone', 'Notices, 30 days', s.notices_30d, 'notices')}</div>
-        <div class="m-bars" aria-hidden="true">${a.weeks.map(n => `<span style="height:${Math.max(4, Math.round(n / max * 80))}px"></span>`).join('')}</div><span class="muted xs">Requests per week, last 8 weeks</span>
-        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Verify at gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gatelog">${ic('clock-counter-clockwise')}Gate log</button></div>
-        <button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Tenant leases</button>
+      const [s, reqs, notices, emg, pend] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => []), API.admin.users('pending').catch(() => [])]);
+      S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active');
+      const a = adminSummary(reqs, s), unList = a.open.filter(r => !r.vendor_id), un = unList.length;
+      const chips = [['user-check', 'Approvals', 'approvals', true], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['megaphone', 'Notices', 'notices', feat('notices')],
+        ['shield-check', 'Gate', 'gate', feat('gate')], ['gear-six', 'Settings', 'settings-sub', true]];
+      const big = (i, n, l, tab, g) => `<button class="am-card am-big g${g}" data-act="${tab.endsWith('-sub') ? 'quick' : 'tab'}" data-tab="${tab}" data-k="${tab}"><span class="am-art">${ic(i)}</span><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></button>`;
+      const attn = big('user-check', pend.length, 'Pending approvals', 'approvals', 1) + big('siren', act.length, 'Active emergencies', 'emergency', 4) + big('user-gear', un, 'Unassigned requests', 'requests', 3);
+      const week = big('clipboard-text', a.open.length, 'Open requests', 'requests', 2) + big('timer', a.overdue, 'Past 48 hours', 'requests', 4) + big('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 5) + big('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 6);
+      const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map((r, i) => amReq(r, i)).join('');
+      screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}
+        ${amSection('Needs your attention', attn)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}
+        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gatelog">${ic('clock-counter-clockwise')}Gate log</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
     },
 
@@ -278,6 +278,7 @@
         ${f || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="edit">' + ic('pencil-simple') + 'Edit details</button>'}
         <div class="m-card"><h3>Household</h3>${ms.map(x => `<div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar blue" style="width:36px;height:36px;font-size:13px">${esc(initials(x.name))}</span><span class="sm">${esc(x.name)} · ${esc(TYPE[x.resident_type] || '')}</span></div>`).join('') || '<span class="muted sm">No other members yet.</span>'}
           <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="household">${ic('users-three')}Manage household</button></div>
+        ${isAdmin() ? `<button class="btn btn-secondary btn-lg" data-act="quick" data-k="settings-sub">${ic('gear-six')}Settings</button>` : ''}
         <button class="btn btn-secondary btn-lg" data-act="quick" data-k="contacts-sub">${ic('address-book')}Who to call</button>
         ${pw || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="pw">' + ic('lock-key') + 'Change password</button>'}
         <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
@@ -307,12 +308,72 @@
         ${f('lv', 'Police verified on', 'police_verified_on', t.police_verified_on, 'type="date"')}${f('la', 'Rent agreement', 'agreement', t.agreement, 'maxlength="200"')}${f('lk', 'Parking', 'parking', t.parking, 'maxlength="100"')}
         <button class="btn btn-primary btn-lg">${ic('floppy-disk')}Save lease</button></form>`);
     },
+    async 'settings-sub'() {
+      const row = (i, t, d, sub) => `<button class="am-list" data-act="quick" data-k="${sub}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${t}</b><span class="muted sm">${d}</span></span>${ic('caret-right')}</button>`;
+      screen(`${back('Dashboard', 'home')}<h1 class="am-h1">Settings</h1>${row('buildings', 'General', 'Society name and type', 'set-general')}${row('shield-check', 'Access control', 'Who can do what', 'set-access')}
+        ${row('users-three', 'Users', 'Search, edit, suspend', 'set-users')}${row('toggle-right', 'Features', 'Switch parts of the app on or off', 'set-features')}${row('shield-star', 'Guards', 'Security staff accounts', 'set-guards')}`);
+    },
+    async 'set-general'() {
+      const st = await API.admin.settings();
+      screen(`${setBack()}<h1 class="am-h1">General</h1><form id="setform" class="m-card am-form"><div class="field"><label for="sn">Society name</label><input class="input" id="sn" name="society_name" required maxlength="100" value="${esc(st.society_name || SOCIETY.name)}"></div>
+        <div class="field"><label for="sk">Society type</label><input class="input" id="sk" name="society_kind" maxlength="100" value="${esc(st.society_kind || SOCIETY.kind)}"></div><p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">Save</button></form>`);
+    },
+    async 'set-access'() {
+      const ac = await API.admin.access(); S.set.access = ac; S.set.matrix = JSON.parse(JSON.stringify(ac.matrix || {}));
+      const roles = ac.roles || ['owner', 'tenant', 'family'];
+      screen(`${setBack()}<h1 class="am-h1">Access control</h1><div class="m-card am-form">${(ac.permissions || []).map(p => `<div class="am-perm"><b>${esc(p.label)}</b><div class="am-sws">${roles.map(r => `<div class="col" style="gap:2px;align-items:center"><span class="muted xs">${esc(TYPE[r] || r)}</span>${swBtn(!!(S.set.matrix[r] || {})[p.key], 'mtgl', `data-r="${esc(r)}" data-p="${esc(p.key)}"`, `${p.label}: ${TYPE[r] || r}`)}</div>`).join('')}</div></div>`).join('')}
+        <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="accsave">Save access</button></div>`);
+    },
+    async 'set-features'() {
+      const st = await API.admin.settings(); S.set.features = { emergency: true, gate: true, contacts: true, notices: true, ...(st.features || {}) };
+      const L = { emergency: ['siren', 'Emergency alerts'], gate: ['shield-check', 'Gate passes'], contacts: ['address-book', 'Society contacts'], notices: ['megaphone', 'Notices'] };
+      screen(`${setBack()}<h1 class="am-h1">Features</h1><div class="m-card am-form">${Object.keys(L).map(k => `<div class="am-perm am-frow"><span class="am-li">${ic(L[k][0])}</span><b class="grow">${L[k][1]}</b>${swBtn(S.set.features[k] !== false, 'ftgl', `data-f="${k}"`, L[k][1])}</div>`).join('')}
+        <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="featsave">Save features</button></div>`);
+    },
+    async 'set-users'() {
+      S.set.users = await API.admin.allUsers({}); S.set.q = ''; S.set.open = null; S.set.confirm = null; S.set.reset = false;
+      screen(`${setBack()}<h1 class="am-h1">Users</h1><div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="us" type="search" placeholder="Search name, flat or email" autocomplete="off" aria-label="Search users"></div><p class="err" id="serr" role="alert"></p><div id="ulist" class="col" style="gap:12px"></div>`);
+      drawUsers();
+    },
+    async 'set-guards'() {
+      S.set.guards = await API.gate.guards(); S.set.gconfirm = null;
+      screen(`${setBack()}<h1 class="am-h1">Guards</h1><div id="glist" class="col" style="gap:12px"></div><form id="gform" class="m-card am-form"><h3>Add a guard</h3><div class="field"><label for="gn">Name</label><input class="input" id="gn" name="name" required maxlength="100"></div>
+        <div class="field"><label for="ge">Email</label><input class="input" id="ge" name="email" type="email" required autocomplete="off"></div><div class="field"><label for="gw">Password (8+)</label><input class="input" id="gw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
+        <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('user-plus')}Add guard</button></form>`);
+      drawGuards();
+    },
     async 'notices-sub'() { const ns = await API.notices.list(); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
     async 'contacts-sub'() {
       const CONTACTS = (await API.contacts.list().catch(() => [])).map(c => [c.icon || 'phone', c.name, c.role, c.phone || '']);
       screen(`${back('Back', isAdmin() ? 'home' : 'profile')}<h2>Who to call</h2>${CONTACTS.length ? CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('') : '<p class="muted">The committee has not added any contacts yet.</p>'}`);
     },
   };
+
+  // ---------- settings helpers
+  const setBack = () => `<button class="back" data-act="quick" data-k="settings-sub">${ic('caret-left')}Settings</button>`;
+  const swBtn = (on, act, attrs, label) => `<button type="button" class="am-sw ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(label)}" data-act="${act}" ${attrs}><span class="am-knob"></span><span class="am-st">${on ? 'On' : 'Off'}</span></button>`;
+  const setErr = m => { const e = $('#serr'); if (e) e.textContent = m || ''; };
+  const trySet = async fn => { setErr(''); try { await fn(); } catch (x) { setErr(x.message); toast(x.message); } };
+  function drawUsers() {
+    const box = $('#ulist'); if (!box) return;
+    const q = S.set.q.trim().toLowerCase();
+    const us = S.set.users.filter(u => !q || [u.name, u.flat, u.email].some(v => (v || '').toLowerCase().includes(q)));
+    box.innerHTML = us.map(u => {
+      const o = S.set.open === u.id, sus = u.status === 'suspended';
+      const types = ['owner', 'tenant', 'family'].map(t => `<button type="button" class="am-seg ${u.resident_type === t ? 'on' : ''}" data-act="utype" data-id="${u.id}" data-t="${t}">${esc(TYPE[t])}</button>`).join('');
+      const more = o ? `<div class="am-more"><div class="am-segs" role="group" aria-label="Resident type">${types}</div>
+        <div class="two"><button class="btn btn-secondary" data-act="usus" data-id="${u.id}">${sus ? 'Reactivate' : 'Suspend'}</button><button class="btn btn-secondary" data-act="ureset" data-id="${u.id}">Reset password</button></div>
+        ${S.set.reset ? `<div class="am-inline"><input class="input" id="rp" type="text" minlength="8" placeholder="New password (8+)" autocomplete="off" aria-label="New password"><button class="btn btn-primary" data-act="ursave" data-id="${u.id}">Set</button></div>` : ''}
+        ${S.set.confirm === u.id ? `<div class="callout col" style="gap:8px"><b class="sm">Remove ${esc(u.name)}? This cannot be undone.</b><div class="two"><button class="btn btn-primary" data-act="urmyes" data-id="${u.id}">Yes, remove</button><button class="btn btn-secondary" data-act="urmno">Keep</button></div></div>` : `<button class="btn btn-secondary" data-act="urmask" data-id="${u.id}">${ic('trash')}Remove</button>`}</div>` : '';
+      return `<div class="m-card am-user"><button class="am-urow" data-act="uopen" data-id="${u.id}" aria-expanded="${o}"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(u.name)}</b><span class="muted xs">${esc(u.flat || '')} · ${esc(TYPE[u.resident_type] || u.role || '')}</span></span><span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${esc(u.status)}</span></button>${more}</div>`;
+    }).join('') || '<p class="muted">No users found.</p>';
+  }
+  function drawGuards() {
+    const box = $('#glist'); if (!box) return;
+    box.innerHTML = S.set.guards.map(g => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(g.name))}</span><span class="col grow" style="gap:0"><b>${esc(g.name)}</b><span class="muted xs">${esc(g.email || '')}</span></span></div>
+      ${S.set.gconfirm === g.id ? `<div class="callout col" style="gap:8px"><b class="sm">Remove ${esc(g.name)}?</b><div class="two"><button class="btn btn-primary" data-act="grmyes" data-id="${g.id}">Yes, remove</button><button class="btn btn-secondary" data-act="grmno">Keep</button></div></div>` : `<button class="btn btn-secondary" data-act="grmask" data-id="${g.id}">${ic('trash')}Remove</button>`}</div>`).join('') || '<p class="muted">No guards yet.</p>';
+  }
+  const userById = id => S.set.users.find(u => String(u.id) === String(id));
 
   // ---------- gate helpers
   const gpTag = st => `<span class="tag ${st === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc({ active: 'Active', used: 'Used', cancelled: 'Cancelled', expired: 'Expired' }[st] || st)}</span>`;
@@ -360,8 +421,24 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopScan(); });
 
   // ---------- events
+  const flipSw = (el, on) => { el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.am-st').textContent = on ? 'On' : 'Off'; };
   const ACT = {
     gscan: () => startScan(),
+    mtgl: el => { const m = S.set.matrix, r = el.dataset.r, p = el.dataset.p; m[r] = m[r] || {}; m[r][p] = !m[r][p]; flipSw(el, m[r][p]); },
+    ftgl: el => { const f = el.dataset.f; S.set.features[f] = S.set.features[f] === false; flipSw(el, S.set.features[f]); },
+    accsave: () => trySet(async () => { await API.admin.setAccess(S.set.matrix); toast('Access saved'); }),
+    featsave: () => trySet(async () => { await API.admin.setSettings({ features: S.set.features }); S.me.features = { ...(S.me.features || {}), ...S.set.features }; toast('Features saved'); }),
+    uopen: el => { const id = Number(el.dataset.id); S.set.open = S.set.open === id ? null : id; S.set.confirm = null; S.set.reset = false; drawUsers(); },
+    utype: el => trySet(async () => { await API.admin.patchUser(el.dataset.id, { resident_type: el.dataset.t }); userById(el.dataset.id).resident_type = el.dataset.t; toast('Type changed'); drawUsers(); }),
+    usus: el => trySet(async () => { const u = userById(el.dataset.id), st = u.status === 'suspended' ? 'approved' : 'suspended'; await API.admin.patchUser(u.id, { status: st }); u.status = st; toast(st === 'suspended' ? 'Suspended' : 'Reactivated'); drawUsers(); }),
+    ureset: () => { S.set.reset = !S.set.reset; drawUsers(); const i = $('#rp'); if (i) i.focus(); },
+    ursave: el => trySet(async () => { const v = ($('#rp') || {}).value || ''; if (v.length < 8) throw new Error('Password must be at least 8 characters.'); await API.admin.resetPassword(el.dataset.id, v); S.set.reset = false; toast('Password reset'); drawUsers(); }),
+    urmask: el => { S.set.confirm = Number(el.dataset.id); drawUsers(); },
+    urmno: () => { S.set.confirm = null; drawUsers(); },
+    urmyes: el => trySet(async () => { await API.admin.removeUser(el.dataset.id); S.set.users = S.set.users.filter(u => String(u.id) !== el.dataset.id); S.set.open = null; S.set.confirm = null; toast('User removed'); drawUsers(); }),
+    grmask: el => { S.set.gconfirm = Number(el.dataset.id); drawGuards(); },
+    grmno: () => { S.set.gconfirm = null; drawGuards(); },
+    grmyes: el => trySet(async () => { await API.gate.removeGuard(el.dataset.id); S.set.guards = S.set.guards.filter(g => String(g.id) !== el.dataset.id); S.set.gconfirm = null; toast('Guard removed'); drawGuards(); }),
     gpopen: el => { const p = (S.gp.list || []).find(x => String(x.id) === el.dataset.id); if (p) { S.gp.view = p; S.gp.confirm = null; render(); window.scrollTo(0, 0); } },
     gpclose: () => { S.gp.view = null; S.gp.confirm = null; render(); },
     gpcancelask: () => { S.gp.confirm = 'cancel'; render(); },
@@ -374,12 +451,12 @@
       if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch { /* cancelled */ } return; }
       try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.'); }
     },
-    tab: el => (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
+    tab: el => el.dataset.tab === 'settings-sub' ? go('home', null, 'settings-sub') : (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
     emgpick: el => { S.sheet = el.dataset.k; S.note = ''; render(); },
     emgcancel: () => { S.sheet = null; S.note = ''; render(); },
     emgresolve: async el => { await API.emergencies.resolve(el.dataset.id); toast('Marked resolved'); render(); },
     pform: el => { S.pf = el.dataset.f || null; render(); },
-    quick: el => (el.dataset.k.endsWith('-sub') ? go('home', null, el.dataset.k) : go(el.dataset.k)),
+    quick: el => (el.dataset.k.endsWith('-sub') || el.dataset.k.startsWith('set-') ? go('home', null, el.dataset.k) : go(el.dataset.k)),
     leaseopen: el => { S.leaseId = Number(el.dataset.id); go('home', null, 'lease-edit'); },
     leasesback: () => go('home', null, 'leases-sub'),
     open: el => go('requests', Number(el.dataset.id)),
@@ -397,6 +474,7 @@
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
   document.addEventListener('input', e => {
     if (e.target.id === 'hs') { const r = $('#hres'); if (r) r.innerHTML = searchResults(e.target.value); }
+    else if (e.target.id === 'us') { S.set.q = e.target.value; drawUsers(); }
     else if (e.target.id === 'enote') S.note = e.target.value;
   });
   document.addEventListener('change', guard(async e => {
@@ -445,6 +523,10 @@
     } else if (f.id === 'hhform') {
       d.consent = f.consent.checked; d.resident_type = S.rtype; await API.household.add(d); toast('Sent to the committee for approval'); render();
     } else if (f.id === 'leaseform') { await API.admin.setLease(f.dataset.id, d); toast('Lease saved. Tenant notified.'); go('home', null, 'leases-sub');
+    } else if (f.id === 'setform') {
+      await trySet(async () => { const r = await API.admin.setSettings({ society_name: d.society_name.trim(), society_kind: (d.society_kind || '').trim() }); SOCIETY.name = (r && r.society_name) || d.society_name.trim(); SOCIETY.kind = (r && r.society_kind) || d.society_kind; toast('Saved'); });
+    } else if (f.id === 'gform') {
+      await trySet(async () => { await API.gate.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); toast('Guard added'); go('home', null, 'set-guards'); });
     } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
   }));
 
@@ -453,11 +535,16 @@
     // never wipe a half-typed field, an open gate form or a visible verify result
     const ae = document.activeElement;
     if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && app.contains(ae)) return;
+    if (S.sub && S.sub.startsWith('set-')) return;
     if (!S.sub && (S.tab === 'gate' || S.tab === 'gatepass' || S.gRes || cam)) return;
     const sc = $('#screen'), top = sc ? sc.scrollTop : 0;
     await render();
     const n = $('#screen'); if (n) n.scrollTop = top;
   });
 
-  (async () => { try { S.me = await API.auth.me(); } catch { S.me = null; } render(); })();
+  (async () => {
+    try { const ps = await API.settings.public(); if (ps) Object.assign(SOCIETY, { ...(ps.society_name ? { name: ps.society_name } : {}), ...(ps.society_kind ? { kind: ps.society_kind } : {}) }); } catch { /* keep defaults */ }
+    try { S.me = await API.auth.me(); } catch { S.me = null; }
+    render();
+  })();
 })();
