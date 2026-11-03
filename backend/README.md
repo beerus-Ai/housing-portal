@@ -59,3 +59,10 @@ Flyway runs `src/main/resources/db/migration` on start (`V1__schema.sql` creates
 `GET|POST /api/household`, `GET /api/lease`, `GET /api/admin/leases`, `PUT /api/admin/users/{id}/lease`,
 `GET|POST /api/vendors`, `PUT|DELETE /api/vendors/{id}`, `GET /api/admin/stats`, `GET /api/admin/export.csv`, `GET /api/pulse`.
 Photos are written under `portal.upload-dir` (env `UPLOAD_DIR`, default `./uploads`).
+
+## Phase 3 (safety, gate and estate)
+`GET|POST /api/emergencies`, `POST /api/emergencies/{id}/resolve`, `GET|POST /api/contacts`, `DELETE /api/contacts/{id}`,
+`POST|GET /api/gate/passes`, `POST /api/gate/passes/{id}/cancel`, `GET /api/gate/me`, `POST /api/gate/me/rotate`,
+`POST /api/gate/verify`, `GET /api/gate/log`, `GET /api/gate/overview`, `POST|GET /api/admin/guards`, `DELETE /api/admin/guards/{id}`,
+`GET|POST /api/vehicles`, `DELETE /api/vehicles/{id}`, `GET|POST /api/parking`, `POST /api/parking/{id}/assign|free`,
+`DELETE /api/parking/{id}`, `GET|POST /api/admin/workers`, `PUT|DELETE /api/admin/workers/{id}`, `GET /api/admin/overview`.
