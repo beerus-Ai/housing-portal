@@ -1,6 +1,17 @@
 const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
 
+const PERMISSIONS = [
+  { key: 'request.create', label: 'Raise work requests' },
+  { key: 'emergency.raise', label: 'Raise emergency alerts' },
+  { key: 'gate.pass', label: 'Create visitor gate passes' },
+  { key: 'household.manage', label: 'Add household members' },
+  { key: 'notice.read', label: 'Read notices' },
+  { key: 'contacts.read', label: 'View society contacts' },
+  { key: 'lease.view', label: 'View own lease' },
+];
+const ACCESS_ROLES = ['owner', 'tenant', 'family'];
+
 function openDb(file) {
   const db = new DatabaseSync(file || process.env.DB_FILE || 'portal.db');
   db.exec(`
@@ -35,8 +46,36 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS notifications(
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, message TEXT NOT NULL,
     is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS emergencies(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
+    type TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), resolved_at TEXT, resolved_by INTEGER);
+  CREATE TABLE IF NOT EXISTS contacts(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, phone TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'phone');
+  CREATE TABLE IF NOT EXISTS gate_passes(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id),
+    visitor_name TEXT NOT NULL, purpose TEXT, token TEXT NOT NULL UNIQUE, code TEXT NOT NULL,
+    valid_from TEXT NOT NULL, valid_until TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), used_at TEXT, used_by INTEGER);
+  CREATE INDEX IF NOT EXISTS gate_passes_code ON gate_passes(code);
+  CREATE TABLE IF NOT EXISTS resident_tokens(
+    user_id INTEGER PRIMARY KEY REFERENCES users(id), token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS gate_log(
+    id INTEGER PRIMARY KEY, kind TEXT NOT NULL, subject TEXT, flat TEXT, result TEXT NOT NULL, reason TEXT,
+    guard_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
+  CREATE TABLE IF NOT EXISTS role_permissions(
+    role TEXT NOT NULL, permission TEXT NOT NULL, allowed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(role, permission));
   `);
-  const admin = db.prepare("SELECT id FROM users WHERE role='admin'").get();
+  // Seed defaults only when empty, so committee changes are never overwritten.
+  if (!db.prepare('SELECT 1 FROM role_permissions LIMIT 1').get()) {
+    const ins = db.prepare('INSERT INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
+    const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view'] };
+    for (const role of Object.keys(off)) for (const k of PERMISSIONS.map(x => x.key)) ins.run(role, k, off[role].includes(k) ? 0 : 1);
+  }
+  const admin =db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {
     // Synthetic default admin for dev/demo. Set ADMIN_EMAIL / ADMIN_PASSWORD in production.
     if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 12))
@@ -48,4 +87,4 @@ function openDb(file) {
   }
   return db;
 }
-module.exports = { openDb };
+module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };
