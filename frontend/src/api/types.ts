@@ -19,7 +19,7 @@ export interface User {
 /** GET /api/me */
 export interface Me extends User {
   permissions: string[];
-  features: Partial<Features>;
+  features: Partial<Features> & { parking?: boolean };
 }
 
 /** GET /api/settings and /api/admin/settings */

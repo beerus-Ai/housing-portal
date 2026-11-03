@@ -24,6 +24,14 @@ export const firstName = (n: string): string => n.trim().split(/\s+/)[0] ?? n;
 export const STATUS_LABEL: Record<string, string> = {
   open: 'Open', assigned: 'Assigned', in_progress: 'In progress', closed: 'Closed',
 };
+export const CATEGORIES: [key: string, label: string, icon: string][] = [
+  ['plumbing', 'Plumbing', 'drop'], ['electrical', 'Electrical', 'lightning'], ['lift', 'Lift', 'elevator'],
+  ['housekeeping', 'Housekeeping', 'broom'], ['security', 'Security', 'shield-check'], ['other', 'Other', 'dots-three-circle'],
+];
+
+/** "4 Nov, 3:30 pm" style stamp for API timestamps. */
+export const stamp = (s: string): string => parseTs(s).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
 export const CATEGORY_ICON: Record<string, string> = {
   plumbing: 'drop', electrical: 'lightning', lift: 'elevator', housekeeping: 'broom', security: 'shield-check', other: 'dots-three-circle',
 };

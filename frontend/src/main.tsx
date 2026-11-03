@@ -7,6 +7,7 @@ import { AuthProvider } from './auth/AuthContext';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/app.css';
+import './styles/phase3.css';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 

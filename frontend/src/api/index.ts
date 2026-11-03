@@ -1,11 +1,13 @@
 // Typed API layer. The single place that knows the server's URLs (mirrors public/api.js).
 import { call, enc, qs } from './client';
+import { safetyApi } from './safety';
 import type {
-  AccessMatrix, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification, Emergency, GatePass,
+  AccessMatrix, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification,
   Guard, GuardBody, HouseholdMember, Me, Notice, RegisterBody, ServiceRequest, Settings, SettingsPatch, Stats, User,
 } from './types';
 
 export * from './types';
+export * from './safety';
 export { ApiError } from './client';
 
 export const API = {
@@ -36,11 +38,13 @@ export const API = {
   household: {
     list: () => call<HouseholdMember[]>('GET', '/api/household'),
   },
-  emergencies: {
-    list: () => call<Emergency[]>('GET', '/api/emergencies'),
-  },
+  emergencies: safetyApi.emergencies,
+  contacts: safetyApi.contacts,
+  vehicles: safetyApi.vehicles,
+  parking: safetyApi.parking,
+  workers: safetyApi.workers,
   gate: {
-    passes: () => call<GatePass[]>('GET', '/api/gate/passes'),
+    ...safetyApi.gate,
     guards: () => call<Guard[]>('GET', '/api/admin/guards'),
     addGuard: (body: GuardBody) => call<{ id: number }>('POST', '/api/admin/guards', body),
     removeGuard: (id: number) => call<{ ok: true }>('DELETE', `/api/admin/guards/${enc(id)}`),
@@ -53,6 +57,7 @@ export const API = {
     decide: (id: number, decision: 'approve' | 'reject') =>
       call<unknown>('POST', `/api/admin/users/${enc(id)}/${decision === 'approve' ? 'approve' : 'reject'}`),
     stats: () => call<Stats>('GET', '/api/admin/stats'),
+    overview: safetyApi.overview,
     settings: () => call<Settings>('GET', '/api/admin/settings'),
     setSettings: (body: SettingsPatch) => call<Settings>('PUT', '/api/admin/settings', body),
     access: () => call<AccessResponse>('GET', '/api/admin/access'),

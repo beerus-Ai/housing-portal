@@ -31,7 +31,8 @@ VITE_API_TARGET=http://localhost:8080 npm run dev
 - `src/auth/` auth context (`/api/me`, login, Google, logout), route guards, lazy Google Identity Services loader.
 - `src/nav.ts` role, permission and feature filtering of menu items, and the `hp.nav` preference (`{pos:'side'|'top', hidden}`; same format as the existing web app).
 - `src/pages/` Login (and Join), Home (resident), Dashboard (committee), Approvals, Alerts, Settings (General, Access control, Users, Features, Guards, Sign-in).
-- Other menu items (requests, gate pass, vendors, ...) show a "coming in a later phase" page until phases 2 and 3.
+- Phase 3: grouped navigation (`nav.ts`: Requests and safety, Community, Property, Administration; collapsible in the side layout, dropdowns in the top layout, `hp.nav` kept, `hp.navgroups` remembers collapsed sections), a responsive shell (below 700px: bottom tab bar per role, floating + for residents, Menu screen, back arrow and title on sub-pages) and the pages Emergency, Contacts, Gate pass (QR via `qrcode-generator`), Gate (guard verify with optional BarcodeDetector scan, committee overview), Gate log, Vehicles, Parking, Workers and the committee Dashboard (`GET /api/admin/overview`). API additions live in `src/api/safety.ts`.
+- Other menu items not yet built show a "coming in a later phase" page.
 - `public/` is copied from the existing app: logo, Outfit and Plus Jakarta Sans fonts, Phosphor duotone icon font. `src/styles/tokens.css` is `public/css/tokens.css` with a 24px card radius.
 
 ## Notes
