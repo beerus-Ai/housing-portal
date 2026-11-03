@@ -1,12 +1,14 @@
 // Typed API layer. The single place that knows the server's URLs (mirrors public/api.js).
 import { call, enc, qs } from './client';
+import { safetyApi } from './safety';
 import type {
-  AccessMatrix, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification, Emergency, GatePass,
+  AccessMatrix, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification,
   AuditRow, Comment, Guard, GuardBody, HouseholdBody, HouseholdMember, Lease, LeaseBody, LeaseRow, Me, Notice, NoticeBody,
   RegisterBody, RequestDetail, RequestStatus, ServiceRequest, Settings, SettingsPatch, Stats, User, Vendor, VendorBody,
 } from './types';
 
 export * from './types';
+export * from './safety';
 export { ApiError } from './client';
 
 export const API = {
@@ -55,11 +57,13 @@ export const API = {
     list: () => call<HouseholdMember[]>('GET', '/api/household'),
     add: (body: HouseholdBody) => call<{ id: number }>('POST', '/api/household', body),
   },
-  emergencies: {
-    list: () => call<Emergency[]>('GET', '/api/emergencies'),
-  },
+  emergencies: safetyApi.emergencies,
+  contacts: safetyApi.contacts,
+  vehicles: safetyApi.vehicles,
+  parking: safetyApi.parking,
+  workers: safetyApi.workers,
   gate: {
-    passes: () => call<GatePass[]>('GET', '/api/gate/passes'),
+    ...safetyApi.gate,
     guards: () => call<Guard[]>('GET', '/api/admin/guards'),
     addGuard: (body: GuardBody) => call<{ id: number }>('POST', '/api/admin/guards', body),
     removeGuard: (id: number) => call<{ ok: true }>('DELETE', `/api/admin/guards/${enc(id)}`),
@@ -76,6 +80,7 @@ export const API = {
     setLease: (userId: number, body: LeaseBody) => call<{ ok: true }>('PUT', `/api/admin/users/${enc(userId)}/lease`, body),
     audit: () => call<AuditRow[]>('GET', '/api/admin/audit'),
     exportUrl: '/api/admin/export.csv',
+    overview: safetyApi.overview,
     settings: () => call<Settings>('GET', '/api/admin/settings'),
     setSettings: (body: SettingsPatch) => call<Settings>('PUT', '/api/admin/settings', body),
     access: () => call<AccessResponse>('GET', '/api/admin/access'),
