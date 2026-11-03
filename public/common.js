@@ -8,7 +8,7 @@ window.HP = (() => {
   function toast(m) {
     let t = $('#toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.setAttribute('aria-live', 'polite'); document.body.appendChild(t); }
-    t.textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    t.innerHTML = '<span class="toast-ico" data-lottie="check" data-loop="false"></span><span class="toast-msg"></span>'; t.querySelector('.toast-msg').textContent = m; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
   }
   async function api(method, url, body) {
     const opt = { method, headers: {} };
@@ -96,10 +96,9 @@ window.HP = (() => {
   const ring = pct => `conic-gradient(var(--color-accent) 0 ${pct}%, color-mix(in srgb, var(--color-bg) 18%, transparent) ${pct}% 100%)`;
 
   const rid = r => 'R-' + String(1000 + Number(r.id));
-  const SOCIETY = { name: 'Sahyadri Heights', kind: 'Co-operative Housing Society · Pune', flats: 412, towers: 'Towers A–C' };
-  // Synthetic society contacts (demo data only).
-  const CONTACTS = [['briefcase', 'Sunil Kulkarni', 'Secretary', '+91 98500 11220'], ['shield-check', 'Main gate', 'Security, 24 hours', '+91 20 2589 0011'],
-    ['wrench', 'Society maintenance', 'Plumbing and housekeeping', '+91 98500 33440'], ['elevator', 'LiftCare Services', 'Lift emergencies', '1800 266 0099']];
+  const SOCIETY = { name: 'Sahyadri Heights', kind: 'Co-operative Housing Society' };
+  // Society contacts are entered by the committee; none are hard-coded.
+  const CONTACTS = [];
   const dateLong = s => { const d = new Date(s + 'T00:00:00'); return isNaN(d) ? '' : `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`; };
   // Lease numbers for the tenant screens.
   function leaseInfo(l) {

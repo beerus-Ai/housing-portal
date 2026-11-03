@@ -34,10 +34,10 @@
             <span class="avatar">${esc(initials(S.me.name))}</span><span class="sm">${esc(who)}</span>
             <button class="btn btn-secondary" data-act="logout">Sign out</button></div>
         </div>
-        <div class="navrail"><nav aria-label="Main">${nav}</nav><span class="sm row" style="gap:var(--space-3)">${HP.liveBadge()}<i>${esc(todayLabel())} · ${SOCIETY.flats} flats · ${esc(SOCIETY.towers)}</i></span></div>
+        <div class="navrail"><nav aria-label="Main">${nav}</nav><span class="sm row" style="gap:var(--space-3)">${HP.liveBadge()}<i>${esc(todayLabel())}</i></span></div>
       </header>
       <main id="page" class="page"></main>
-      <footer class="foot muted">Synthetic demo data only · <a href="/m/">Open the mobile app</a></footer></div>`;
+      <footer class="foot muted"><a href="/m/">Open the mobile app</a></footer></div>`;
     try { await PAGES[S.page](); } catch (e) { $('#page').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const page = h => { $('#page').innerHTML = h; };
@@ -50,7 +50,7 @@
     root.innerHTML = `<div class="auth"><section class="auth-art"><span class="eyebrow" style="color:var(--color-accent-300)">${esc(SOCIETY.kind)}</span>
       <h1>${esc(SOCIETY.name)}: one portal for residents and the committee</h1>
       <p style="font-size:18px;max-width:520px" class="soft">Raise a work request with a photo, follow it to completion and rate the work. Read society notices. The committee approves residents, assigns vendors and sees the whole picture.</p>
-      <div style="max-width:420px;border-radius:22px;overflow:hidden;height:200px">${photoSlot('Sahyadri Heights')}</div></section>
+      <div class="hero-anim" data-lottie="building" role="img" aria-label="Animated apartment building"></div></section>
       <section class="auth-form"><h2>${login ? 'Sign in' : 'Join your society'}</h2>
       <form id="authform" class="col" novalidate>
         ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
@@ -162,7 +162,7 @@
         <div class="soft" style="margin-top:6px">Ends ${esc(li.ends)} · renewal notice due by ${esc(li.renewBy)}</div>
         <div style="height:8px;border-radius:8px;background:color-mix(in srgb,var(--color-bg) 22%,transparent);margin-top:18px;overflow:hidden"><span style="display:block;height:100%;width:${li.pct}%;background:var(--color-accent-300)"></span></div></div>
         <div class="soft-card">${li.rows.map(([i, k, v]) => `<div class="kv">${ic(i)}<span class="muted">${esc(k)}</span><span style="font-weight:600">${esc(v)}</span></div>`).join('')}</div></div>
-        <div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${CONTACTS.map(([i, n, r, p]) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title">${esc(n)}</span><span class="muted sm">${esc(r)}</span></span><span style="font-weight:600;font-size:14px">${esc(p)}</span></div>`).join('')}</div></div>`);
+        ${CONTACTS.length ? `<div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${CONTACTS.map(([i, n, r, p]) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title">${esc(n)}</span><span class="muted sm">${esc(r)}</span></span><span style="font-weight:600;font-size:14px">${esc(p)}</span></div>`).join('')}</div>` : ''}</div>`);
     },
 
     async notices() {
@@ -192,7 +192,7 @@
         <td>${esc(r.flat)}</td><td class="${overdue(r) ? 'late' : ''}">${ageLabel(r.created_at)}</td><td>${statusTag(r)}</td>
         <td><select class="input" data-change="assign" data-id="${r.id}" aria-label="Assign ${esc(r.title)}">${vendorOptions(vendors, r.vendor_id)}</select></td>
         <td>${r.vendor_id ? `<button class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</td></tr>`).join('');
-      page(`<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests · ${esc(SOCIETY.towers)}</span><span class="chip">${a.overdue} past 48h SLA</span></div>
+      page(`<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests</span><span class="chip">${a.overdue} past 48h SLA</span></div>
         <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><div class="fig" style="font-size:72px">${a.open.length} open requests</div><div class="soft" style="font-weight:600;margin-top:8px">${unassigned} unassigned · ${s.awaiting_rating} waiting for resident rating · oldest ${a.oldest}</div></div>
         <div class="ring" style="background:${ring(a.pct)}"><div><b>${a.pct}%</b><span>within 48h SLA</span></div></div></div>${heroPanels(panels)}</div>
         <section class="col"><h3>Open by category</h3><div class="cat-tiles">${tiles}</div></section>
