@@ -24,3 +24,6 @@
   .mob .screen, .mob .tab.on i { animation: none; }
   .mob .tab::before { transition: none; }
 }
+
+/* Live badge sits in the flow above the screen, so it never overlaps the greeting/date line */
+.phone > .live { position: static; align-self: flex-end; margin: max(8px, env(safe-area-inset-top)) 16px -4px auto; flex: none; }
