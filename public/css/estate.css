@@ -141,3 +141,17 @@
 .cat-photo.on { background: #0a303e; color: #fff; box-shadow: 0 0 0 3px #0088b0; }
 .cat-photo.on .cat-ic { background: rgba(255, 255, 255, .14); color: #99e0ff; }
 .cat-photo.on .cat-strip { color: #fff; }
+
+/* ===== Estate at a glance (committee dashboard) ===== */
+.eg-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .eg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.eg-card { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 14px; border-radius: 16px; background: #fff; color: #0a303e; border: 1px solid #d7ecf4; cursor: pointer; font: inherit; min-width: 0; }
+.eg-card:hover, .eg-card:focus-visible { border-color: #0088b0; }
+.eg-ic { width: 36px; height: 36px; border-radius: 50%; background: #e9f8ff; color: #0088b0; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+.eg-ic i { position: relative; display: inline-block; width: 1em; height: 1em; font-size: 20px; }
+.eg-n { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.eg-l { font-size: 14px; font-weight: 600; }
+.eg-s { font-size: 13px; color: color-mix(in srgb, #0a303e 62%, transparent); overflow-wrap: anywhere; }
+.eg-bar { align-self: stretch; height: 4px; border-radius: 2px; background: #e9f8ff; margin-top: 6px; overflow: hidden; }
+.eg-bar i { display: block; height: 100%; background: #0088b0; }
+/* ===== end Estate at a glance ===== */

@@ -123,3 +123,15 @@
 .am-card.has-alert .am-art::after { content: ""; position: absolute; top: 10px; right: 10px; width: 14px; height: 14px; border-radius: 50%; background: #c4142c; border: 2px solid #0a303e; }
 .am-card.am-cat { width: 168px; padding: 14px; }
 .am-card.am-cat .am-art { height: 84px; }
+
+/* Estate at a glance */
+.gl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gl-card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 148px; min-width: 0; padding: 14px; border-radius: 20px; background: #fff; border: 1px solid #e9f8ff; box-shadow: 0 4px 14px rgba(10, 48, 62, .08); color: #0a303e; }
+.gl-card:focus-visible { outline: var(--focus-ring); }
+.gl-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #e9f8ff; color: #0088b0; }
+.gl-ic i { position: relative; display: inline-block; width: 1em; height: 1em; }
+.gl-num { font-size: 30px; font-weight: 800; line-height: 1.1; margin-top: 6px; }
+.gl-l { font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.gl-s { font-size: 12px; opacity: .7; overflow-wrap: anywhere; }
+.gl-bar { display: block; height: 5px; border-radius: 5px; background: #e9f8ff; overflow: hidden; }
+.gl-bar span { display: block; height: 100%; background: #0088b0; }

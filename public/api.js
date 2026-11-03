@@ -100,6 +100,7 @@ window.API = (() => {
       addWorker: body => call('POST', '/api/admin/workers', body),
       updateWorker: (wid, body) => call('PUT', `/api/admin/workers/${id(wid)}`, body),
       removeWorker: wid => call('DELETE', `/api/admin/workers/${id(wid)}`),
+      overview: () => call('GET', '/api/admin/overview'), // one call for the dashboard: { residents:{approved,pending,suspended,owners,tenants,family,flats}, requests:{open,unassigned,in_progress,closed_30d}, emergencies:{active,resolved_30d}, gate:{admitted_today,denied_today,active_passes,guards}, estate:{vehicles,parking_total,parking_assigned,workers_active,workers_inactive,vendors}, leases:{ending_60d,tenants_without_lease}, notices:{last_30d} }
       settings: () => call('GET', '/api/admin/settings'), // same shape as settings.public plus any extra admin-only keys
       setSettings: body => call('PUT', '/api/admin/settings', body), // { society_name?, society_kind?, google_client_id?, features?: { emergency?, gate?, contacts?, notices? } }
       access: () => call('GET', '/api/admin/access'), // { roles: ['owner','tenant','family'], permissions: [{ key, label }], matrix: { owner: { 'gate.pass': true, ... }, ... } }

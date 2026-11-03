@@ -251,3 +251,33 @@ test('existing databases get new permission rows without losing edits', async ()
     db.close();
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('admin overview: every headline number in one call, admin only', async () => {
+  const { admin, person, close } = await boot();
+  try {
+    const owner = await person('ov-owner@t.test', 'A-101', 'owner');
+    await person('ov-tenant@t.test', 'A-102', 'tenant');
+    const empty = (await admin('GET', '/api/admin/overview')).body;
+    assert.equal(empty.residents.approved, 2);
+    assert.equal(empty.residents.owners, 1);
+    assert.equal(empty.residents.tenants, 1);
+    assert.equal(empty.residents.flats, 2);
+    assert.equal(empty.leases.tenants_without_lease, 1);
+    assert.equal(empty.estate.vehicles, 0);
+    assert.equal(empty.emergencies.active, 0);
+    assert.equal(empty.gate.admitted_today, 0);
+    // data moves the numbers
+    assert.equal((await owner('POST', '/api/vehicles', { plate: 'MH12 AB 1234', type: 'car' })).status, 201);
+    assert.equal((await admin('POST', '/api/parking', { prefix: 'P-', from: 1, count: 3 })).status, 201);
+    assert.equal((await admin('POST', '/api/admin/workers', { name: 'Ravi', role: 'security', phone: '+91 90000 11111' })).status, 201);
+    assert.equal((await owner('POST', '/api/emergencies', { type: 'fire' })).status, 201);
+    const o = (await admin('GET', '/api/admin/overview')).body;
+    assert.equal(o.estate.vehicles, 1);
+    assert.equal(o.estate.parking_total, 3);
+    assert.equal(o.estate.parking_assigned, 0);
+    assert.equal(o.estate.workers_active, 1);
+    assert.equal(o.emergencies.active, 1);
+    // residents cannot read it, anonymous gets 401
+    assert.equal((await owner('GET', '/api/admin/overview')).status, 403);
+  } finally { close(); }
+});
