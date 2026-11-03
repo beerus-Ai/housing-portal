@@ -48,11 +48,30 @@
   // card variants (one palette): dk = dark teal, wh = white, sf = soft teal tint
   const amCard = (icon, title, sub, act, k, v) => `<button class="am-card ${v || 'wh'}" data-act="${act}" data-k="${esc(k)}"><span class="am-art">${ic(icon)}</span><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span></button>`;
   const amBig = (i, n, l, tab, v) => `<button class="am-card am-big ${v}" data-act="${tab.endsWith('-sub') ? 'quick' : 'tab'}" data-tab="${tab}" data-k="${tab}"><span class="am-art">${ic(i)}</span><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></button>`;
+  const glanceCard = (i, n, l, sub, k, bar) => `<button class="gl-card" data-act="${['requests', 'notices'].includes(k) ? 'tab' : 'quick'}" data-tab="${k}" data-k="${k}"><span class="gl-ic">${ic(i)}</span><span class="gl-num">${esc(n)}</span><span class="gl-l">${esc(l)}</span>${bar == null ? '' : `<span class="gl-bar"><span style="width:${Math.max(0, Math.min(100, bar))}%"></span></span>`}<span class="gl-s">${esc(sub)}</span></button>`;
+  const glanceSection = ov => {
+    if (!ov || typeof ov !== 'object') return '';
+    const n = v => Number(v) || 0, r = ov.residents || {}, q = ov.requests || {}, g = ov.gate || {}, e = ov.estate || {}, l = ov.leases || {}, nt = ov.notices || {};
+    const gate = feat('gate'), park = feat('parking'), pt = n(e.parking_total), pa = n(e.parking_assigned);
+    const cards = [glanceCard('users-three', n(r.approved), 'Residents', `${n(r.owners)} owners · ${n(r.tenants)} tenants · ${n(r.family)} family`, 'set-users'),
+      glanceCard('buildings', n(r.flats), 'Flats occupied', 'With an approved resident', 'set-users'),
+      glanceCard('clipboard-text', n(q.open), 'Open requests', `${n(q.unassigned)} unassigned · ${n(q.in_progress)} in progress`, 'requests'),
+      gate ? glanceCard('shield-check', n(g.admitted_today), 'Gate today', `${n(g.denied_today)} denied`, 'gate') : '',
+      gate ? glanceCard('qr-code', n(g.active_passes), 'Active passes', 'Visitor passes', 'gate') : '',
+      gate ? glanceCard('shield-star', n(g.guards), 'Guards', 'Security accounts', 'set-guards') : '',
+      park ? glanceCard('car', n(e.vehicles), 'Vehicles', 'Registered', 'parking') : '',
+      park ? glanceCard('garage', `${pa}/${pt}`, 'Parking', `${Math.max(0, pt - pa)} free`, 'parking', pt ? pa * 100 / pt : 0) : '',
+      glanceCard('hard-hat', n(e.workers_active), 'Workers', `${n(e.workers_inactive)} inactive`, 'workers'),
+      glanceCard('storefront', n(e.vendors), 'Vendors', 'Contractors', 'vendors-sub'),
+      glanceCard('file-text', n(l.ending_60d), 'Leases ending in 60 days', `${n(l.tenants_without_lease)} tenants without a lease`, 'leases-sub'),
+      glanceCard('megaphone', n(nt.last_30d), 'Notices, 30 days', 'Posted', 'notices')].join('');
+    return `<section class="am-sec"><h2 class="am-h2">Estate at a glance</h2><div class="gl-grid">${cards}</div></section>`;
+  };
   // photo card: /img/categories/<key>.svg (or the request's own photo) with a dark label bar; solid dark-teal + icon when the image fails
-  const catPhoto = k => '/img/categories/' + encodeURIComponent(k) + '.svg';
-  const photoCard = (src, icon, title, sub, attrs, extra) => `<button class="am-card am-photo" ${attrs}><img class="am-pimg" data-fb="1" src="${esc(src)}" alt="" loading="lazy"><span class="am-pic">${ic(icon)}</span><span class="am-over"><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span>${extra || ''}</span></button>`;
+  const catPhoto = () => ''; // category cards are icon cards now (no images)
+  const photoCard = (src, icon, title, sub, attrs, extra) => `<button class="am-card am-photo" ${attrs}>${src ? `<img class="am-pimg" data-fb="1" src="${esc(src)}" alt="" loading="lazy">` : ''}<span class="am-pic">${ic(icon)}</span><span class="am-over"><span class="am-t">${esc(title)}</span><span class="am-s">${esc(sub)}</span>${extra || ''}</span></button>`;
   const amReq = r => photoCard(r.has_photo ? API.requests.photoUrl(r.id) : catPhoto(r.category), catIcon(r.category), r.title, `${rid(r)} · ${day(r.created_at)}`, `data-act="open" data-id="${r.id}"`, `<span class="am-tag">${statusTag(r)}</span>`);
-  const catCard = (k, l, i) => photoCard(catPhoto(k), i, l, 'Category', `data-act="catgo" data-c="${esc(k)}"`);
+  const catCard = (k, l, i) => `<button class="am-card am-cat wh" data-act="catgo" data-c="${esc(k)}"><span class="am-art">${ic(i)}</span><span class="am-t">${esc(l)}</span><span class="am-s">See requests</span></button>`;
   const catSection = () => amSection('By category', CATS.map(([k, l, i]) => catCard(k, l, i)).join(''));
   function wirePhotos() {
     document.querySelectorAll('img[data-fb]').forEach(img => {
@@ -249,16 +268,16 @@
     },
 
     async dashboard() {
-      const [s, reqs, notices, emg, pend] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => []), API.admin.users('pending').catch(() => [])]);
+      const [s, reqs, notices, emg, pend, ov] = await Promise.all([API.admin.stats(), API.requests.list(), API.notices.list().catch(() => []), API.emergencies.list().catch(() => []), API.admin.users('pending').catch(() => []), API.admin.overview().catch(() => null)]);
       S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active');
       const a = adminSummary(reqs, s), unList = a.open.filter(r => !r.vendor_id), un = unList.length;
       const chips = [['user-check', 'Approvals', 'approvals', true, pend.length], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['shield-check', 'Gate', 'gate', feat('gate')],
         ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'More', 'menu', true]];
-      const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'em' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
+      const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'dk has-alert' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
       const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'sf') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'sf');
       const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map(amReq).join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}
-        ${amSection('Needs your attention', attn)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}${catSection()}
+        ${amSection('Needs your attention', attn)}${glanceSection(ov)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}${catSection()}
         <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
     },

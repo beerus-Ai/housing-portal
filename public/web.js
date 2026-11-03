@@ -423,7 +423,7 @@
   // Category photos: /img/categories/<key>.svg. If one is missing it is removed and the solid dark-teal card with the icon shows instead.
   document.addEventListener('error', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img')) t.remove(); }, true);
   document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
-  const catPic = k => `<img class="cat-img" src="/img/categories/${esc(k)}.svg" alt="" loading="lazy" decoding="async">`;
+  const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
     catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
