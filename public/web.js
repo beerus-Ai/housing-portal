@@ -21,22 +21,35 @@
     if (hide) hide.setAttribute('aria-expanded', String(!S.nav.hidden));
     if (show) show.hidden = !S.nav.hidden;
     const aside = document.querySelector('.sidebar'); if (aside) aside.inert = S.nav.hidden;
+    document.querySelectorAll('.nav-grp').forEach(g => { g.classList.remove('open'); const h = g.querySelector('.nav-grp-h'); if (h) h.setAttribute('aria-expanded', String(S.nav.pos === 'top' ? false : !g.classList.contains('collapsed'))); });
   };
   const isAdmin = () => S.me.role === 'admin';
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three'], ['contacts', 'Contacts', 'phone-call'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
-    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
-    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
-    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['approvals', 'Approvals', 'user-check'], ['contacts', 'Contacts', 'phone-call'], ['notices', 'Notices', 'megaphone'],
-      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six']],
+    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['household', 'Household', 'users-three'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code']],
+    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['gate', 'Gate', 'shield-check'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
+      ['approvals', 'Approvals', 'user-check'], ['users', 'Residents', 'users'], ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six']],
     guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise']],
   };
+  // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
+  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six']];
+  const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
+    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin' };
+  const COLKEY = 'hp.navc';
+  const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
   const isGuard = () => S.me.role === 'guard';
   // Feature flags (GET /api/me features{}) and permissions (permissions[]) decide what a person sees. Missing data means allowed.
   const feat = f => !S.me || !S.me.features || S.me.features[f] !== false;
   const can = p => !S.me || S.me.role === 'admin' || !Array.isArray(S.me.permissions) || S.me.permissions.includes(p);
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
-    household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view') };
+    household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
+    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const navFor = () => (NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner).filter(([k]) => isGuard() || allowed(k));
   const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
@@ -49,7 +62,17 @@
     let pending = 0, activeEm = 0;
     if (isAdmin()) { pending = (await API.admin.users('pending')).length; try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; } }
     const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
-    const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : k === 'emergencies' && activeEm ? `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` : '')).join('');
+    const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` } : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` } : { n: 0, h: '' };
+    const items = navFor(), col = loadCollapsed();
+    let nav;
+    if (isGuard()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+    else nav = GROUPS.map(([g, gl, gi]) => {
+      const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
+      if (g === 'home') return its.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+      const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), c = col.includes(g), on = its.some(([k]) => k === S.page);
+      return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
+        <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h)).join('')}</div></div>`;
+    }).join('');
     const who = isAdmin() || isGuard() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
@@ -162,10 +185,10 @@
     },
 
     async raise() {
-      const tiles = CATS.map(([k, l, i]) => `<button type="button" class="cat ${S.cat === k ? 'on' : ''}" data-act="cat" data-c="${k}" aria-pressed="${S.cat === k}">${ic(i)}${l}</button>`).join('');
+      const tiles = CATS.map(([k, l, i]) => `<button type="button" class="cat-photo cat-pick ${S.cat === k ? 'on' : ''}" data-act="cat" data-c="${k}" aria-pressed="${S.cat === k}">${catPic(k)}<span class="cat-ic">${ic(i)}</span><span class="cat-strip"><b>${esc(l)}</b></span></button>`).join('');
       const steps = [['user-gear', 'The secretary assigns a vendor, usually the same day.'], ['bell-ringing', "You're notified of each status change."], ['star', 'Once resolved, you rate the work to close it.']];
       page(`<div class="split-eq"><form id="raiseform" class="col" style="gap:var(--space-4)"><h2>Raise a request</h2>
-        <div class="field"><label id="cl">Category</label><div class="cat-grid" role="group" aria-labelledby="cl">${tiles}</div></div>
+        <div class="field"><label id="cl">Category</label><div class="cat-pick-grid" role="group" aria-labelledby="cl">${tiles}</div></div>
         <div class="field"><label for="t">Short title</label><input class="input" id="t" name="title" required maxlength="120" placeholder="e.g. Bathroom tap dripping"></div>
         <div class="field"><label for="w">Where</label><input class="input" id="w" name="where" value="Flat ${esc(S.me.flat)}" maxlength="100"></div>
         <div class="field"><label for="d">What's happening</label><textarea class="input" id="d" name="description" maxlength="1800" placeholder="When it started, how bad it is, best time to visit"></textarea></div>
@@ -394,12 +417,24 @@
   }
 
   // ---------- events (delegated; no inline handlers under the CSP)
+  const closeGroups = () => document.querySelectorAll('.nav-grp.open').forEach(g => { g.classList.remove('open'); const h = g.querySelector('.nav-grp-h'); if (h) h.setAttribute('aria-expanded', 'false'); });
+  document.addEventListener('click', e => { if (!e.target.closest('.nav-grp')) closeGroups(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGroups(); });
+  // Category photos: /img/categories/<key>.svg. If one is missing it is removed and the solid dark-teal card with the icon shows instead.
+  document.addEventListener('error', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img')) t.remove(); }, true);
+  document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
+  const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
     catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
     lease: el => { S.leaseId = Number(el.dataset.id); render(); },
     navpos: () => { S.nav.pos = S.nav.pos === 'top' ? 'side' : 'top'; saveNav(); applyNav(); },
     navhide: () => { S.nav.hidden = !S.nav.hidden; saveNav(); applyNav(); if (!S.nav.hidden) { const f = document.querySelector('.side-link.on'); if (f) f.focus(); } },
+    navgroup: el => {
+      const g = el.closest('.nav-grp'); if (!g) return;
+      if (S.nav.pos === 'top') { const was = g.classList.contains('open'); closeGroups(); if (!was) { g.classList.add('open'); el.setAttribute('aria-expanded', 'true'); } return; }
+      const c = g.classList.toggle('collapsed'); el.setAttribute('aria-expanded', String(!c)); saveCollapsed(g.dataset.g, c);
+    },
     nav: el => go(el.dataset.page, el.dataset.sel ? Number(el.dataset.sel) : null),
     open: el => go(el.dataset.page || 'requests', Number(el.dataset.id)),
     logout: async () => { stopScan(); await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
@@ -475,12 +510,12 @@
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
   }));
 
-  window.HPWeb = { S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, home0, reqRow, noticeRow, emType, emCard, vendorOptions };
+  window.HPWeb = { catPic, S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, home0, reqRow, noticeRow, emType, emCard, vendorOptions };
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
   const poller = HP.live(async () => {
     if (!S.me) return;
-    if (S.page === 'settings' || S.page === 'guards') return; // unsaved toggles and inline forms must not be wiped
+    if (['settings', 'guards', 'users', 'vehicles', 'parking', 'workers'].includes(S.page)) return; // unsaved toggles and inline forms must not be wiped
     if (S.page === 'gate') return refreshGateLog(); // never redraw the gate page: it would wipe the typed code and the result card
     const pg = $('#page'), top = pg ? pg.scrollTop : 0;
     await render();

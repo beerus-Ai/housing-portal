@@ -51,7 +51,7 @@ test('public settings need no sign-in and have defaults', async () => {
     const r = await client()('GET', '/api/settings');
     assert.equal(r.status, 200);
     assert.deepEqual(r.body, { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '',
-      features: { emergency: true, gate: true, contacts: true, notices: true } });
+      features: { emergency: true, gate: true, contacts: true, notices: true, parking: true } });
   } finally { close(); }
 });
 
@@ -73,7 +73,7 @@ test('admin settings: update, validation, role check, audit', async () => {
     assert.equal(pub.society_name, 'Lake View');
     assert.equal(pub.society_kind, 'Co-operative Housing Society');
     assert.equal(pub.google_client_id, CID);
-    assert.deepEqual(pub.features, { emergency: true, gate: true, contacts: true, notices: false });
+    assert.deepEqual(pub.features, { emergency: true, gate: true, contacts: true, notices: false, parking: true });
     assert.equal((await admin('PUT', '/api/admin/settings', { google_client_id: '' })).body.google_client_id, '');
     const audit = (await admin('GET', '/api/admin/audit')).body;
     assert.ok(audit.some(a => a.entity === 'settings' && a.action === 'feature_off' && a.detail === 'notices'));
@@ -112,7 +112,7 @@ test('access matrix: GET/PUT, validation, enforcement, /api/me', async () => {
     const f = await person('f2@example.test', 'A-2', 'family');
     const a = (await admin('GET', '/api/admin/access')).body;
     assert.deepEqual(a.roles, ['owner', 'tenant', 'family']);
-    assert.equal(a.permissions.length, 7);
+    assert.equal(a.permissions.length, 9);
     assert.ok(a.permissions.every(p => p.key && p.label));
     assert.equal(a.matrix.owner['household.manage'], true);
     assert.equal(a.matrix.tenant['household.manage'], false);
@@ -122,16 +122,16 @@ test('access matrix: GET/PUT, validation, enforcement, /api/me', async () => {
     assert.equal((await o('PUT', '/api/admin/access', { matrix: {} })).status, 403);
     // /api/me
     const mo = (await o('GET', '/api/me')).body, mf = (await f('GET', '/api/me')).body;
-    assert.equal(mo.permissions.length, 7);
+    assert.equal(mo.permissions.length, 9);
     assert.ok(!mf.permissions.includes('lease.view') && mf.permissions.includes('gate.pass'));
-    assert.equal((await admin('GET', '/api/me')).body.permissions.length, 7);
-    assert.deepEqual(mo.features, { emergency: true, gate: true, contacts: true, notices: true });
+    assert.equal((await admin('GET', '/api/me')).body.permissions.length, 9);
+    assert.deepEqual(mo.features, { emergency: true, gate: true, contacts: true, notices: true, parking: true });
     // validation
     for (const bad of [undefined, [], { admin: { 'gate.pass': false } }, { tenant: { 'nope.key': true } }, { tenant: { 'gate.pass': 'no' } }, { tenant: [] }])
       assert.equal((await admin('PUT', '/api/admin/access', { matrix: bad })).status, 400);
     // enforcement
     assert.equal((await t('POST', '/api/gate/passes', { visitor_name: 'V' })).status, 201);
-    const put = await admin('PUT', '/api/admin/access', { matrix: { tenant: { 'gate.pass': false, 'contacts.read': false, 'notice.read': false, 'emergency.raise': false, 'request.create': false, 'lease.view': false } } });
+    const put = await admin('PUT', '/api/admin/access', { matrix: { tenant: { 'gate.pass': false, 'contacts.read': false, 'notice.read': false, 'emergency.raise': false, 'request.create': false, 'lease.view': false, 'vehicle.manage': false, 'parking.view': false } } });
     assert.equal(put.status, 200);
     assert.equal(put.body.matrix.tenant['gate.pass'], false);
     assert.equal(put.body.matrix.owner['gate.pass'], true);

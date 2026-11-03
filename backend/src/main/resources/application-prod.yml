@@ -1,0 +1,15 @@
+server:
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:portal}
+    username: ${DB_USER:portal}
+    password: ${DB_PASSWORD:}
+
+portal:
+  production: true
