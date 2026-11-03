@@ -194,3 +194,22 @@ div.em-banner { cursor: default; margin-bottom: 0; }
 /* Fix: duotone icons draw their line layer with an absolutely positioned pseudo-element, so the <i> must stay position:relative and size 1em.
    The soft red tile behind the emergency icons is drawn with a spread box-shadow instead of padding or a grid box. */
 .em-tile i { position: relative; display: inline-block; width: 1em; height: 1em; font-size: 64px; line-height: 1; margin: 18px; border-radius: 22px; background: var(--em-red-bg); box-shadow: 0 0 0 18px var(--em-red-bg); backdrop-filter: none; place-items: initial; }
+
+/* ===== Gate access (HSP-24) ===== */
+.gate-card { align-items: stretch; }
+.gate-qr { align-self: center; background: #fff; padding: 20px; border-radius: 18px; line-height: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, .12); }
+.gate-qr svg { display: block; max-width: 100%; height: auto; }
+.gate-code { text-align: center; font-size: 44px; font-weight: 800; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+.gate-lbl { font-size: 18px; font-weight: 600; }
+.gate-input { font-size: 32px; padding: 16px 20px; letter-spacing: .06em; min-height: 72px; }
+.gate-btn { font-size: 22px; min-height: 64px; padding: 0 28px; }
+.gate-verify { max-width: 640px; }
+.gate-scan { max-width: 640px; display: flex; flex-direction: column; gap: var(--space-2); }
+.gate-scan video { width: 100%; border-radius: 18px; background: #000; }
+.gate-res { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 24px; border-radius: 24px; color: #fff; text-align: center; max-width: 640px; }
+.gate-ok { background: #15803d; }
+.gate-no { background: #b91c1c; }
+.gate-res i { position: relative; display: inline-block; width: 1em; height: 1em; font-size: 72px; line-height: 1; }
+.gate-big { font-size: clamp(44px, 9vw, 84px); font-weight: 800; line-height: 1; letter-spacing: .04em; }
+.gate-sub { font-size: 24px; font-weight: 600; }
+.gate-table td, .gate-table th { font-size: 16px; }

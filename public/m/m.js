@@ -8,11 +8,14 @@
   const app = $('#app');
   const S = { me: null, leaseId: null, tab: 'home', sub: null, selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', sheet: null, note: '', pf: null, emgActive: 0, idx: { reqs: [], notices: [] } };
   const isAdmin = () => S.me.role === 'admin';
+  const isGuard = () => S.me.role === 'guard';
+  S.gp = { view: null, confirm: null, list: [] }; S.gRes = null;
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['profile', 'Profile', 'user-circle']],
+    guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['profile', 'Profile', 'user-circle']],
     admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone']],
   };
-  const go = (tab, selId = null, sub = null) => { S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
+  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
   const dateShort = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const back = (label, to) => `<button class="back" data-act="tab" data-tab="${to}">${ic('caret-left')}${esc(label)}</button>`;
@@ -39,15 +42,17 @@
 
   async function render() {
     if (!S.me) return authView();
-    const tabs = TABS[isAdmin() ? 'admin' : 'resident']();
+    stopScan();
+    if (isGuard() && !['gate', 'gatelog', 'profile'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
+    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']();
     let pending = 0;
     if (isAdmin()) {
       pending = (await API.admin.users('pending').catch(() => [])).length;
       S.emgActive = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active').length;
     }
     const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
-    const fab = !isAdmin() && !S.sub && S.tab !== 'raise' ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
-    app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : ''}" aria-label="Main">${bar}</nav></div>`;
+    const fab = !isAdmin() && !isGuard() && !S.sub && S.tab !== 'raise' ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
+    app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : tabs.length < 4 ? 'three' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const screen = h => { $('#screen').innerHTML = h; };
@@ -83,7 +88,7 @@
       if (t === 'owner') p2 = ['Household', String((await API.household.list()).length), ['tab', 'data-tab="household"']];
       if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); p2 = ['Lease ends', li ? li.left + 'd' : '–', ['tab', 'data-tab="lease"']]; }
       const n0 = notices[0]; S.idx = { reqs, notices };
-      const quick = [['plus-circle', 'Raise', 'raise'], ['list-checks', 'Requests', 'requests'], ['megaphone', 'Notices', 'notices-sub'], ['address-book', 'Contacts', 'contacts-sub']]
+      const quick = [['plus-circle', 'Raise', 'raise'], ['list-checks', 'Requests', 'requests'], ['megaphone', 'Notices', 'notices-sub'], ['qr-code', 'Gate pass', 'gatepass']]
         .map(([i, l, k]) => `<button data-act="quick" data-k="${k}"><span class="tile">${ic(i)}</span>${l}</button>`).join('');
       screen(`<div class="row" style="flex-wrap:nowrap"><span class="avatar" style="width:40px;height:40px;font-size:14px">${esc(initials(S.me.name))}</span>
         <div class="col grow" style="gap:0"><span class="muted xs">${esc(dateShort())} · ${esc(S.me.flat)}</span><span class="list-title" style="font-size:20px">${greet()}, ${esc(firstName(S.me.name))}</span></div>
@@ -97,6 +102,54 @@
         <div class="quick">${quick}</div>
         ${n0 ? `<div class="row" style="flex-wrap:nowrap;align-items:center"><div style="width:96px;height:96px;border-radius:14px;overflow:hidden;flex:none">${photoSlot('', noticeIcon(n0))}</div><div class="col" style="gap:2px"><span class="kicker">Notice · ${esc(day(n0.created_at))}</span><span class="list-title" style="font-size:16px">${esc(n0.title)}</span></div></div>` : ''}
         `);
+    },
+
+    // ---------- gate: resident passes
+    async gatepass() {
+      const [passes, me] = await Promise.all([API.gate.passes().catch(() => []), API.gate.me().catch(() => null)]);
+      S.gp.list = passes;
+      const v = S.gp.view, c = S.gp.confirm;
+      const now = new Date(), later = new Date(now.getTime() + 864e5);
+      const inp = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+      const qrCard = v ? `<div class="m-card gp-card"><div class="gp-qr">${HP.qrSvg(v.qr || 'HSP:' + v.token, 280)}</div>
+        <span class="muted xs" style="text-align:center">${esc(v.visitor_name || '')}${v.purpose ? ' · ' + esc(v.purpose) : ''}</span>
+        <div class="gp-code" aria-label="Pass code">${esc(v.code)}</div>
+        <span class="muted sm" style="text-align:center">Valid ${esc(stamp(v.valid_from))} to ${esc(stamp(v.valid_until))}</span>
+        <span style="align-self:center">${gpTag(v.status || 'active')}</span>
+        <button class="btn btn-primary btn-lg" data-act="gpshare">${ic('share-network')}Share</button>
+        ${(v.status || 'active') === 'active' ? (c === 'cancel' ? `<div class="callout col" style="gap:8px"><b class="sm">Cancel this pass? The visitor will be turned away.</b><div class="two"><button class="btn btn-primary" data-act="gpcancelyes">Yes, cancel</button><button class="btn btn-secondary" data-act="gpno">Keep it</button></div></div>`
+          : `<button class="btn btn-secondary btn-lg" data-act="gpcancelask">${ic('x-circle')}Cancel pass</button>`) : ''}
+        <button class="link-btn" style="text-align:center;min-height:44px" data-act="gpclose">Close</button></div>` : '';
+      const meCard = me ? `<div class="m-card gp-card"><h3>My gate QR</h3><div class="gp-qr">${HP.qrSvg(me.qr || 'HSP:' + me.token, 240)}</div>
+        <p class="muted sm" style="margin:0;text-align:center">Show this at the gate to walk in. The same code is what is written on an NFC tag, so a tag can be tapped instead.</p>
+        ${c === 'rotate' ? `<div class="callout col" style="gap:8px"><b class="sm">Reset your QR? The old QR and any NFC tag stop working.</b><div class="two"><button class="btn btn-primary" data-act="gprotyes">Yes, reset</button><button class="btn btn-secondary" data-act="gpno">Keep it</button></div></div>`
+          : `<button class="btn btn-secondary btn-lg" data-act="gprotask">${ic('arrows-clockwise')}Reset my QR</button>`}</div>` : '';
+      screen(`${back('Home', 'home')}<h2>Gate pass</h2>${qrCard}
+        <form id="gpform" class="m-card col"><h3>Invite a visitor</h3><div class="field"><label for="gvn">Visitor name</label><input class="input" id="gvn" name="visitor_name" required maxlength="100"></div>
+        <div class="field"><label for="gpu">Purpose (optional)</label><input class="input" id="gpu" name="purpose" maxlength="100" placeholder="e.g. Delivery, guest"></div>
+        <div class="field"><label for="gvf">Valid from</label><input class="input" id="gvf" name="valid_from" type="datetime-local" required value="${inp(now)}"></div>
+        <div class="field"><label for="gvu">Valid until</label><input class="input" id="gvu" name="valid_until" type="datetime-local" required value="${inp(later)}"></div>
+        <p class="err" id="gperr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('qr-code')}Create pass</button></form>
+        <h3>Passes for Flat ${esc(S.me.flat)}</h3>${passes.map(p => `<button class="list-row m-card" style="grid-template-columns:40px minmax(0,1fr) auto;align-items:center" data-act="gpopen" data-id="${p.id}"><span class="tile">${ic('qr-code')}</span>
+          <span class="col" style="gap:2px"><span class="list-title" style="font-size:15px">${esc(p.visitor_name)}</span><span class="muted xs">${esc(stamp(p.valid_from))} to ${esc(stamp(p.valid_until))}</span></span>${gpTag(p.status)}</button>`).join('') || '<p class="muted">No passes yet.</p>'}
+        ${meCard}`);
+    },
+
+    // ---------- gate: guard / committee verify
+    async gate() {
+      const canScan = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
+      screen(`${isAdmin() ? back('Dashboard', 'home') : ''}<h2>Gate</h2>
+        <form id="gateform" class="col" style="gap:12px"><input class="input gate-code" id="gcode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="6-digit code"><button class="btn btn-primary btn-lg gate-go">${ic('shield-check')}Verify</button></form>
+        ${canScan ? `<button class="btn btn-secondary btn-lg" data-act="gscan">${ic('scan')}Scan QR</button><div id="gcam"></div>` : '<p class="muted sm" style="margin:0">QR scanning is not supported on this device. Type the 6-digit code instead.</p>'}
+        <div id="gres" aria-live="assertive"></div>`);
+      if (S.gRes) showRes(S.gRes, true);
+      const i = $('#gcode'); if (i && !S.gRes) i.focus();
+    },
+
+    async gatelog() {
+      const rows = await API.gate.log();
+      screen(`${isAdmin() ? back('Dashboard', 'home') : ''}<h2>Gate log</h2>${rows.map(r => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="list-title" style="font-size:16px">${esc(r.subject || 'Unknown')}</span><span class="tag ${r.result === 'allowed' ? 'tag-accent' : 'tag-accent-2'}">${r.result === 'allowed' ? 'Allowed' : 'Denied'}</span></div>
+        <span class="muted xs">${esc(stamp(r.created_at))}${r.flat ? ' · Flat ' + esc(r.flat) : ''}${r.guard_name ? ' · ' + esc(r.guard_name) : ''}</span>${r.result !== 'allowed' && r.reason ? `<span class="sm">${esc(reasonText(r.reason))}</span>` : ''}</div>`).join('') || '<p class="muted">No entries yet.</p>'}`);
     },
 
     async requests() {
@@ -179,6 +232,7 @@
         <div class="soft sm" style="margin-top:6px">${un} unassigned · oldest ${a.oldest} · within 48h SLA ${a.pct}%</div></div>
         <div class="stat-grid">${stat('user-check', 'Pending approvals', s.pending_users, 'approvals')}${stat('user-gear', 'Unassigned', un, 'requests')}${stat('star', 'Average rating', s.avg_rating ? s.avg_rating.toFixed(1) : '–', 'requests')}${stat('megaphone', 'Notices, 30 days', s.notices_30d, 'notices')}</div>
         <div class="m-bars" aria-hidden="true">${a.weeks.map(n => `<span style="height:${Math.max(4, Math.round(n / max * 80))}px"></span>`).join('')}</div><span class="muted xs">Requests per week, last 8 weeks</span>
+        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Verify at gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gatelog">${ic('clock-counter-clockwise')}Gate log</button></div>
         <button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Tenant leases</button>
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
     },
@@ -202,6 +256,8 @@
     },
 
     async profile() {
+      if (isGuard()) return screen(`<div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">Security guard</span></div>
+        <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
       const m = S.me, ms = await API.household.list().catch(() => []);
       const pct = Math.round([m.name, m.phone, m.flat, m.email].filter(v => v && String(v).trim()).length / 4 * 100);
       const row = (i, k, v) => `<div class="row" style="flex-wrap:nowrap;padding:8px 0;gap:var(--space-2)">${ic(i)}<span class="col" style="gap:0"><span class="muted xs">${k}</span><span class="sm" style="font-weight:600">${v ? esc(v) : 'Not added'}</span></span></div>`;
@@ -253,8 +309,66 @@
     },
   };
 
+  // ---------- gate helpers
+  const gpTag = st => `<span class="tag ${st === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc({ active: 'Active', used: 'Used', cancelled: 'Cancelled', expired: 'Expired' }[st] || st)}</span>`;
+  const REASONS = { expired: 'This pass has expired.', used: 'This pass was already used.', cancelled: 'This pass was cancelled by the resident.', not_found: 'Code not recognised.', unknown: 'Code not recognised.', invalid: 'Code not recognised.', not_yet_valid: 'This pass is not valid yet.', inactive: 'This resident is not active.' };
+  const reasonText = r => REASONS[r] || (r ? String(r).replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : 'Not allowed.');
+  let resTimer = null, cam = null;
+  function showRes(r, quiet) {
+    const box = $('#gres'); if (!box) return;
+    const ok = r.result === 'allowed';
+    box.innerHTML = `<div class="gate-res ${ok ? 'ok' : 'no'}" role="status"><b class="gate-big">${ok ? 'ALLOWED' : 'DENIED'}</b>${ok
+      ? `<span class="gate-name">${esc(r.name || '')}</span><span>${r.flat ? 'Flat ' + esc(r.flat) : ''}</span>${r.purpose ? `<span>${esc(r.purpose)}</span>` : ''}${r.kind === 'resident' ? '<span>Resident</span>' : ''}`
+      : `<span class="gate-name">${esc(reasonText(r.reason))}</span>${r.name ? `<span>${esc(r.name)}${r.flat ? ', Flat ' + esc(r.flat) : ''}</span>` : ''}`}</div>`;
+    if (!quiet && navigator.vibrate) { try { navigator.vibrate(ok ? 150 : [120, 80, 120]); } catch { /* ignore */ } }
+    clearTimeout(resTimer);
+    resTimer = setTimeout(() => { S.gRes = null; const b = $('#gres'); if (b) b.innerHTML = ''; const i = $('#gcode'); if (i) i.focus(); }, 8000);
+  }
+  async function doVerify(body) {
+    let r;
+    try { r = await API.gate.verify(body); } catch (x) { r = { result: 'denied', reason: x.message }; }
+    S.gRes = r; showRes(r);
+    const i = $('#gcode'); if (i) { i.value = ''; i.focus(); }
+  }
+  function stopScan() {
+    if (!cam) return;
+    clearTimeout(cam.t); if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
+    cam = null; const b = $('#gcam'); if (b) b.innerHTML = '';
+  }
+  async function startScan() {
+    if (cam) return stopScan();
+    const box = $('#gcam'); if (!box) return;
+    const me = cam = { stream: null, t: 0 };
+    try {
+      me.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      if (cam !== me) return me.stream.getTracks().forEach(t => t.stop());
+      const v = document.createElement('video'); v.setAttribute('playsinline', ''); v.muted = true; v.className = 'gate-cam'; v.srcObject = me.stream; box.appendChild(v); await v.play();
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      const tick = async () => {
+        if (cam !== me) return;
+        try { const f = await det.detect(v); if (f.length && f[0].rawValue) { stopScan(); return doVerify({ token: f[0].rawValue }); } } catch { /* keep scanning */ }
+        if (cam === me) me.t = setTimeout(tick, 250);
+      };
+      tick();
+    } catch { stopScan(); toast('Camera not available. Type the code instead.'); }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopScan(); });
+
   // ---------- events
   const ACT = {
+    gscan: () => startScan(),
+    gpopen: el => { const p = (S.gp.list || []).find(x => String(x.id) === el.dataset.id); if (p) { S.gp.view = p; S.gp.confirm = null; render(); window.scrollTo(0, 0); } },
+    gpclose: () => { S.gp.view = null; S.gp.confirm = null; render(); },
+    gpcancelask: () => { S.gp.confirm = 'cancel'; render(); },
+    gprotask: () => { S.gp.confirm = 'rotate'; render(); },
+    gpno: () => { S.gp.confirm = null; render(); },
+    gpcancelyes: async () => { await API.gate.cancel(S.gp.view.id); S.gp.view = { ...S.gp.view, status: 'cancelled' }; S.gp.confirm = null; toast('Pass cancelled'); render(); },
+    gprotyes: async () => { await API.gate.rotate(); S.gp.confirm = null; toast('Your gate QR was reset'); render(); },
+    gpshare: async () => {
+      const v = S.gp.view, text = `Gate pass for ${v.visitor_name} at ${SOCIETY.name}, Flat ${S.me.flat}. Code ${v.code}. Valid until ${stamp(v.valid_until)}.`;
+      if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch { /* cancelled */ } return; }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.'); }
+    },
     tab: el => (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
     emgpick: el => { S.sheet = el.dataset.k; S.note = ''; render(); },
     emgcancel: () => { S.sheet = null; S.note = ''; render(); },
@@ -301,6 +415,18 @@
       fd.set('description', [d.where ? 'Where: ' + d.where : '', d.description].filter(Boolean).join('\n'));
       if (S.photo) fd.set('photo', S.photo);
       const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
+    } else if (f.id === 'gateform') {
+      const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code'); return; }
+      await doVerify({ code });
+    } else if (f.id === 'gpform') {
+      const err = $('#gperr'); err.textContent = '';
+      try {
+        const vf = new Date(d.valid_from), vu = new Date(d.valid_until);
+        if (isNaN(vf) || isNaN(vu) || vu <= vf) { err.textContent = 'Valid until must be after valid from.'; return; }
+        const body = { visitor_name: d.visitor_name.trim(), purpose: (d.purpose || '').trim(), valid_from: vf.toISOString(), valid_until: vu.toISOString() };
+        const r = await API.gate.pass(body);
+        S.gp.view = { ...body, ...r, status: 'active' }; S.gp.confirm = null; toast('Pass created'); render(); window.scrollTo(0, 0);
+      } catch (x) { err.textContent = x.message; }
     } else if (f.id === 'emgform') {
       const t = S.sheet; await API.emergencies.raise(t, (d.note || '').trim()); S.sheet = null; S.note = ''; toast('Alert sent to the committee'); render();
     } else if (f.id === 'profform' || f.id === 'pwform') {
@@ -318,6 +444,10 @@
 
   HP.live(async () => {
     if (!S.me) return;
+    // never wipe a half-typed field, an open gate form or a visible verify result
+    const ae = document.activeElement;
+    if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && app.contains(ae)) return;
+    if (!S.sub && (S.tab === 'gate' || S.tab === 'gatepass' || S.gRes || cam)) return;
     const sc = $('#screen'), top = sc ? sc.scrollTop : 0;
     await render();
     const n = $('#screen'); if (n) n.scrollTop = top;

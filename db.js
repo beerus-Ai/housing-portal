@@ -42,6 +42,18 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS contacts(
     id INTEGER PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, phone TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'phone');
+  CREATE TABLE IF NOT EXISTS gate_passes(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id),
+    visitor_name TEXT NOT NULL, purpose TEXT, token TEXT NOT NULL UNIQUE, code TEXT NOT NULL,
+    valid_from TEXT NOT NULL, valid_until TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), used_at TEXT, used_by INTEGER);
+  CREATE INDEX IF NOT EXISTS gate_passes_code ON gate_passes(code);
+  CREATE TABLE IF NOT EXISTS resident_tokens(
+    user_id INTEGER PRIMARY KEY REFERENCES users(id), token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS gate_log(
+    id INTEGER PRIMARY KEY, kind TEXT NOT NULL, subject TEXT, flat TEXT, result TEXT NOT NULL, reason TEXT,
+    guard_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   `);
   const admin =db.prepare("SELECT id FROM users WHERE role='admin'").get();
   if (!admin) {

@@ -58,8 +58,16 @@ function createApp(opts = {}) {
   const auth = (req, res, next) => {
     const u = req.session.uid && one('SELECT * FROM users WHERE id=?', req.session.uid);
     if (!u || u.status !== 'approved') return res.status(401).json({ error: 'Not signed in' });
+    // Guards get a strict allow-list so no resident/committee route can ever leak data to them.
+    if (u.role === 'guard') {
+      const p = req.path, m = req.method;
+      const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
+        (m === 'GET' && (p === '/api/gate/log' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
+      if (!okGuard) return res.status(403).json({ error: 'Not allowed for guard accounts' });
+    }
     req.user = u; next();
   };
+  const gate = (req, res, next) => (['guard', 'admin'].includes(req.user.role) ? next() : res.status(403).json({ error: 'Gate staff only' }));
   const admin = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }));
 
   const fails = new Map();
@@ -398,6 +406,7 @@ function createApp(opts = {}) {
   // ---- live updates: clients poll this and only redraw when the token changes (no data is returned, just a version string)
   app.get('/api/pulse', auth, (req, res) => {
     const u = req.user;
+    if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
       return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
     }
@@ -465,6 +474,151 @@ function createApp(opts = {}) {
   app.get('/api/notifications/unread-count', auth, (req, res) => res.json({ n: one('SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND is_read=0', req.user.id).n }));
   app.get('/api/notifications', auth, (req, res) => res.json(q('SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50', req.user.id)));
   app.post('/api/notifications/read', auth, (req, res) => { run('UPDATE notifications SET is_read=1 WHERE user_id=?', req.user.id); res.json({ ok: true }); });
+
+  // ---- guards (committee creates gate staff accounts)
+  app.post('/api/admin/guards', auth, admin, (req, res) => {
+    const b = req.body || {};
+    const name = str(b.name, 100), email = str(b.email, 200).toLowerCase(), pw = typeof b.password === 'string' ? b.password : '';
+    if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
+    if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
+    if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });
+    const r = run("INSERT INTO users(name,email,password_hash,role,status,consent_at) VALUES(?,?,?,'guard','approved',datetime('now'))", name, email, bcrypt.hashSync(pw, 10));
+    log(req.user.id, 'user', r.lastInsertRowid, 'guard_created', email);
+    res.status(201).json({ id: Number(r.lastInsertRowid) });
+  });
+  app.get('/api/admin/guards', auth, admin, (req, res) => res.json(q("SELECT id,name,email,status,created_at FROM users WHERE role='guard' ORDER BY id DESC")));
+  app.delete('/api/admin/guards/:id', auth, admin, (req, res) => {
+    const g = one("SELECT * FROM users WHERE id=? AND role='guard'", req.params.id);
+    if (!g) return res.status(404).json({ error: 'Guard not found' });
+    run('DELETE FROM notifications WHERE user_id=?', g.id);
+    run('DELETE FROM users WHERE id=?', g.id);
+    log(req.user.id, 'user', g.id, 'guard_deleted', g.email);
+    res.json({ ok: true });
+  });
+
+  // ---- gate access
+  const ts = d => d.toISOString().slice(0, 19).replace('T', ' ');
+  const parseTime = v => {
+    if (typeof v !== 'string') return null;
+    let s = v.trim().replace(' ', 'T');
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/.test(s)) return null;
+    if (!/(Z|[+-]\d{2}:\d{2})$/.test(s)) s += 'Z';
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  };
+  const residentOnly = (req, res, next) => (req.user.role === 'resident' && req.user.flat ? next() : res.status(403).json({ error: 'Only residents with a flat can use this' }));
+  const glog = (kind, subject, flat, result, reason, guardId) =>
+    run('INSERT INTO gate_log(kind,subject,flat,result,reason,guard_id) VALUES(?,?,?,?,?,?)', kind, subject || null, flat || null, result, reason || null, guardId);
+  const passRow = r => ({
+    id: r.id, flat: r.flat, visitor_name: r.visitor_name, purpose: r.purpose, code: r.code, qr: 'HSP:' + r.token,
+    valid_from: r.valid_from, valid_until: r.valid_until,
+    status: r.status === 'active' && r.valid_until < ts(new Date()) ? 'expired' : r.status,
+    created_by_name: r.created_by_name, used_at: r.used_at,
+  });
+  const PASS_SELECT = 'SELECT p.*, u.name AS created_by_name FROM gate_passes p JOIN users u ON u.id=p.created_by';
+  const MAX_ACTIVE_PASSES = 10;
+
+  app.post('/api/gate/passes', auth, residentOnly, (req, res) => {
+    const b = req.body || {};
+    const visitor = typeof b.visitor_name === 'string' ? b.visitor_name.trim() : '';
+    if (!visitor || visitor.length > 100) return res.status(400).json({ error: 'Visitor name is required (up to 100 characters)' });
+    if (b.purpose != null && typeof b.purpose !== 'string') return res.status(400).json({ error: 'Purpose must be text' });
+    const purpose = (b.purpose || '').trim();
+    if (purpose.length > 200) return res.status(400).json({ error: 'Purpose must be 200 characters or fewer' });
+    const now = new Date();
+    let from = now, until;
+    if (b.valid_from != null && b.valid_from !== '') { from = parseTime(b.valid_from); if (!from) return res.status(400).json({ error: 'valid_from is not a valid date and time' }); }
+    if (b.valid_until != null && b.valid_until !== '') { until = parseTime(b.valid_until); if (!until) return res.status(400).json({ error: 'valid_until is not a valid date and time' }); }
+    else until = new Date(from.getTime() + 24 * 3600e3);
+    if (until <= from) return res.status(400).json({ error: 'valid_until must be after valid_from' });
+    if (until - from > 7 * 24 * 3600e3) return res.status(400).json({ error: 'A pass can be valid for at most 7 days' });
+    const active = one("SELECT COUNT(*) AS n FROM gate_passes WHERE flat=? AND status='active' AND valid_until>=?", req.user.flat, ts(now)).n;
+    if (active >= MAX_ACTIVE_PASSES) return res.status(429).json({ error: `Your flat already has ${MAX_ACTIVE_PASSES} active visitor passes. Cancel one or wait for it to expire.` });
+    let code;
+    do { code = String(crypto.randomInt(0, 1000000)).padStart(6, '0'); } while (one("SELECT id FROM gate_passes WHERE code=? AND status='active'", code));
+    const token = crypto.randomBytes(12).toString('hex');
+    const r = run('INSERT INTO gate_passes(flat,created_by,visitor_name,purpose,token,code,valid_from,valid_until) VALUES(?,?,?,?,?,?,?,?)',
+      req.user.flat, req.user.id, visitor, purpose || null, token, code, ts(from), ts(until));
+    const id = Number(r.lastInsertRowid);
+    log(req.user.id, 'gate_pass', id, 'created', `${visitor} flat ${req.user.flat} ${ts(from)} to ${ts(until)}`);
+    res.status(201).json({ id, token, code, qr: 'HSP:' + token });
+  });
+  app.get('/api/gate/passes', auth, (req, res) => {
+    if (req.user.role === 'admin') return res.json(q(`${PASS_SELECT} ORDER BY p.id DESC LIMIT 500`).map(passRow));
+    if (req.user.role !== 'resident' || !req.user.flat) return res.status(403).json({ error: 'Only residents with a flat can use this' });
+    res.json(q(`${PASS_SELECT} WHERE p.flat=? ORDER BY p.id DESC LIMIT 200`, req.user.flat).map(passRow));
+  });
+  app.post('/api/gate/passes/:id/cancel', auth, (req, res) => {
+    const p = one('SELECT * FROM gate_passes WHERE id=?', req.params.id);
+    const u = req.user;
+    if (!p || (u.role !== 'admin' && p.flat !== u.flat)) return res.status(404).json({ error: 'Pass not found' });
+    if (u.role !== 'admin' && p.created_by !== u.id && u.resident_type !== 'owner') return res.status(403).json({ error: 'Only the creator, the flat owner or the committee can cancel this pass' });
+    if (p.status !== 'active') return res.status(409).json({ error: `Pass is already ${p.status}` });
+    const r = run("UPDATE gate_passes SET status='cancelled' WHERE id=? AND status='active'", p.id);
+    if (!r.changes) return res.status(409).json({ error: 'Pass is no longer active' });
+    log(u.id, 'gate_pass', p.id, 'cancelled', p.visitor_name);
+    res.json({ ok: true });
+  });
+  const myToken = uid => {
+    let t = one('SELECT token FROM resident_tokens WHERE user_id=?', uid);
+    if (!t) {
+      run('INSERT OR IGNORE INTO resident_tokens(user_id,token) VALUES(?,?)', uid, crypto.randomBytes(12).toString('hex'));
+      t = one('SELECT token FROM resident_tokens WHERE user_id=?', uid);
+    }
+    return { token: t.token, qr: 'HSP:' + t.token, nfc: 'HSP:' + t.token };
+  };
+  app.get('/api/gate/me', auth, residentOnly, (req, res) => res.json(myToken(req.user.id)));
+  app.post('/api/gate/me/rotate', auth, residentOnly, (req, res) => {
+    const token = crypto.randomBytes(12).toString('hex');
+    run(`INSERT INTO resident_tokens(user_id,token) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET token=excluded.token, created_at=datetime('now')`, req.user.id, token);
+    log(req.user.id, 'resident_token', req.user.id, 'rotated');
+    res.json({ token, qr: 'HSP:' + token, nfc: 'HSP:' + token });
+  });
+
+  const VERIFY_MAX_DENIED = 10;
+  app.post('/api/gate/verify', auth, gate, (req, res) => {
+    const gid = req.user.id, b = req.body || {};
+    const hasToken = typeof b.token === 'string' && b.token.trim() !== '';
+    const hasCode = (typeof b.code === 'string' || typeof b.code === 'number') && String(b.code).trim() !== '';
+    if (!hasToken && !hasCode) return res.status(400).json({ error: 'Provide a code or a token' });
+    if (one("SELECT COUNT(*) AS n FROM gate_log WHERE guard_id=? AND result='denied' AND created_at >= datetime('now','-10 minutes')", gid).n >= VERIFY_MAX_DENIED)
+      return res.status(429).json({ error: 'Too many failed checks. Wait a few minutes and try again.' });
+    const deny = (reason, p) => {
+      glog(p ? 'visitor' : 'unknown', p && p.visitor_name, p && p.flat, 'denied', reason, gid);
+      res.json(p ? { result: 'denied', reason, kind: 'visitor', name: p.visitor_name, flat: p.flat, purpose: p.purpose } : { result: 'denied', reason });
+    };
+    let pass = null;
+    if (hasToken) {
+      const tok = String(b.token).trim().replace(/^HSP:/i, '').trim().slice(0, 64);
+      pass = one('SELECT * FROM gate_passes WHERE token=?', tok);
+      if (!pass) {
+        const rt = one('SELECT u.* FROM resident_tokens t JOIN users u ON u.id=t.user_id WHERE t.token=?', tok);
+        if (rt && rt.status === 'approved' && rt.role === 'resident') {
+          glog('resident', rt.name, rt.flat, 'allowed', null, gid);
+          return res.json({ result: 'allowed', kind: 'resident', name: rt.name, flat: rt.flat });
+        }
+        return deny('unknown');
+      }
+    } else {
+      const code = String(b.code).trim().slice(0, 12);
+      if (!/^\d{6}$/.test(code)) return deny('unknown');
+      pass = one("SELECT * FROM gate_passes WHERE code=? ORDER BY (status='active') DESC, id DESC LIMIT 1", code);
+      if (!pass) return deny('unknown');
+    }
+    if (pass.status === 'cancelled') return deny('cancelled', pass);
+    if (pass.status === 'used') return deny('used', pass);
+    const now = ts(new Date());
+    if (now < pass.valid_from) return deny('not_yet_valid', pass);
+    if (now > pass.valid_until) return deny('expired', pass);
+    const r = run("UPDATE gate_passes SET status='used', used_at=?, used_by=? WHERE id=? AND status='active'", now, gid, pass.id);
+    if (!r.changes) return deny('used', pass);
+    glog('visitor', pass.visitor_name, pass.flat, 'allowed', null, gid);
+    log(gid, 'gate_pass', pass.id, 'used', `${pass.visitor_name} flat ${pass.flat}`);
+    notify(pass.created_by, `Your visitor ${pass.visitor_name} has entered`);
+    res.json({ result: 'allowed', kind: 'visitor', name: pass.visitor_name, flat: pass.flat, purpose: pass.purpose });
+  });
+  app.get('/api/gate/log', auth, gate, (req, res) => res.json(q(`SELECT l.id,l.kind,l.subject,l.flat,l.result,l.reason,u.name AS guard_name,l.created_at
+    FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 100`)));
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   app.use(express.static(path.join(__dirname, 'public')));

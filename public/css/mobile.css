@@ -53,3 +53,18 @@
 
 /* Leave room under every screen so the floating + button never covers the last item */
 .phone > .screen, .phone > form.screen { padding-bottom: 120px; }
+
+/* ===== HSP-24 gate access (appended) ===== */
+.mob .tabbar.three { grid-template-columns: repeat(3, 1fr); }
+.gp-card { align-items: stretch; gap: 12px; }
+.gp-qr { align-self: center; width: 100%; background: #fff; padding: 16px; border-radius: 20px; display: flex; justify-content: center; box-sizing: border-box; }
+.gp-qr svg { width: 100%; max-width: 300px; height: auto; aspect-ratio: 1; background: #fff; display: block; }
+.gp-code { text-align: center; font-size: 44px; font-weight: 800; letter-spacing: 8px; font-variant-numeric: tabular-nums; }
+.gate-code { height: 88px; text-align: center; font-size: 48px; font-weight: 800; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
+.gate-go { min-height: 64px; font-size: 20px; }
+.gate-cam { width: 100%; border-radius: 20px; background: #000; max-height: 60vh; object-fit: cover; }
+.gate-res { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 28px 16px; border-radius: 24px; color: #fff; font-size: 18px; }
+.gate-res.ok { background: #1b7f3b; }
+.gate-res.no { background: #c62828; }
+.gate-big { font-size: 48px; line-height: 1.1; letter-spacing: 2px; }
+.gate-name { font-size: 24px; font-weight: 700; }

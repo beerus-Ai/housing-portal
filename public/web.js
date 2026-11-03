@@ -7,7 +7,7 @@
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '' };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '' };
   // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
   const NAVKEY = 'hp.nav';
   const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
@@ -24,23 +24,27 @@
   };
   const isAdmin = () => S.me.role === 'admin';
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three'], ['contacts', 'Contacts', 'phone-call'], ['emergency', 'Emergency', 'siren']],
-    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text'], ['emergency', 'Emergency', 'siren']],
-    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['emergency', 'Emergency', 'siren']],
+    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three'], ['contacts', 'Contacts', 'phone-call'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
+    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
+    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['gatepass', 'Gate pass', 'qr-code'], ['emergency', 'Emergency', 'siren']],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['approvals', 'Approvals', 'user-check'], ['contacts', 'Contacts', 'phone-call'], ['notices', 'Notices', 'megaphone'],
-      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['audit', 'Audit trail', 'clock-counter-clockwise']],
+      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise']],
+    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise']],
   };
-  const navFor = () => NAV[isAdmin() ? 'admin' : S.me.resident_type] || NAV.owner;
-  const go = (page, selId = null) => { S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
+  const isGuard = () => S.me.role === 'guard';
+  const navFor = () => NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner;
+  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
+  const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
   // ---------- shell
   async function render() {
-    if (!S.me) return authView();
+    if (!S.me) { stopScan(); return authView(); }
+    if (S.page !== 'gate') stopScan();
     let pending = 0, activeEm = 0;
     if (isAdmin()) { pending = (await API.admin.users('pending')).length; try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; } }
     const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
     const nav = navFor().map(([k, label, icon]) => navBtn(k, label, icon, k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : k === 'emergencies' && activeEm ? `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` : '')).join('');
-    const who = isAdmin() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
+    const who = isAdmin() || isGuard() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
       <aside class="sidebar">
@@ -235,6 +239,67 @@
         : `<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Notice board</h2>${ns.map(n => `<article class="notice-card"><span class="tile lg">${ic(noticeIcon(n))}</span><span class="col" style="gap:4px"><span class="muted sm">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title" style="font-size:22px">${esc(n.title)}</span><span>${esc(n.body)}</span></span></article>`).join('') || '<p class="muted">No notices.</p>'}</div>`);
     },
 
+    async gatepass() {
+      const [passes, me] = await Promise.all([API.gate.passes(), isAdmin() ? Promise.resolve(null) : API.gate.me()]);
+      const loc = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      const now = new Date(), later = new Date(now.getTime() + 864e5);
+      const sel = passes.find(p => p.id === S.gpSel) || (S.gpNew && S.gpNew.id === S.gpSel ? S.gpNew : null);
+      const tag = p => ({ active: '<span class="tag tag-accent">Active</span>', used: '<span class="tag tag-neutral">Used</span>', cancelled: '<span class="tag tag-danger">Cancelled</span>', expired: '<span class="tag tag-neutral">Expired</span>' }[p.status] || `<span class="tag tag-neutral">${esc(p.status)}</span>`);
+      const card = p => {
+        const code = gateCode(p.code), when = p.valid_from ? `${stamp(p.valid_from)} to ${stamp(p.valid_until)}` : '';
+        const text = `Gate pass for ${p.visitor_name || 'visitor'} at ${SOCIETY.name}. Show this code at the gate: ${code}${when ? '. Valid ' + when : ''}.`;
+        const isLive = !p.status || p.status === 'active';
+        return `<section class="form-card gate-card col" id="gpcard" aria-label="Gate pass"><div class="row" style="justify-content:space-between"><h3>${esc(p.visitor_name || 'Visitor')}</h3><button class="link-btn" data-act="gpclose">Close</button></div>
+          <div class="gate-qr">${HP.qrSvg(p.qr || 'HSP:' + p.token, 260)}</div><div class="gate-code" aria-label="Pass code">${esc(code)}</div>
+          <p class="muted" style="margin:0;text-align:center">${p.purpose ? esc(p.purpose) + ' · ' : ''}${esc(when)}</p>
+          <div class="row" style="justify-content:center">${isLive ? `<button class="btn btn-primary" data-act="gshare" data-text="${esc(text)}">${ic('share-network')}Share code</button>` : tag(p)}
+          ${isLive ? (S.gpCancel === p.id ? `<button class="btn btn-danger" data-act="gpcancel" data-id="${p.id}">Cancel this pass?</button><button class="btn btn-secondary" data-act="gpkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gpask" data-id="${p.id}">${ic('prohibit')}Cancel pass</button>`) : ''}</div></section>`;
+      };
+      const row = p => `<button class="list-row ${S.gpSel === p.id ? 'on' : ''}" data-act="gpshow" data-id="${p.id}"><span class="tile">${ic('qr-code')}</span><span class="col" style="gap:4px"><span class="muted xs">${esc(stamp(p.valid_from))} to ${esc(stamp(p.valid_until))}${p.created_by_name ? ' · ' + esc(p.created_by_name) : ''}${isAdmin() ? ' · ' + esc(p.flat) : ''}</span><span class="list-title">${esc(p.visitor_name)}</span><span style="align-self:flex-start">${tag(p)}</span></span></button>`;
+      const mine = !me ? '' : `<section class="form-card gate-card col"><h3>My gate QR</h3><p class="muted" style="margin:0">Show this at the gate to walk in. The same code is what gets written to an NFC tag or key fob.</p>
+        <div class="gate-qr">${HP.qrSvg(me.qr || 'HSP:' + me.token, 240)}</div>
+        <div class="row">${S.gmRot ? `<button class="btn btn-danger" data-act="gmrot">Reset the QR? The old one stops working</button><button class="btn btn-secondary" data-act="gmkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gmask">${ic('arrows-clockwise')}Reset my QR</button>`}</div></section>`;
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Gate pass</h2><div class="split-eq" style="grid-template-columns:minmax(0,480px) minmax(0,1fr);align-items:start">
+        <div class="col" style="gap:var(--space-4)"><form id="gpform" class="form-card col"><h3>New visitor pass</h3>
+          <div class="field"><label for="gpn">Visitor name</label><input class="input" id="gpn" name="visitor_name" required maxlength="100"></div>
+          <div class="field"><label for="gpp">Purpose</label><input class="input" id="gpp" name="purpose" maxlength="100" placeholder="Delivery, guest, plumber"></div>
+          <div class="two"><div class="field"><label for="gpf">Valid from</label><input class="input" id="gpf" name="valid_from" type="datetime-local" required value="${loc(now)}"></div>
+          <div class="field"><label for="gpu">Valid until</label><input class="input" id="gpu" name="valid_until" type="datetime-local" required value="${loc(later)}"></div></div>
+          <p class="err" id="gperr" role="alert"></p><div><button class="btn btn-primary">${ic('qr-code')}Create pass</button></div></form>${mine}</div>
+        <div class="col" style="gap:var(--space-4)">${sel ? card(sel) : ''}<h3 style="margin:0">${isAdmin() ? 'All passes' : 'Passes for your flat'}</h3>${passes.map(row).join('') || '<p class="muted">No passes yet.</p>'}</div></div></div>`);
+    },
+
+    async gate() {
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Gate</h2>
+        <form id="gvform" class="gate-verify col" novalidate><label for="gcode" class="gate-lbl">Visitor code or pasted token</label>
+          <input class="input gate-input" id="gcode" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" placeholder="000 000">
+          <div class="row"><button class="btn btn-primary gate-btn">${ic('shield-check')}Verify</button><button type="button" class="btn btn-secondary gate-btn" data-act="gscan" id="gscanbtn" hidden>${ic('camera')}Scan QR</button></div>
+          <p class="muted" id="gnoscan" hidden style="margin:0">Scanning is not supported in this browser; type the code.</p></form>
+        <div id="gscanbox" class="gate-scan" hidden><video id="gvideo" playsinline muted></video><button type="button" class="btn btn-secondary" data-act="gscanstop">Stop scanning</button></div>
+        <div id="gres" aria-live="assertive"></div>
+        <h3 style="margin:0">Recent entries</h3><div id="glog"></div></div>`);
+      const can = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
+      $('#gscanbtn').hidden = !can; $('#gnoscan').hidden = can;
+      const i = $('#gcode'); if (i) i.focus();
+      await refreshGateLog();
+    },
+
+    async gatelog() {
+      page('<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Entry log</h2><div id="glog"></div></div>');
+      await refreshGateLog();
+    },
+
+    async guards() {
+      const gs = await API.admin.guards();
+      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Gate guards</h2>${S.gdErr ? `<p class="err" role="alert">${esc(S.gdErr)}</p>` : ''}
+        ${gs.map(g => `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(g.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(g.name)}</span><span class="muted sm">${esc(g.email)}</span></span>
+          <span class="row" style="gap:var(--space-1);flex-wrap:nowrap">${S.gdDel === g.id ? `<button class="btn btn-danger" data-act="gddel" data-id="${g.id}">Remove ${esc(g.name)}?</button><button class="btn btn-secondary" data-act="gddkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gddask" data-id="${g.id}" aria-label="Remove ${esc(g.name)}">${ic('trash')}Remove</button>`}</span></div>`).join('') || '<p class="muted">No guards yet.</p>'}</div>
+        <form id="gdform" class="form-card col"><h3>Add guard</h3><div class="field"><label for="gdn">Name</label><input class="input" id="gdn" name="name" required maxlength="100"></div>
+          <div class="field"><label for="gde">Email</label><input class="input" id="gde" name="email" type="email" required autocomplete="off"></div>
+          <div class="field"><label for="gdp">Temporary password (at least 8 characters)</label><input class="input" id="gdp" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+          <p class="err" id="gderr" role="alert"></p><div><button class="btn btn-primary">Add guard</button></div></form></div>`);
+    },
+
     async alerts() {
       const ns = await API.notifications.list();
       page(`<div class="col" style="max-width:none"><h2>Alerts</h2>${ns.map(n => `<p class="row" style="gap:8px;margin:0">${n.is_read ? '' : '<span class="tag tag-accent-2">new</span>'}<span>${esc(n.message)}</span><span class="muted xs">${esc(stamp(n.created_at))}</span></p>`).join('') || '<p class="muted">No alerts.</p>'}</div>`);
@@ -318,6 +383,53 @@
     <div class="field"><label for="lk">Parking</label><input class="input" id="lk" name="parking" maxlength="100" placeholder="Slot C-14" value="${esc(t.parking || '')}"></div></div>
     <div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save lease</button><span class="muted sm">The tenant is notified.</span></div></form>`;
 
+  // ---------- gate helpers
+  const gateCode = c => String(c || '').replace(/\D/g, '').replace(/(\d{3})(?=\d)/, '$1 ');
+  const logTable = rows => `<div class="table-wrap"><table class="table gate-table"><thead><tr><th>Time</th><th>Who</th><th>Flat</th><th>Result</th><th>Reason</th></tr></thead><tbody>${rows.map(x => `<tr><td>${esc(stamp(x.created_at))}</td><td>${esc(x.subject || '')}</td><td>${esc(x.flat || '')}</td><td><span class="tag ${x.result === 'allowed' ? 'tag-accent' : 'tag-danger'}">${x.result === 'allowed' ? 'Allowed' : 'Denied'}</span></td><td>${esc(x.reason || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No entries yet.</td></tr>'}</tbody></table></div>`;
+  async function refreshGateLog() {
+    if (!$('#glog')) return;
+    try { const rows = await API.gate.log(); const b = $('#glog'); if (b) b.innerHTML = logTable(rows); } catch (e) { const b = $('#glog'); if (b) b.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  }
+  let gateTimer = null;
+  function showGateResult(h) {
+    const r = $('#gres'); if (!r) return;
+    r.innerHTML = h; clearTimeout(gateTimer); gateTimer = setTimeout(() => { const x = $('#gres'); if (x) x.innerHTML = ''; }, 8000);
+    const i = $('#gcode'); if (i) { i.value = ''; i.focus(); }
+  }
+  async function gateVerify(body) {
+    stopScan();
+    let h;
+    try {
+      const r = await API.gate.verify(body), ok = r.result === 'allowed';
+      const who = r.kind === 'resident' ? [r.name, r.flat ? 'Flat ' + r.flat : ''] : [r.name, r.flat ? 'Visiting flat ' + r.flat : '', r.purpose];
+      h = ok ? `<div class="gate-res gate-ok" role="alert">${ic('check-circle')}<div class="gate-big">ALLOWED</div><div class="gate-sub">${who.filter(Boolean).map(esc).join(' · ')}</div></div>`
+        : `<div class="gate-res gate-no" role="alert">${ic('x-circle')}<div class="gate-big">DENIED</div><div class="gate-sub">${esc(r.reason || 'This code is not valid.')}</div></div>`;
+    } catch (x) { h = `<div class="gate-res gate-no" role="alert">${ic('x-circle')}<div class="gate-big">DENIED</div><div class="gate-sub">${esc(x.message)}</div></div>`; }
+    showGateResult(h); await refreshGateLog();
+  }
+  let scanStream = null, scanOn = false;
+  function stopScan() {
+    scanOn = false;
+    if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+    const v = document.getElementById('gvideo'); if (v) v.srcObject = null;
+    const b = document.getElementById('gscanbox'); if (b) b.hidden = true;
+  }
+  async function startScan() {
+    if (scanOn) return;
+    try {
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const v = $('#gvideo'); if (!v) return stopScan();
+      v.srcObject = scanStream; $('#gscanbox').hidden = false; await v.play(); scanOn = true;
+      const loop = async () => {
+        if (!scanOn) return;
+        try { const f = await det.detect(v); if (f.length && f[0].rawValue) { const val = f[0].rawValue; stopScan(); return gateVerify({ token: val }); } } catch (e) { /* frame not ready */ }
+        setTimeout(loop, 250);
+      };
+      loop();
+    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied')); }
+  }
+
   // ---------- events (delegated; no inline handlers under the CSP)
   const ACT = {
     catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
@@ -327,7 +439,7 @@
     navhide: () => { S.nav.hidden = !S.nav.hidden; saveNav(); applyNav(); if (!S.nav.hidden) { const f = document.querySelector('.side-link.on'); if (f) f.focus(); } },
     nav: el => go(el.dataset.page, el.dataset.sel ? Number(el.dataset.sel) : null),
     open: el => go(el.dataset.page || 'requests', Number(el.dataset.id)),
-    logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
+    logout: async () => { stopScan(); await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
     mode: () => { S.mode = S.mode === 'login' ? 'register' : 'login'; render(); },
     regtype: el => { S.regType = el.dataset.t; document.querySelectorAll('[data-act=regtype]').forEach(b => b.classList.toggle('on', b === el)); },
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
@@ -345,6 +457,24 @@
     vask: el => { S.delVendor = Number(el.dataset.id); S.editVendor = null; S.vErr = ''; render(); },
     vcancel: () => { S.delVendor = S.editVendor = null; S.vErr = ''; render(); },
     vdel: async el => { try { await API.vendors.remove(el.dataset.id); S.delVendor = null; S.vErr = ''; toast('Vendor deleted'); } catch (x) { S.delVendor = null; S.vErr = x.message; } render(); },
+    gpshow: el => { S.gpSel = Number(el.dataset.id); S.gpCancel = null; render().then(() => { const c = $('#gpcard'); if (c) c.scrollIntoView({ block: 'center' }); }); },
+    gpclose: () => { S.gpSel = null; S.gpCancel = null; render(); },
+    gpask: el => { S.gpCancel = Number(el.dataset.id); render(); },
+    gpkeep: () => { S.gpCancel = null; render(); },
+    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message); } render(); },
+    gshare: async el => {
+      const text = el.dataset.text;
+      if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch (x) { /* dismissed */ } return; }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.'); }
+    },
+    gmask: () => { S.gmRot = true; render(); },
+    gmkeep: () => { S.gmRot = false; render(); },
+    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message); } render(); },
+    gscan: () => startScan(),
+    gscanstop: () => stopScan(),
+    gddask: el => { S.gdDel = Number(el.dataset.id); render(); },
+    gddkeep: () => { S.gdDel = null; render(); },
+    gddel: async el => { S.gdDel = null; try { await API.admin.removeGuard(el.dataset.id); S.gdErr = ''; toast('Guard removed'); } catch (x) { S.gdErr = x.message; } render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
@@ -361,7 +491,7 @@
     if (f.id === 'authform') {
       const err = $('#autherr'); err.textContent = '';
       try {
-        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = isAdmin() ? 'dashboard' : 'home'; return render(); }
+        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = home0(); return render(); }
         d.consent = f.consent.checked; d.resident_type = S.regType;
         const r = await API.auth.register(d); S.mode = 'login'; await render(); toast(r.message);
       } catch (x) { err.textContent = x.message; }
@@ -379,19 +509,23 @@
     else if (f.id === 'emform') { await API.emergencies.raise(S.emType, (d.note || '').trim()); S.emType = null; toast('Alert sent. The committee has been notified.'); render(); }
     else if (f.id === 'cform') { try { await API.contacts.create(d); toast('Contact added'); render(); } catch (x) { $('#cerr').textContent = x.message; } }
     else if (f.classList.contains('veform')) { try { await API.vendors.update(f.dataset.id, d); S.editVendor = null; S.vErr = ''; toast('Vendor saved'); } catch (x) { S.vErr = x.message; } render(); }
+    else if (f.id === 'gpform') { try { const r = await API.gate.pass({ visitor_name: (d.visitor_name || '').trim(), purpose: (d.purpose || '').trim(), valid_from: new Date(d.valid_from).toISOString(), valid_until: new Date(d.valid_until).toISOString() }); S.gpSel = r.id; S.gpNew = r; S.gpCancel = null; toast('Gate pass created'); render(); } catch (x) { $('#gperr').textContent = x.message; } }
+    else if (f.id === 'gvform') { const inp = $('#gcode'); const v = (inp.value || '').trim(); if (!v) { inp.focus(); return; } await gateVerify(/^[\d\s]+$/.test(v) ? { code: v.replace(/\s+/g, '') } : { token: v }); }
+    else if (f.id === 'gdform') { try { await API.admin.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); S.gdErr = ''; toast('Guard added'); render(); } catch (x) { $('#gderr').textContent = x.message; } }
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
   }));
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
   const poller = HP.live(async () => {
     if (!S.me) return;
+    if (S.page === 'gate') return refreshGateLog(); // never redraw the gate page: it would wipe the typed code and the result card
     const pg = $('#page'), top = pg ? pg.scrollTop : 0;
     await render();
     const np = $('#page'); if (np) np.scrollTop = top;
   });
 
   (async () => {
-    try { S.me = await API.auth.me(); S.page = isAdmin() ? 'dashboard' : 'home'; } catch { S.me = null; }
+    try { S.me = await API.auth.me(); S.page = home0(); } catch { S.me = null; }
     render();
   })();
 })();
