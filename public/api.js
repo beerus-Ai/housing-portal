@@ -59,6 +59,7 @@ window.API = (() => {
       me: () => call('GET', '/api/gate/me'), // resident's permanent gate token: { token, qr: 'HSP:<token>', nfc: 'HSP:<token>' }
       rotate: () => call('POST', '/api/gate/me/rotate'),
       verify: body => call('POST', '/api/gate/verify', body), // guard/committee: { code } or { token } (token may carry the 'HSP:' prefix) -> { result: 'allowed'|'denied', kind, name, flat, purpose, reason }
+      overview: () => call('GET', '/api/gate/overview'), // committee/guard: { today: { allowed, denied, visitors, residents }, active_passes, inside: n, recent: [log rows], by_hour: [{ hour, n }] }
       log: () => call('GET', '/api/gate/log'), // guard/committee: latest 100 [{ id, kind, subject, flat, result, reason, guard_name, created_at }]
       guards: () => call('GET', '/api/admin/guards'),
       addGuard: body => call('POST', '/api/admin/guards', body), // committee: { name, email, password }
@@ -66,6 +67,18 @@ window.API = (() => {
     },
     settings: {
       public: () => call('GET', '/api/settings'), // no sign-in needed: { society_name, society_kind, google_client_id ('' when off), features: { emergency, gate, contacts, notices } }
+    },
+    vehicles: {
+      list: params => call('GET', '/api/vehicles' + qs(params)), // resident: own flat's vehicles; committee: all, optional { q } (plate/flat/owner). [{ id, flat, owner_name, plate, type, make, color, sticker, created_at }]
+      add: body => call('POST', '/api/vehicles', body), // { plate, type: 'car'|'bike'|'scooter'|'other', make?, color?, sticker? } (resident flat is implied; committee may pass { flat })
+      remove: vid => call('DELETE', `/api/vehicles/${id(vid)}`),
+    },
+    parking: {
+      list: () => call('GET', '/api/parking'), // committee: { summary: { total, assigned, free }, slots: [{ id, code, level, kind: 'car'|'bike'|'visitor', flat, vehicle_id, plate }] }; resident: same shape limited to their flat's slots plus summary
+      addSlots: body => call('POST', '/api/parking', body), // committee: { prefix: 'B1-', from: 1, count: 20, kind, level } creates slots B1-01..B1-20
+      assign: (sid, body) => call('POST', `/api/parking/${id(sid)}/assign`, body), // committee: { flat, vehicle_id? }
+      free: sid => call('POST', `/api/parking/${id(sid)}/free`),
+      removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
     vendors: {
@@ -83,6 +96,10 @@ window.API = (() => {
       stats: () => call('GET', '/api/admin/stats'),
       audit: () => call('GET', '/api/admin/audit'),
       exportUrl: '/api/admin/export.csv',
+      workers: () => call('GET', '/api/admin/workers'), // [{ id, name, role: 'security'|'housekeeping'|'maintenance'|'gardener'|'other', phone, shift, status: 'active'|'inactive', notes }]
+      addWorker: body => call('POST', '/api/admin/workers', body),
+      updateWorker: (wid, body) => call('PUT', `/api/admin/workers/${id(wid)}`, body),
+      removeWorker: wid => call('DELETE', `/api/admin/workers/${id(wid)}`),
       settings: () => call('GET', '/api/admin/settings'), // same shape as settings.public plus any extra admin-only keys
       setSettings: body => call('PUT', '/api/admin/settings', body), // { society_name?, society_kind?, google_client_id?, features?: { emergency?, gate?, contacts?, notices? } }
       access: () => call('GET', '/api/admin/access'), // { roles: ['owner','tenant','family'], permissions: [{ key, label }], matrix: { owner: { 'gate.pass': true, ... }, ... } }
