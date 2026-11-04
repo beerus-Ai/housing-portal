@@ -136,7 +136,7 @@ input:not([type=checkbox]):focus, select:focus { border-color: var(--color-accen
 .rail-track { display: flex; gap: var(--space-4); overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 12px; }
 .rail-empty { padding: 4px 2px; }
 .cardx {
-  flex: none; width: 250px; min-height: 200px; border-radius: var(--radius-card); padding: var(--space-4) var(--space-4) var(--space-3);
+  flex: none; width: 210px; min-height: 128px; border-radius: var(--radius-card); padding: var(--space-3) var(--space-4);
   display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; scroll-snap-align: start; transition: transform .12s;
 }
 a.cardx:hover { transform: translateY(-3px); }
@@ -149,10 +149,10 @@ a.cardx:hover { transform: translateY(-3px); }
 .t-sky { background: var(--color-accent-200); color: var(--color-accent-900); }
 .t-rose { background: var(--color-accent-2-300); color: #5d0030; }
 .t-sand { background: #e8e1d3; color: #3a3226; }
-.attn .big { font-family: var(--font-heading); font-size: 3.2rem; line-height: 1; font-weight: 600; }
+.attn .big { font-family: var(--font-heading); font-size: 2.2rem; line-height: 1; font-weight: 600; }
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-4); }
-.stat { display: flex; flex-direction: column; gap: 4px; padding: var(--space-4); }
-.stat b { font-family: var(--font-heading); font-size: 2.2rem; font-weight: 600; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-4); }
+.stat b { font-family: var(--font-heading); font-size: 1.7rem; font-weight: 600; }
 
 /* Lists */
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
@@ -256,3 +256,10 @@ textarea:focus { border-color: var(--color-accent); background: #fff; }
   .content { padding-top: var(--space-6); }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+@media (max-width: 699px) {
+  .rq-row { gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-4); }
+  .rq-ic { width: 40px; height: 40px; font-size: 1.2rem; }
+  .rq-main { flex: 1 1 calc(100% - 64px); }
+  .rq-row .pill, .rq-row > :last-child { margin-left: 52px; }
+}
