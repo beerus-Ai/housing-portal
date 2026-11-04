@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint((req, res, ex) -> JsonErrors.write(res, 401, "Not signed in"))
                         .accessDeniedHandler((req, res, ex) -> JsonErrors.write(res, 403, "Your role does not have access to this")))
                 .authorizeHttpRequests(a -> a
-                        .requestMatchers("/api/register", "/api/login", "/api/logout", "/api/auth/google", "/api/settings",
+                        .requestMatchers("/api/register", "/api/login", "/api/logout", "/api/auth/google", "/api/settings", "/api/whatsapp/webhook",
                                 "/healthz", "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll());

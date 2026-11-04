@@ -20,9 +20,13 @@ public class RequestRepository {
     }
 
     public long insert(long userId, String category, String title, String description, String photo) {
+        return insert(userId, category, title, description, photo, "app");
+    }
+
+    public long insert(long userId, String category, String title, String description, String photo, String source) {
         var now = TimeUtil.nowUtc();
-        return db.insert("INSERT INTO requests(user_id,category,title,description,photo,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
-                userId, category, title, description, photo, now, now);
+        return db.insert("INSERT INTO requests(user_id,category,title,description,photo,source,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                userId, category, title, description, photo, source, now, now);
     }
 
     public List<Map<String, Object>> search(Long visibleToUser, String flat, String status, String category) {

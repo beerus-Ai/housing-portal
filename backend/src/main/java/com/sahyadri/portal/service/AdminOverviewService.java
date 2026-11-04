@@ -12,9 +12,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class AdminOverviewService {
     private final Db db;
+    private final EscalationService escalation;
+    private final AiAdminService aiAdmin;
 
-    public AdminOverviewService(Db db) {
+    public AdminOverviewService(Db db, EscalationService escalation, AiAdminService aiAdmin) {
         this.db = db;
+        this.escalation = escalation;
+        this.aiAdmin = aiAdmin;
     }
 
     private static Map<String, Object> m(Object... kv) {
@@ -24,6 +28,7 @@ public class AdminOverviewService {
     }
 
     public Map<String, Object> overview() {
+        escalation.escalateOverdue();
         LocalDateTime now = TimeUtil.nowUtc();
         LocalDateTime dayStart = now.toLocalDate().atStartOfDay(), dayEnd = dayStart.plusDays(1);
         LocalDateTime d30 = now.minusDays(30);
@@ -65,6 +70,6 @@ public class AdminOverviewService {
                         + "AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.user_id=u.id)"));
         Map<String, Object> notices = m("last_30d", db.count("SELECT COUNT(*) FROM notices WHERE created_at >= ?", d30));
         return m("residents", residents, "requests", requests, "emergencies", emergencies, "gate", gate, "estate", estate,
-                "leases", leases, "notices", notices);
+                "leases", leases, "notices", notices, "ai", aiAdmin.overviewBlock());
     }
 }
