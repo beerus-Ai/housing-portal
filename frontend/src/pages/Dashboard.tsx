@@ -6,12 +6,13 @@ import { Icon } from '../components/Icon';
 import { ago, CATEGORIES, CATEGORY_ICON, firstName, greeting } from '../components/format';
 
 /** Dark teal attention card. A red dot marks live emergencies, nothing else on the page is red. */
-function Attention({ n, label, icon, to, live }: { n: number; label: string; icon: string; to: string; live?: boolean }) {
+function Attention({ n, label, icon, to, live, sub, tint }: { n: number; label: string; icon: string; to: string; live?: boolean; sub?: string; tint?: boolean }) {
   return (
-    <Link to={to} className="cardx attn t-ink" aria-label={`${label}: ${n}`}>
+    <Link to={to} className={`cardx attn ${tint ? 't-sky' : 't-ink'}`} aria-label={`${label}: ${n}${sub ? `, ${sub}` : ''}`}>
       <span className="cardx-ic"><Icon name={icon} />{live && n > 0 && <span className="dot-red" data-testid="live-dot" aria-hidden="true" />}</span>
       <b className="big">{n}</b>
       <span className="cardx-sub">{label}</span>
+      {sub && <span className="cardx-foot">{sub}</span>}
     </Link>
   );
 }
@@ -52,6 +53,13 @@ function EstateGlance({ ov, gate, park }: { ov: Overview; gate: boolean; park: b
       </div>
     </section>
   );
+}
+
+function WhatsAppCard({ ai }: { ai: NonNullable<Overview['ai']> }) {
+  const urgent = num(ai.urgent_open), esc = num(ai.escalated_open), n = num(ai.whatsapp_requests_30d);
+  const hot = urgent + esc > 0;
+  const sub = hot ? `${urgent} urgent · ${esc} escalated` : n ? 'AI sorted, nothing urgent' : 'AI triage is on';
+  return <Attention n={n} label="Via WhatsApp" icon="chat-circle-text" to="/settings?tab=ai" sub={sub} tint={!hot} />;
 }
 
 export function PendingApprovals() {
@@ -119,6 +127,7 @@ export default function Dashboard() {
             {emgOn && <Attention n={active} label="Active emergencies" icon="siren" to="/emergencies" live />}
             <Attention n={unassigned} label="Unassigned requests" icon="user-gear" to="/requests" />
             {s && <Attention n={s.sla.overdue} label="Past 48 hours" icon="timer" to="/requests" />}
+            {ov?.ai && <WhatsAppCard ai={ov.ai} />}
           </div>
         )}
       </section>

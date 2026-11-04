@@ -18,6 +18,11 @@ export default function Notices() {
     mutationFn: () => API.notices.create({ title: title.trim(), body: body.trim() }),
     onSuccess: () => { setTitle(''); setBody(''); refresh(); },
   });
+  const draft = useMutation({
+    mutationFn: () => API.admin.draftNotice(body.trim() || title.trim()),
+    onSuccess: (d) => { setTitle(d.title); setBody(d.body); },
+  });
+  const rough = (body.trim() || title.trim()).length;
   const del = useMutation({ mutationFn: (id: number) => API.notices.remove(id), onSuccess: refresh });
   const submit = (e: FormEvent) => { e.preventDefault(); if (title.trim() && body.trim()) post.mutate(); };
   return (
@@ -34,8 +39,15 @@ export default function Notices() {
             <label htmlFor="nb">Message</label>
             <textarea id="nb" rows={4} maxLength={5000} value={body} onChange={(e) => setBody(e.target.value)} />
           </div>
-          <ErrorBanner error={post.error} />
-          <button type="submit" className="btn btn-primary" disabled={!title.trim() || !body.trim() || post.isPending}>Post notice</button>
+          <ErrorBanner error={post.error ?? draft.error} />
+          {draft.isSuccess && <p className="banner ok" role="status">Draft ready. Check it before posting.</p>}
+          <div className="row-actions">
+            <button type="submit" className="btn btn-primary" disabled={!title.trim() || !body.trim() || post.isPending}>Post notice</button>
+            <button type="button" className="btn btn-secondary" disabled={rough < 5 || draft.isPending} onClick={() => draft.mutate()}>
+              <Icon name="sparkle" /> {draft.isPending ? 'Drafting…' : 'Draft with AI'}
+            </button>
+          </div>
+          <span className="muted small">Type a few rough words in the message, then Draft with AI. At least 5 characters. Check the text before you post.</span>
         </form>
       )}
       <ErrorBanner error={list.error ?? del.error} />

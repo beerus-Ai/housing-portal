@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { AccessPanel } from './settings/Access';
 import { GuardsPanel } from './settings/Guards';
+import { AiPanel } from './settings/Ai';
 import { FeaturesPanel, GeneralPanel, SignInPanel } from './settings/Simple';
 import { UsersPanel } from './settings/Users';
 
@@ -11,11 +13,13 @@ const TABS: { key: string; label: string; icon: string; panel: () => ReactNode }
   { key: 'users', label: 'Users', icon: 'users', panel: () => <UsersPanel /> },
   { key: 'features', label: 'Features', icon: 'toggle-right', panel: () => <FeaturesPanel /> },
   { key: 'guards', label: 'Guards', icon: 'shield-check', panel: () => <GuardsPanel /> },
+  { key: 'ai', label: 'AI and WhatsApp', icon: 'sparkle', panel: () => <AiPanel /> },
   { key: 'signin', label: 'Sign-in', icon: 'sign-in', panel: () => <SignInPanel /> },
 ];
 
 export default function Settings() {
-  const [tab, setTab] = useState('general');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get('tab') ?? 'general');
   const cur = TABS.find((t) => t.key === tab) ?? TABS[0];
   return (
     <div className="page">
