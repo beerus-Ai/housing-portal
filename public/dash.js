@@ -123,7 +123,7 @@
     attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
     if (ov && ov.ai) {
       const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0);
-      attn.push(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
+      attn.unshift(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
     }
     const max = Math.max(1, ...a.weeks), total = a.weeks.reduce((x, y) => x + y, 0);
     const chart = `<div class="ds-chart"><div class="ds-chart-h"><div><div class="ds-big">${a.weeks[7]}</div><div class="muted sm">raised this week · ${total} in 8 weeks</div></div></div>

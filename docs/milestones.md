@@ -13,6 +13,7 @@ Every milestone updates three places: this log and the code on GitHub (PR #16 an
 | 11-04 | Deployed on Render (free plan): https://sahyadri-heights.onrender.com ; headers and auth checks verified | render.yaml, docs/deploy.md | HSP-36 (Done) |
 | 11-04 | Phone-call intake workflow (voice number -> speech to text -> same intake as WhatsApp) | n8n/phone-call-intake.json | new story in epic HSP-26 |
 | 11-04 | Dashboard and pages now fill the space the menu leaves (side, top or hidden); attention cards stretch to the row | public/css/airbnb.css, estate.css, frontend app.css | HSP-23 |
+| 11-04 | Attention cards made smaller; Via WhatsApp is now the first card (web and React) | public/css/airbnb.css, dash.js, frontend Dashboard.tsx | HSP-23 |
 | 11-04 | Native NFC and camera QR scanning built into the Android app | commit b956206 | HSP-32 (device test pending) |
 
 ## Open

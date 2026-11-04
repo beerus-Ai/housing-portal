@@ -123,11 +123,11 @@ export default function Dashboard() {
         {(stats.error || overview.error) && <p className="banner err" role="alert">{(stats.error ?? overview.error)?.message}</p>}
         {ready && (
           <div className="rail-track">
+            {ov?.ai && <WhatsAppCard ai={ov.ai} />}
             <Attention n={pending} label="Pending approvals" icon="user-check" to="/approvals" />
             {emgOn && <Attention n={active} label="Active emergencies" icon="siren" to="/emergencies" live />}
             <Attention n={unassigned} label="Unassigned requests" icon="user-gear" to="/requests" />
             {s && <Attention n={s.sla.overdue} label="Past 48 hours" icon="timer" to="/requests" />}
-            {ov?.ai && <WhatsAppCard ai={ov.ai} />}
           </div>
         )}
       </section>
