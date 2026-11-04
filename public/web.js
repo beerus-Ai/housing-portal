@@ -1,69 +1,139 @@
 // Web app (desktop-first, responsive). Phones are sent to the mobile app at /m/ unless ?web is in the URL.
 (() => {
   const { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, stamp, day, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, CONTACTS, leaseInfo } = HP;
+    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, leaseInfo } = HP;
+  const EMERGENCY_TYPES = HP.EMERGENCY_TYPES || [], CONTACT_ICONS = HP.CONTACT_ICONS || [];
 
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '' };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '', settings: null };
+  // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
+  const NAVKEY = 'hp.nav';
+  const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
+  const saveNav = () => { try { localStorage.setItem(NAVKEY, JSON.stringify(S.nav)); } catch (e) { /* storage blocked: choice lasts for this visit only */ } };
+  S.nav = loadNav();
+  const applyNav = () => {
+    const w = document.querySelector('.web'); if (!w) return;
+    w.classList.toggle('top-shell', S.nav.pos === 'top'); w.classList.toggle('side-shell', S.nav.pos !== 'top'); w.classList.toggle('nav-hidden', S.nav.hidden);
+    const pos = document.querySelector('[data-act=navpos]'), hide = document.querySelector('.side-tools [data-act=navhide]'), show = document.querySelector('.nav-reveal');
+    if (pos) { const top = S.nav.pos === 'top'; pos.title = top ? 'Move menu to the side' : 'Move menu to the top'; pos.setAttribute('aria-label', pos.title); pos.querySelector('i').className = 'ph-duotone ' + (top ? 'ph-sidebar-simple' : 'ph-align-top-simple'); pos.querySelector('.side-tt').textContent = top ? 'Menu to side' : 'Menu to top'; }
+    if (hide) hide.setAttribute('aria-expanded', String(!S.nav.hidden));
+    if (show) show.hidden = !S.nav.hidden;
+    const aside = document.querySelector('.sidebar'); if (aside) aside.inert = S.nav.hidden;
+    document.querySelectorAll('.nav-grp').forEach(g => { g.classList.remove('open'); const h = g.querySelector('.nav-grp-h'); if (h) h.setAttribute('aria-expanded', String(S.nav.pos === 'top' ? false : !g.classList.contains('collapsed'))); });
+  };
   const isAdmin = () => S.me.role === 'admin';
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['household', 'Household', 'users-three']],
-    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['lease', 'My lease', 'file-text']],
-    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['notices', 'Notices', 'megaphone']],
-    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone'],
-      ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['audit', 'Audit trail', 'clock-counter-clockwise']],
+    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['household', 'Household', 'users-three'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code']],
+    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['gate', 'Gate', 'shield-check'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
+      ['approvals', 'Approvals', 'user-check'], ['users', 'Residents', 'users'], ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six']],
+    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise']],
   };
-  const navFor = () => NAV[isAdmin() ? 'admin' : S.me.resident_type] || NAV.owner;
-  const go = (page, selId = null) => { S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
+  // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
+  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six']];
+  const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
+    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin' };
+  const COLKEY = 'hp.navc';
+  const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
+  const isGuard = () => S.me.role === 'guard';
+  // Feature flags (GET /api/me features{}) and permissions (permissions[]) decide what a person sees. Missing data means allowed.
+  const feat = f => !S.me || !S.me.features || S.me.features[f] !== false;
+  const can = p => !S.me || S.me.role === 'admin' || !Array.isArray(S.me.permissions) || S.me.permissions.includes(p);
+  const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
+    household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
+    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin() };
+  const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
+  const navFor = () => (NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner).filter(([k]) => isGuard() || allowed(k));
+  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
+  const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
   // ---------- shell
   async function render() {
-    if (!S.me) return authView();
-    let pending = 0;
-    if (isAdmin()) pending = (await API.admin.users('pending')).length;
-    const nav = navFor().map(([k, label, icon]) => `<button class="btn ${S.page === k ? 'btn-primary' : 'btn-ghost'}" data-act="nav" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}${esc(label)}${k === 'approvals' && pending ? `<span class="tag tag-accent-2">${pending}</span>` : ''}</button>`).join('');
-    const who = isAdmin() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
-    root.innerHTML = `<div class="web">
-      <header class="col" style="gap:var(--space-2)">
-        <div class="masthead">
-          <div class="row" style="flex-wrap:nowrap"><span class="tile lg" style="background:var(--color-accent-900);color:var(--color-bg);width:52px;height:52px;border-radius:22px">${ic('buildings')}</span>
-            <div class="col" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
-          <div class="row"><button class="btn btn-ghost" data-act="nav" data-page="alerts" aria-label="Alerts">${ic('bell')}</button>
-            <span class="avatar">${esc(initials(S.me.name))}</span><span class="sm">${esc(who)}</span>
-            <button class="btn btn-secondary" data-act="logout">Sign out</button></div>
-        </div>
-        <div class="navrail"><nav aria-label="Main">${nav}</nav><span class="sm row" style="gap:var(--space-3)">${HP.liveBadge()}<i>${esc(todayLabel())}</i></span></div>
-      </header>
-      <main id="page" class="page"></main>
-      <footer class="foot muted"><a href="/m/">Open the mobile app</a></footer></div>`;
+    if (!S.me) { stopScan(); return authView(); }
+    if (S.page !== 'gate') stopScan();
+    let pending = 0, activeEm = 0;
+    if (isAdmin()) { pending = (await API.admin.users('pending')).length; try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; } }
+    const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
+    const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` } : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` } : { n: 0, h: '' };
+    const items = navFor(), col = loadCollapsed();
+    let nav;
+    if (isGuard()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+    else nav = GROUPS.map(([g, gl, gi]) => {
+      const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
+      if (g === 'home') return its.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+      const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), c = col.includes(g), on = its.some(([k]) => k === S.page);
+      return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
+        <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h)).join('')}</div></div>`;
+    }).join('');
+    const who = isAdmin() || isGuard() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
+    root.innerHTML = `<div class="web side-shell">
+      <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
+      <aside class="sidebar">
+        <div class="side-brand"><span class="side-logo">${HP.logo(44)}</span>
+          <div class="col side-t" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
+        <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
+        <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
+        <div class="side-tools" role="group" aria-label="Menu layout">
+          <button class="btn btn-ghost side-tool" data-act="navpos" title="Move menu to the top" aria-label="Move menu to the top">${ic('align-top-simple')}<span class="side-t side-tt">Menu to top</span></button>
+          <button class="btn btn-ghost side-tool" data-act="navhide" title="Hide menu" aria-label="Hide menu" aria-expanded="true">${ic('caret-double-left')}<span class="side-t">Hide menu</span></button></div>
+        <div class="side-user"><span class="avatar" title="${esc(who)}">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(who)}</span>
+          <button class="btn btn-secondary side-out" data-act="logout" title="Sign out">${ic('sign-out')}<span class="side-t">Sign out</span></button>
+          <a class="side-t xs muted" href="/m/">Open the mobile app</a></div>
+      </aside>
+      <main id="page" class="page"></main></div>`;
+    applyNav();
     try { await PAGES[S.page](); } catch (e) { $('#page').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
   const page = h => { $('#page').innerHTML = h; };
 
   // ---------- signed out
+  // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
+  const authField = (id, label, icon, input) => `<div class="field af"><label for="${id}">${label}</label><div class="af-wrap"><span class="af-ic">${ic(icon)}</span>${input}</div></div>`;
+  const pwField = (login) => `<div class="field af"><label for="pw">Password${login ? '' : ' (8+ characters)'}</label><div class="af-wrap"><span class="af-ic">${ic('lock-key')}</span><input class="input" id="pw" name="password" type="password" required minlength="${login ? 1 : 8}" autocomplete="${login ? 'current-password' : 'new-password'}"><button type="button" class="af-eye" data-act="pwtoggle" aria-label="Show password" aria-pressed="false">${ic('eye')}</button></div></div>`;
+  let gsiLoad = null;
+  const loadGsi = () => gsiLoad || (gsiLoad = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = ok; s.onerror = () => { gsiLoad = null; no(new Error('Google sign-in could not load')); }; document.head.appendChild(s); }));
+  async function initGoogle() {
+    const box = $('#gbtn'); if (!box || !S.gid) return;
+    try {
+      await loadGsi(); if (!$('#gbtn') || !window.google || !google.accounts) throw new Error('Google sign-in could not load');
+      google.accounts.id.initialize({ client_id: S.gid, callback: async resp => {
+        const err = $('#autherr'); if (err) err.textContent = '';
+        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message); }
+      } });
+      google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(360, box.clientWidth || 360) });
+    } catch (x) { const b = $('#gbtn'); if (b) { b.textContent = x.message; b.classList.add('err'); } }
+  }
   function authView() {
     const login = S.mode === 'login';
     const tiles = [['owner', 'key', 'Owner', 'Holds the sale deed'], ['tenant', 'house-line', 'Tenant', 'Rent agreement'], ['family', 'users', 'Family', 'Added by owner']]
       .map(([k, i, l, s]) => `<button type="button" class="type-tile ${S.regType === k ? 'on' : ''}" data-act="regtype" data-t="${k}">${ic(i)}<b>${l}</b><span>${s}</span></button>`).join('');
-    root.innerHTML = `<div class="auth"><section class="auth-art"><span class="eyebrow" style="color:var(--color-accent-300)">${esc(SOCIETY.kind)}</span>
-      <h1>${esc(SOCIETY.name)}: one portal for residents and the committee</h1>
-      <p style="font-size:18px;max-width:520px" class="soft">Raise a work request with a photo, follow it to completion and rate the work. Read society notices. The committee approves residents, assigns vendors and sees the whole picture.</p>
-      <div class="hero-anim" data-lottie="building" role="img" aria-label="Animated apartment building"></div></section>
-      <section class="auth-form"><h2>${login ? 'Sign in' : 'Join your society'}</h2>
+    const google = login && S.gid ? `<div id="gbtn" class="am-google" aria-label="Continue with Google"></div><div class="am-or" role="separator"><span>or</span></div>` : '';
+    root.innerHTML = `<div class="auth auth-min"><div class="am-card">
+      <div class="am-brand">${HP.logo(64)}<span class="am-name">${esc(SOCIETY.name)}</span></div>
+      <h2>${login ? 'Welcome back' : 'Join your society'}</h2>
+      ${login ? '' : `<p class="muted am-sub">The committee approves new residents before you can sign in.</p>`}
+      ${google}
       <form id="authform" class="col" novalidate>
         ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
-          <div class="two"><div class="field"><label for="n">Full name</label><input class="input" id="n" name="name" required maxlength="100" autocomplete="name"></div>
-          <div class="field"><label for="f">Flat (e.g. B-304)</label><input class="input" id="f" name="flat" required maxlength="20"></div></div>
-          <div class="field"><label for="p">Mobile</label><input class="input" id="p" name="phone" maxlength="20" autocomplete="tel"></div>`}
-        <div class="field"><label for="e">Email</label><input class="input" id="e" name="email" type="email" required autocomplete="username"></div>
-        <div class="field"><label for="pw">Password${login ? '' : ' (at least 8 characters)'}</label><input class="input" id="pw" name="password" type="password" required minlength="${login ? 1 : 8}" autocomplete="${login ? 'current-password' : 'new-password'}"></div>
+          <div class="two">${authField('n', 'Full name', 'user', '<input class="input" id="n" name="name" required maxlength="100" autocomplete="name">')}
+          ${authField('f', 'Flat (e.g. B-304)', 'house', '<input class="input" id="f" name="flat" required maxlength="20">')}</div>
+          ${authField('p', 'Mobile', 'phone', '<input class="input" id="p" name="phone" maxlength="20" autocomplete="tel" inputmode="tel">')}`}
+        ${authField('e', 'Email', 'envelope-simple', '<input class="input" id="e" name="email" type="email" required autocomplete="username">')}
+        ${pwField(login)}
         ${login ? '' : `<label class="consent"><input type="checkbox" name="consent" required>I consent to ${esc(SOCIETY.name)} storing these details to manage society services, as required under the DPDP Act, 2023.</label>`}
         <p class="err" id="autherr" role="alert"></p>
-        <div class="row"><button class="btn btn-primary">${login ? 'Sign in' : 'Send for approval'}</button>
-        <button type="button" class="link-btn" data-act="mode">${login ? 'New resident? Register' : 'Already registered? Sign in'}</button></div>
-      </form></section></div>`;
+        <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
+      </form>
+      <p class="am-switch">${login ? 'New here?' : 'Already have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p></div></div>`;
+    initGoogle();
   }
 
   // ---------- helpers
@@ -74,32 +144,19 @@
     <span class="col" style="gap:4px"><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · ${esc(day(r.created_at))}${isAdmin() || S.me.resident_type !== 'tenant' ? ' · ' + esc(r.flat) : ''}</span><span class="list-title">${esc(r.title)}</span><span style="align-self:flex-start">${statusTag(r)}</span></span></button>`;
   const vendorOptions = (vs, cur) => `<option value="">Unassigned</option>${vs.map(v => `<option value="${v.id}" ${cur === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}`;
 
+  const emType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', 'Emergency'];
+  const contactIcon = i => (CONTACT_ICONS.map(c => Array.isArray(c) ? c[0] : c).includes(i) ? i : 'phone');
+  const contactRow = (c, admin) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(contactIcon(c.icon))}</span><span class="col" style="gap:0"><span class="list-title">${esc(c.name)}</span><span class="muted sm">${esc(c.role)}</span></span>
+    <span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><a href="tel:${esc(String(c.phone).replace(/[^\d+]/g, ''))}" style="font-weight:600;font-size:16px">${esc(c.phone)}</a>${admin ? (S.delContact === c.id
+      ? `<button class="btn btn-danger" data-act="cdel" data-id="${c.id}">Delete ${esc(c.name)}?</button><button class="btn btn-secondary" data-act="ccancel">Keep</button>`
+      : `<button class="btn btn-secondary" data-act="cask" data-id="${c.id}" aria-label="Delete ${esc(c.name)}">${ic('trash')}Delete</button>`) : ''}</span></div>`;
+  const emStatus = e => e.status === 'active' ? '<span class="tag tag-danger">Active</span>' : '<span class="tag tag-accent">Resolved</span>';
+  const emCard = e => { const [, i, l] = emType(e.type); return `<article class="em-row ${e.status === 'active' ? 'on' : ''}"><span class="tile lg em-ic">${ic(i)}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:20px">${esc(l)} · Flat ${esc(e.flat)}</span>
+    <span class="muted sm">${esc(e.user_name || '')} · ${esc(stamp(e.created_at))}${e.resolved_at ? ' · resolved ' + esc(stamp(e.resolved_at)) : ''}</span>${e.note ? `<span>${esc(e.note)}</span>` : ''}</span>
+    <span class="col" style="align-items:flex-end;gap:8px">${emStatus(e)}${isAdmin() && e.status === 'active' ? `<button class="btn btn-primary" data-act="emresolve" data-id="${e.id}">Mark resolved</button>` : ''}</span></article>`; };
+
   // ---------- pages
   const PAGES = {
-    async home() {
-      const [reqs, notices] = await Promise.all([API.requests.list(), API.notices.list()]);
-      const { open, toRate, track } = residentSummary(reqs, S.me, notices);
-      const t = S.me.resident_type, n0 = notices[0];
-      let extra = [];
-      if (t === 'owner') extra = [{ l: 'Household', v: String((await API.household.list()).length), s: 'Members on ' + S.me.flat, icon: 'users-three', go: 'household' }];
-      if (t === 'tenant') { const li = leaseInfo(await API.lease.get()); extra = [{ l: 'Lease ends', v: li ? li.ends.replace(/ \d{4}$/, '') : '–', s: li ? li.left + ' days left' : 'No lease on file', icon: 'calendar-check', go: 'lease' }]; }
-      const notePanel = { l: 'New notices', v: String(notices.length), s: n0 ? n0.title : 'Nothing new', icon: 'megaphone', go: t === 'family' ? 'notices' : 'home' };
-      const panels = t === 'family'
-        ? [{ l: 'Raised by you', v: String(reqs.filter(r => r.user_id === S.me.id).length), s: 'You can raise and track', icon: 'note-pencil', go: 'requests' },
-          { l: 'Awaiting owner rating', v: String(reqs.filter(r => r.status === 'closed' && !r.rating).length), s: 'The flat owner rates the work', icon: 'star', go: 'requests' }, notePanel]
-        : [{ l: 'To rate', v: String(toRate.length), s: toRate[0] ? toRate[0].title : 'Nothing to rate', icon: 'star', go: 'requests', sel: toRate[0] ? toRate[0].id : '' }, ...extra, notePanel];
-      let trackHtml = '<p class="muted">You have no requests yet.</p>';
-      if (track) { const d = await API.requests.get(track.id);
-        trackHtml = `<div class="row" style="align-items:baseline"><h3>${esc(track.title)}</h3><span class="muted sm">${rid(track)} · ${esc(track.vendor_name || 'Not yet assigned')}</span></div>${stepper(track, d.history)}`; }
-      page(`<div class="g2"><div class="hero"><div class="hero-head">${`<span class="tile">${ic('wrench')}</span>`}<span class="soft">Flat ${esc(S.me.flat)} · ${t === 'family' ? 'household requests' : 'your requests'}</span>
-          <span class="chip">${toRate.length ? toRate.length + ' waiting for your rating' : 'All up to date'}</span></div>
-          <div class="fig">${open.length} open</div><div class="soft" style="font-weight:600;margin-top:8px">${track ? `${esc(track.title)} · ${esc(track.vendor_name || 'not yet assigned')} · raised ${esc(day(track.created_at))}` : 'Nothing open'}</div>
-          ${heroPanels(panels)}</div><div class="hero-photo">${photoSlot('Sahyadri Heights')}</div></div>
-        <section class="col"><h6 style="margin:0">Track your current request</h6>${trackHtml}</section>
-        <div class="split-2"><div class="lead">${n0 ? `<article class="col" style="gap:var(--space-2)"><span class="kicker row" style="gap:6px">${ic('megaphone')}Notice · ${esc(day(n0.created_at))}</span><h1>${esc(n0.title)}</h1><p style="font-size:17px;margin:0">${esc(n0.body)}</p><span class="muted sm">Posted by ${esc(n0.author)}</span></article><div style="height:220px;border-radius:14px;overflow:hidden">${photoSlot('Notice', 'megaphone')}</div>` : '<p class="muted">No notices yet.</p>'}</div>
-          <aside class="col"><h6 style="margin:0">Also on the board</h6>${notices.slice(1, 5).map(noticeRow).join('')}<button class="btn btn-primary" data-act="nav" data-page="raise" style="align-self:flex-start">${ic('plus-circle')}Raise a request</button></aside></div>`);
-    },
-
     async requests() {
       const [all, vendors] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter } : {}), isAdmin() ? API.vendors.list() : []]);
       const reqs = (S.catFilter ? all.filter(isOpen) : all).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
@@ -128,10 +185,10 @@
     },
 
     async raise() {
-      const tiles = CATS.map(([k, l, i]) => `<button type="button" class="cat ${S.cat === k ? 'on' : ''}" data-act="cat" data-c="${k}" aria-pressed="${S.cat === k}">${ic(i)}${l}</button>`).join('');
+      const tiles = CATS.map(([k, l, i]) => `<button type="button" class="cat-photo cat-pick ${S.cat === k ? 'on' : ''}" data-act="cat" data-c="${k}" aria-pressed="${S.cat === k}">${catPic(k)}<span class="cat-ic">${ic(i)}</span><span class="cat-strip"><b>${esc(l)}</b></span></button>`).join('');
       const steps = [['user-gear', 'The secretary assigns a vendor, usually the same day.'], ['bell-ringing', "You're notified of each status change."], ['star', 'Once resolved, you rate the work to close it.']];
       page(`<div class="split-eq"><form id="raiseform" class="col" style="gap:var(--space-4)"><h2>Raise a request</h2>
-        <div class="field"><label id="cl">Category</label><div class="cat-grid" role="group" aria-labelledby="cl">${tiles}</div></div>
+        <div class="field"><label id="cl">Category</label><div class="cat-pick-grid" role="group" aria-labelledby="cl">${tiles}</div></div>
         <div class="field"><label for="t">Short title</label><input class="input" id="t" name="title" required maxlength="120" placeholder="e.g. Bathroom tap dripping"></div>
         <div class="field"><label for="w">Where</label><input class="input" id="w" name="where" value="Flat ${esc(S.me.flat)}" maxlength="100"></div>
         <div class="field"><label for="d">What's happening</label><textarea class="input" id="d" name="description" maxlength="1800" placeholder="When it started, how bad it is, best time to visit"></textarea></div>
@@ -155,14 +212,46 @@
     },
 
     async lease() {
-      const li = leaseInfo(await API.lease.get());
+      const [lease, contacts] = await Promise.all([API.lease.get(), API.contacts.list()]); const li = leaseInfo(lease);
       if (!li) return page('<h2>Your lease</h2><p class="callout">No lease is on file yet. The committee adds it after verifying your rent agreement.</p>');
       page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="col" style="gap:var(--space-4)"><h2>Your lease</h2>
         <div class="hero"><div class="row soft sm" style="gap:8px;font-weight:600">${ic('calendar-check')}Lease on ${esc(S.me.flat)}</div><div class="fig" style="font-size:48px;margin-top:10px">${li.left} days left</div>
         <div class="soft" style="margin-top:6px">Ends ${esc(li.ends)} · renewal notice due by ${esc(li.renewBy)}</div>
         <div style="height:8px;border-radius:8px;background:color-mix(in srgb,var(--color-bg) 22%,transparent);margin-top:18px;overflow:hidden"><span style="display:block;height:100%;width:${li.pct}%;background:var(--color-accent-300)"></span></div></div>
         <div class="soft-card">${li.rows.map(([i, k, v]) => `<div class="kv">${ic(i)}<span class="muted">${esc(k)}</span><span style="font-weight:600">${esc(v)}</span></div>`).join('')}</div></div>
-        ${CONTACTS.length ? `<div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${CONTACTS.map(([i, n, r, p]) => `<div class="member" style="grid-template-columns:48px minmax(0,1fr) auto"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title">${esc(n)}</span><span class="muted sm">${esc(r)}</span></span><span style="font-weight:600;font-size:14px">${esc(p)}</span></div>`).join('')}</div>` : ''}</div>`);
+        ${contacts.length ? `<div class="col"><h6 style="margin:0;padding-top:12px">Who to call</h6>${contacts.map(c => contactRow(c, false)).join('')}</div>` : ''}</div>`);
+    },
+
+    async emergency() {
+      const list = await API.emergencies.list();
+      const tiles = EMERGENCY_TYPES.map(([k, i, l]) => `<button type="button" class="em-tile ${S.emType === k ? 'on' : ''}" data-act="emsel" data-k="${k}" aria-pressed="${S.emType === k}">${ic(i)}<span>${esc(l)}</span></button>`).join('');
+      const [, ci, cl] = S.emType ? emType(S.emType) : [0, 'siren', ''];
+      const confirm = S.emType ? `<form id="emform" class="em-confirm col" role="alertdialog" aria-label="Confirm emergency alert"><div class="row" style="gap:12px;flex-wrap:nowrap"><span class="tile lg em-ic">${ic(ci)}</span><h3 style="margin:0">Send ${esc(cl)} alert for Flat ${esc(S.me.flat)}?</h3></div>
+        <p class="em-warn" style="margin:0">${ic('warning')}The committee is alerted immediately. Only send this in a real emergency. Call the emergency services yourself if someone is in danger.</p>
+        <div class="field"><label for="emn">Add a note (optional)</label><textarea class="input" id="emn" name="note" maxlength="500" placeholder="Where you are, what is happening"></textarea></div>
+        <div class="row"><button class="btn btn-danger">${ic('siren')}Send alert</button><button type="button" class="btn btn-secondary" data-act="emcancel">Cancel</button></div></form>` : '';
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Emergency</h2><p style="margin:0;font-size:18px">Tap what is happening. You will be asked to confirm before the committee is alerted.</p>
+        <div class="em-grid">${tiles}</div>${confirm}
+        <h6 style="margin:var(--space-4) 0 0">Recent alerts for your flat</h6>${list.map(e => emCard(e)).join('') || '<p class="muted">No alerts raised.</p>'}</div>`);
+    },
+
+    async emergencies() {
+      const list = await API.emergencies.list();
+      const act = list.filter(e => e.status === 'active'), done = list.filter(e => e.status !== 'active');
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Emergencies</h2>
+        ${act.length ? `<div class="em-banner" role="alert">${ic('siren')}<b>${act.length} active emergenc${act.length > 1 ? 'ies' : 'y'}</b></div>${act.map(emCard).join('')}` : '<p class="callout" style="margin:0">No active emergencies.</p>'}
+        <h6 style="margin:var(--space-4) 0 0">Resolved</h6>${done.map(emCard).join('') || '<p class="muted">Nothing resolved yet.</p>'}</div>`);
+    },
+
+    async contacts() {
+      const cs = await API.contacts.list();
+      const icons = (CONTACT_ICONS.length ? CONTACT_ICONS : ['phone']).map(c => Array.isArray(c) ? c : [c, c]);
+      if (!isAdmin()) return page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Who to call</h2>${cs.map(c => contactRow(c, false)).join('') || '<p class="muted">No contacts yet.</p>'}</div>`);
+      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,440px)"><div class="col"><h2>Society contacts</h2><p class="muted" style="margin:0">Residents see these under "Who to call".</p>${cs.map(c => contactRow(c, true)).join('') || '<p class="muted">No contacts yet.</p>'}</div>
+        <form id="cform" class="col"><h3>Add contact</h3><div class="field"><label for="cn">Name</label><input class="input" id="cn" name="name" required maxlength="100"></div><div class="field"><label for="cr">Role</label><input class="input" id="cr" name="role" required maxlength="100" placeholder="Security desk"></div>
+        <div class="field"><label for="cp">Phone</label><input class="input" id="cp" name="phone" required maxlength="20" inputmode="tel"></div>
+        <div class="field"><label for="ci">Icon</label><select class="input" id="ci" name="icon">${icons.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select></div>
+        <p class="err" id="cerr" role="alert"></p><div><button class="btn btn-primary">Add contact</button></div></form></div>`);
     },
 
     async notices() {
@@ -173,35 +262,60 @@
         : `<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Notice board</h2>${ns.map(n => `<article class="notice-card"><span class="tile lg">${ic(noticeIcon(n))}</span><span class="col" style="gap:4px"><span class="muted sm">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title" style="font-size:22px">${esc(n.title)}</span><span>${esc(n.body)}</span></span></article>`).join('') || '<p class="muted">No notices.</p>'}</div>`);
     },
 
+    async gatepass() {
+      const [passes, me] = await Promise.all([API.gate.passes(), isAdmin() ? Promise.resolve(null) : API.gate.me()]);
+      const loc = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      const now = new Date(), later = new Date(now.getTime() + 864e5);
+      const sel = passes.find(p => p.id === S.gpSel) || (S.gpNew && S.gpNew.id === S.gpSel ? S.gpNew : null);
+      const tag = p => ({ active: '<span class="tag tag-accent">Active</span>', used: '<span class="tag tag-neutral">Used</span>', cancelled: '<span class="tag tag-danger">Cancelled</span>', expired: '<span class="tag tag-neutral">Expired</span>' }[p.status] || `<span class="tag tag-neutral">${esc(p.status)}</span>`);
+      const card = p => {
+        const code = gateCode(p.code), when = p.valid_from ? `${stamp(p.valid_from)} to ${stamp(p.valid_until)}` : '';
+        const text = `Gate pass for ${p.visitor_name || 'visitor'} at ${SOCIETY.name}. Show this code at the gate: ${code}${when ? '. Valid ' + when : ''}.`;
+        const isLive = !p.status || p.status === 'active';
+        return `<section class="form-card gate-card col" id="gpcard" aria-label="Gate pass"><div class="row" style="justify-content:space-between"><h3>${esc(p.visitor_name || 'Visitor')}</h3><button class="link-btn" data-act="gpclose">Close</button></div>
+          <div class="gate-qr">${HP.qrSvg(p.qr || 'HSP:' + p.token, 260)}</div><div class="gate-code" aria-label="Pass code">${esc(code)}</div>
+          <p class="muted" style="margin:0;text-align:center">${p.purpose ? esc(p.purpose) + ' · ' : ''}${esc(when)}</p>
+          <div class="row" style="justify-content:center">${isLive ? `<button class="btn btn-primary" data-act="gshare" data-text="${esc(text)}">${ic('share-network')}Share code</button>` : tag(p)}
+          ${isLive ? (S.gpCancel === p.id ? `<button class="btn btn-danger" data-act="gpcancel" data-id="${p.id}">Cancel this pass?</button><button class="btn btn-secondary" data-act="gpkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gpask" data-id="${p.id}">${ic('prohibit')}Cancel pass</button>`) : ''}</div></section>`;
+      };
+      const row = p => `<button class="list-row ${S.gpSel === p.id ? 'on' : ''}" data-act="gpshow" data-id="${p.id}"><span class="tile">${ic('qr-code')}</span><span class="col" style="gap:4px"><span class="muted xs">${esc(stamp(p.valid_from))} to ${esc(stamp(p.valid_until))}${p.created_by_name ? ' · ' + esc(p.created_by_name) : ''}${isAdmin() ? ' · ' + esc(p.flat) : ''}</span><span class="list-title">${esc(p.visitor_name)}</span><span style="align-self:flex-start">${tag(p)}</span></span></button>`;
+      const mine = !me ? '' : `<section class="form-card gate-card col"><h3>My gate QR</h3><p class="muted" style="margin:0">Show this at the gate to walk in. The same code is what gets written to an NFC tag or key fob.</p>
+        <div class="gate-qr">${HP.qrSvg(me.qr || 'HSP:' + me.token, 240)}</div>
+        <div class="row">${S.gmRot ? `<button class="btn btn-danger" data-act="gmrot">Reset the QR? The old one stops working</button><button class="btn btn-secondary" data-act="gmkeep">Keep</button>` : `<button class="btn btn-secondary" data-act="gmask">${ic('arrows-clockwise')}Reset my QR</button>`}</div></section>`;
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Gate pass</h2><div class="split-eq" style="grid-template-columns:minmax(0,480px) minmax(0,1fr);align-items:start">
+        <div class="col" style="gap:var(--space-4)"><form id="gpform" class="form-card col"><h3>New visitor pass</h3>
+          <div class="field"><label for="gpn">Visitor name</label><input class="input" id="gpn" name="visitor_name" required maxlength="100"></div>
+          <div class="field"><label for="gpp">Purpose</label><input class="input" id="gpp" name="purpose" maxlength="100" placeholder="Delivery, guest, plumber"></div>
+          <div class="two"><div class="field"><label for="gpf">Valid from</label><input class="input" id="gpf" name="valid_from" type="datetime-local" required value="${loc(now)}"></div>
+          <div class="field"><label for="gpu">Valid until</label><input class="input" id="gpu" name="valid_until" type="datetime-local" required value="${loc(later)}"></div></div>
+          <p class="err" id="gperr" role="alert"></p><div><button class="btn btn-primary">${ic('qr-code')}Create pass</button></div></form>${mine}</div>
+        <div class="col" style="gap:var(--space-4)">${sel ? card(sel) : ''}<h3 style="margin:0">${isAdmin() ? 'All passes' : 'Passes for your flat'}</h3>${passes.map(row).join('') || '<p class="muted">No passes yet.</p>'}</div></div></div>`);
+    },
+
+    async gate() {
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Gate</h2>
+        <form id="gvform" class="gate-verify col" novalidate><label for="gcode" class="gate-lbl">Visitor code or pasted token</label>
+          <input class="input gate-input" id="gcode" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" placeholder="000 000">
+          <div class="row"><button class="btn btn-primary gate-btn">${ic('shield-check')}Verify</button><button type="button" class="btn btn-secondary gate-btn" data-act="gscan" id="gscanbtn" hidden>${ic('camera')}Scan QR</button></div>
+          <p class="muted" id="gnoscan" hidden style="margin:0">Scanning is not supported in this browser; type the code.</p></form>
+        <div id="gscanbox" class="gate-scan" hidden><video id="gvideo" playsinline muted></video><button type="button" class="btn btn-secondary" data-act="gscanstop">Stop scanning</button></div>
+        <div id="gres" aria-live="assertive"></div>
+        <h3 style="margin:0">Recent entries</h3><div id="glog"></div></div>`);
+      const can = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
+      $('#gscanbtn').hidden = !can; $('#gnoscan').hidden = can;
+      const i = $('#gcode'); if (i) i.focus();
+      await refreshGateLog();
+    },
+
+    async gatelog() {
+      page('<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Entry log</h2><div id="glog"></div></div>');
+      await refreshGateLog();
+    },
+
     async alerts() {
       const ns = await API.notifications.list();
       page(`<div class="col" style="max-width:none"><h2>Alerts</h2>${ns.map(n => `<p class="row" style="gap:8px;margin:0">${n.is_read ? '' : '<span class="tag tag-accent-2">new</span>'}<span>${esc(n.message)}</span><span class="muted xs">${esc(stamp(n.created_at))}</span></p>`).join('') || '<p class="muted">No alerts.</p>'}</div>`);
       await API.notifications.markRead();
-    },
-
-    async dashboard() {
-      const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
-      const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id).length;
-      const panels = [{ l: 'Pending approvals', v: String(s.pending_users), s: 'New residents to verify', icon: 'user-check', go: 'approvals' }, { l: 'Unassigned', v: String(unassigned), s: 'Need a vendor today', icon: 'user-gear', go: 'requests' },
-        { l: 'Average rating', v: s.avg_rating ? s.avg_rating.toFixed(1) + ' / 5' : '–', s: 'All rated requests', icon: 'star', go: 'dashboard' }, { l: 'Notices, 30 days', v: String(s.notices_30d), s: `${s.households} households reached`, icon: 'megaphone', go: 'notices' }];
-      const max = Math.max(1, ...a.weeks);
-      const tiles = CATS.map(([k, l, i]) => { const c = s.by_category.find(x => x.category === k) || { open: 0, raised_30d: 0 }; const top = Math.max(1, ...s.by_category.map(x => x.raised_30d));
-        return `<button class="cat-tile" data-act="catfilter" data-c="${k}" aria-label="Show open ${l} requests"><div class="row" style="gap:8px;font-weight:600;font-size:14px">${ic(i)}${l}</div><div class="n">${c.open}</div><div class="sm" style="opacity:.82">${c.raised_30d} raised in 30 days</div><div class="bar"><span class="${c.open > 1 ? 'hot' : ''}" style="width:${Math.round(c.raised_30d / top * 100)}%"></span></div></button>`; }).join('');
-      const vr = s.vendor_ratings.map(v => `<div class="vbar"><span class="avatar light" style="width:40px;height:40px">${esc(initials(v.name))}</span><span class="col" style="gap:4px"><span class="sm" style="font-weight:600">${esc(v.name)}</span><span class="track"><span style="width:${v.avg ? v.avg / 5 * 100 : 0}%"></span></span></span><span class="list-title" style="text-align:right">${v.avg || '–'}</span></div>`).join('') || '<p class="muted">No vendors yet.</p>';
-      const rows = a.open.map(r => `<tr><td>${rid(r)}</td><td><span class="row" style="flex-wrap:nowrap;gap:var(--space-2)"><span style="font-size:22px;color:var(--color-accent-700)">${ic(catIcon(r.category))}</span><span class="col" style="gap:0"><button class="link-btn" style="font-weight:600;text-align:left" data-act="open" data-id="${r.id}" data-page="requests">${esc(r.title)}</button><span class="muted xs">${esc(catLabel(r.category))} · ${esc(r.resident_name)}</span></span></span></td>
-        <td>${esc(r.flat)}</td><td class="${overdue(r) ? 'late' : ''}">${ageLabel(r.created_at)}</td><td>${statusTag(r)}</td>
-        <td><select class="input" data-change="assign" data-id="${r.id}" aria-label="Assign ${esc(r.title)}">${vendorOptions(vendors, r.vendor_id)}</select></td>
-        <td>${r.vendor_id ? `<button class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</td></tr>`).join('');
-      page(`<div class="hero"><div class="hero-head"><span class="tile">${ic('clipboard-text')}</span><span class="soft">Open work requests</span><span class="chip">${a.overdue} past 48h SLA</span></div>
-        <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div><div class="fig" style="font-size:72px">${a.open.length} open requests</div><div class="soft" style="font-weight:600;margin-top:8px">${unassigned} unassigned · ${s.awaiting_rating} waiting for resident rating · oldest ${a.oldest}</div></div>
-        <div class="ring" style="background:${ring(a.pct)}"><div><b>${a.pct}%</b><span>within 48h SLA</span></div></div></div>${heroPanels(panels)}</div>
-        <section class="col"><h3>Open by category</h3><div class="cat-tiles">${tiles}</div></section>
-        <div class="dash-mid"><section class="col"><div class="row" style="justify-content:space-between"><h3>Requests raised per week</h3><span class="muted sm">Last 8 weeks</span></div>
-          <div class="bars">${a.weeks.map(n => `<div><span>${n}</span><span class="b" style="height:${Math.round(n / max * 140)}px"></span></div>`).join('')}</div>
-          <div class="bars" style="height:auto">${a.weeks.map((_, i) => `<span class="muted xs" style="text-align:center">${i === 7 ? 'This wk' : (7 - i) + 'w ago'}</span>`).join('')}</div></section>
-          <section class="col"><h3>Vendor ratings</h3>${vr}</section></div>
-        <section class="col"><h3>Open requests</h3><div class="table-wrap"><table class="table"><thead><tr><th>ID</th><th>Request</th><th>Flat</th><th>Age</th><th>Status</th><th>Assign to</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="muted">All clear.</td></tr>'}</tbody></table></div></section>
-        <section class="col" style="max-width:none"><div class="row" style="justify-content:space-between"><h4>Audit trail</h4><button class="link-btn" data-act="nav" data-page="audit">View all</button></div>${audit.slice(0, 6).map(x => `<div class="hist"><span class="muted">${esc(stamp(x.created_at))}</span><span><strong style="font-weight:600">${esc(x.action.replace('_', ' '))}</strong> · ${esc(x.entity)} ${esc(x.entity_id)} — ${esc(x.actor || 'system')}</span></div>`).join('')}</section>`);
     },
 
     async approvals() {
@@ -227,7 +341,7 @@
 
     async vendors() {
       const vs = await API.vendors.list();
-      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Vendors</h2>${vs.map(v => `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(v.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(v.name)}</span><span class="muted sm">${esc(v.trade)}</span></span><span class="sm">${esc(v.phone || '')}</span></div>`).join('') || '<p class="muted">No vendors yet.</p>'}</div>
+      page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Vendors</h2>${S.vErr ? `<p class="err" role="alert">${esc(S.vErr)}</p>` : ''}${vs.map(vendorRow).join('') || '<p class="muted">No vendors yet.</p>'}</div>
         <form id="vform" class="col"><h3>Add vendor</h3><div class="field"><label for="vn">Name</label><input class="input" id="vn" name="name" required maxlength="100"></div><div class="field"><label for="vt">Trade</label><input class="input" id="vt" name="trade" required maxlength="50" placeholder="plumbing"></div>
         <div class="field"><label for="vp">Phone</label><input class="input" id="vp" name="phone" maxlength="20"></div><div><button class="btn btn-primary">Add vendor</button></div></form></div>`);
     },
@@ -238,6 +352,13 @@
     },
   };
   PAGES.adminNotices = PAGES.notices;
+  const vendorRow = v => S.editVendor === v.id
+    ? `<form class="member veform" data-id="${v.id}" style="grid-template-columns:minmax(0,1fr);gap:var(--space-2)"><div class="three"><div class="field"><label for="ven${v.id}">Name</label><input class="input" id="ven${v.id}" name="name" required maxlength="100" value="${esc(v.name)}"></div>
+      <div class="field"><label for="vet${v.id}">Trade</label><input class="input" id="vet${v.id}" name="trade" required maxlength="50" value="${esc(v.trade)}"></div><div class="field"><label for="vep${v.id}">Phone</label><input class="input" id="vep${v.id}" name="phone" maxlength="20" value="${esc(v.phone || '')}"></div></div>
+      <div class="row"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-act="vcancel">Cancel</button></div></form>`
+    : `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(v.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(v.name)}</span><span class="muted sm">${esc(v.trade)}</span></span><span class="sm">${esc(v.phone || '')}</span>
+      <span class="row" style="gap:var(--space-1);flex-wrap:nowrap">${S.delVendor === v.id ? `<button class="btn btn-danger" data-act="vdel" data-id="${v.id}">Delete ${esc(v.name)}?</button><button class="btn btn-secondary" data-act="vcancel">Keep</button>`
+      : `<button class="btn btn-secondary" data-act="vedit" data-id="${v.id}" aria-label="Edit ${esc(v.name)}">${ic('pencil-simple')}Edit</button><button class="btn btn-secondary" data-act="vask" data-id="${v.id}" aria-label="Delete ${esc(v.name)}">${ic('trash')}</button>`}</span></div>`;
   const leaseForm = t => `<form id="leaseform" class="form-card" data-id="${t.user_id}"><div class="row" style="justify-content:space-between"><h3>${esc(t.name)} · Flat ${esc(t.flat)}</h3><span class="ok" id="leaseok"></span></div>
     <div class="two"><div class="field"><label for="ls">Lease starts</label><input class="input" id="ls" name="start_date" type="date" required value="${esc(t.start_date || '')}"></div>
     <div class="field"><label for="le">Lease ends</label><input class="input" id="le" name="end_date" type="date" required value="${esc(t.end_date || '')}"></div></div>
@@ -248,21 +369,108 @@
     <div class="field"><label for="lk">Parking</label><input class="input" id="lk" name="parking" maxlength="100" placeholder="Slot C-14" value="${esc(t.parking || '')}"></div></div>
     <div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save lease</button><span class="muted sm">The tenant is notified.</span></div></form>`;
 
+  // ---------- gate helpers
+  const gateCode = c => String(c || '').replace(/\D/g, '').replace(/(\d{3})(?=\d)/, '$1 ');
+  const logTable = rows => `<div class="table-wrap"><table class="table gate-table"><thead><tr><th>Time</th><th>Who</th><th>Flat</th><th>Result</th><th>Reason</th></tr></thead><tbody>${rows.map(x => `<tr><td>${esc(stamp(x.created_at))}</td><td>${esc(x.subject || '')}</td><td>${esc(x.flat || '')}</td><td><span class="tag ${x.result === 'allowed' ? 'tag-accent' : 'tag-danger'}">${x.result === 'allowed' ? 'Allowed' : 'Denied'}</span></td><td>${esc(x.reason || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No entries yet.</td></tr>'}</tbody></table></div>`;
+  async function refreshGateLog() {
+    if (!$('#glog')) return;
+    try { const rows = await API.gate.log(); const b = $('#glog'); if (b) b.innerHTML = logTable(rows); } catch (e) { const b = $('#glog'); if (b) b.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  }
+  let gateTimer = null;
+  function showGateResult(h) {
+    const r = $('#gres'); if (!r) return;
+    r.innerHTML = h; clearTimeout(gateTimer); gateTimer = setTimeout(() => { const x = $('#gres'); if (x) x.innerHTML = ''; }, 8000);
+    const i = $('#gcode'); if (i) { i.value = ''; i.focus(); }
+  }
+  async function gateVerify(body) {
+    stopScan();
+    let h;
+    try {
+      const r = await API.gate.verify(body), ok = r.result === 'allowed';
+      const who = r.kind === 'resident' ? [r.name, r.flat ? 'Flat ' + r.flat : ''] : [r.name, r.flat ? 'Visiting flat ' + r.flat : '', r.purpose];
+      h = ok ? `<div class="gate-res gate-ok" role="alert">${ic('check-circle')}<div class="gate-big">ALLOWED</div><div class="gate-sub">${who.filter(Boolean).map(esc).join(' · ')}</div></div>`
+        : `<div class="gate-res gate-no" role="alert">${ic('x-circle')}<div class="gate-big">DENIED</div><div class="gate-sub">${esc(r.reason || 'This code is not valid.')}</div></div>`;
+    } catch (x) { h = `<div class="gate-res gate-no" role="alert">${ic('x-circle')}<div class="gate-big">DENIED</div><div class="gate-sub">${esc(x.message)}</div></div>`; }
+    showGateResult(h); await refreshGateLog();
+  }
+  let scanStream = null, scanOn = false;
+  function stopScan() {
+    scanOn = false;
+    if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+    const v = document.getElementById('gvideo'); if (v) v.srcObject = null;
+    const b = document.getElementById('gscanbox'); if (b) b.hidden = true;
+  }
+  async function startScan() {
+    if (scanOn) return;
+    try {
+      const det = new BarcodeDetector({ formats: ['qr_code'] });
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const v = $('#gvideo'); if (!v) return stopScan();
+      v.srcObject = scanStream; $('#gscanbox').hidden = false; await v.play(); scanOn = true;
+      const loop = async () => {
+        if (!scanOn) return;
+        try { const f = await det.detect(v); if (f.length && f[0].rawValue) { const val = f[0].rawValue; stopScan(); return gateVerify({ token: val }); } } catch (e) { /* frame not ready */ }
+        setTimeout(loop, 250);
+      };
+      loop();
+    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied')); }
+  }
+
   // ---------- events (delegated; no inline handlers under the CSP)
+  const closeGroups = () => document.querySelectorAll('.nav-grp.open').forEach(g => { g.classList.remove('open'); const h = g.querySelector('.nav-grp-h'); if (h) h.setAttribute('aria-expanded', 'false'); });
+  document.addEventListener('click', e => { if (!e.target.closest('.nav-grp')) closeGroups(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGroups(); });
+  // Category photos: /img/categories/<key>.svg. If one is missing it is removed and the solid dark-teal card with the icon shows instead.
+  document.addEventListener('error', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img')) t.remove(); }, true);
+  document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
+  const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
     catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
     lease: el => { S.leaseId = Number(el.dataset.id); render(); },
+    navpos: () => { S.nav.pos = S.nav.pos === 'top' ? 'side' : 'top'; saveNav(); applyNav(); },
+    navhide: () => { S.nav.hidden = !S.nav.hidden; saveNav(); applyNav(); if (!S.nav.hidden) { const f = document.querySelector('.side-link.on'); if (f) f.focus(); } },
+    navgroup: el => {
+      const g = el.closest('.nav-grp'); if (!g) return;
+      if (S.nav.pos === 'top') { const was = g.classList.contains('open'); closeGroups(); if (!was) { g.classList.add('open'); el.setAttribute('aria-expanded', 'true'); } return; }
+      const c = g.classList.toggle('collapsed'); el.setAttribute('aria-expanded', String(!c)); saveCollapsed(g.dataset.g, c);
+    },
     nav: el => go(el.dataset.page, el.dataset.sel ? Number(el.dataset.sel) : null),
     open: el => go(el.dataset.page || 'requests', Number(el.dataset.id)),
-    logout: async () => { await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
-    mode: () => { S.mode = S.mode === 'login' ? 'register' : 'login'; render(); },
+    logout: async () => { stopScan(); await API.auth.logout(); S.me = null; S.mode = 'login'; render(); },
+    pwtoggle: el => { const i = document.getElementById('pw'); if (!i) return; const show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.setAttribute('aria-pressed', String(show)); el.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); el.innerHTML = ic(show ? 'eye-slash' : 'eye'); i.focus(); },
+    mode: el => { if (el && el.getAttribute('role') === 'tab' && el.classList.contains('on')) return; S.mode = S.mode === 'login' ? 'register' : 'login'; render(); },
     regtype: el => { S.regType = el.dataset.t; document.querySelectorAll('[data-act=regtype]').forEach(b => b.classList.toggle('on', b === el)); },
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved. The resident can now rate it.' : 'Work started'); render(); },
+    emsel: el => { S.emType = el.dataset.k; render().then(() => { const n = $('#emn'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); } }); },
+    emcancel: () => { S.emType = null; render(); },
+    emresolve: async el => { await API.emergencies.resolve(el.dataset.id); toast('Marked resolved'); render(); },
+    cask: el => { S.delContact = Number(el.dataset.id); render(); },
+    ccancel: () => { S.delContact = null; render(); },
+    cdel: async el => { S.delContact = null; await API.contacts.remove(el.dataset.id); toast('Contact deleted'); render(); },
+    vedit: el => { S.editVendor = Number(el.dataset.id); S.delVendor = null; S.vErr = ''; render(); },
+    vask: el => { S.delVendor = Number(el.dataset.id); S.editVendor = null; S.vErr = ''; render(); },
+    vcancel: () => { S.delVendor = S.editVendor = null; S.vErr = ''; render(); },
+    vdel: async el => { try { await API.vendors.remove(el.dataset.id); S.delVendor = null; S.vErr = ''; toast('Vendor deleted'); } catch (x) { S.delVendor = null; S.vErr = x.message; } render(); },
+    gpshow: el => { S.gpSel = Number(el.dataset.id); S.gpCancel = null; render().then(() => { const c = $('#gpcard'); if (c) c.scrollIntoView({ block: 'center' }); }); },
+    gpclose: () => { S.gpSel = null; S.gpCancel = null; render(); },
+    gpask: el => { S.gpCancel = Number(el.dataset.id); render(); },
+    gpkeep: () => { S.gpCancel = null; render(); },
+    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message); } render(); },
+    gshare: async el => {
+      const text = el.dataset.text;
+      if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch (x) { /* dismissed */ } return; }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.'); }
+    },
+    gmask: () => { S.gmRot = true; render(); },
+    gmkeep: () => { S.gmRot = false; render(); },
+    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message); } render(); },
+    gscan: () => startScan(),
+    gscanstop: () => stopScan(),
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
@@ -277,12 +485,12 @@
     const f = e.target; e.preventDefault();
     const d = Object.fromEntries(new FormData(f));
     if (f.id === 'authform') {
-      const err = $('#autherr'); err.textContent = '';
+      const err = $('#autherr'); err.textContent = ''; f.classList.remove('shake'); f.classList.add('busy'); const btn = f.querySelector('button.auth-go'); if (btn) btn.disabled = true;
       try {
-        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = isAdmin() ? 'dashboard' : 'home'; return render(); }
+        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = home0(); return render(); }
         d.consent = f.consent.checked; d.resident_type = S.regType;
         const r = await API.auth.register(d); S.mode = 'login'; await render(); toast(r.message);
-      } catch (x) { err.textContent = x.message; }
+      } catch (x) { err.textContent = x.message; f.classList.remove('busy'); if (btn) btn.disabled = false; void f.offsetWidth; f.classList.add('shake'); }
     } else if (f.id === 'raiseform') {
       const fd = new FormData();
       fd.set('category', S.cat); fd.set('title', d.title);
@@ -294,19 +502,30 @@
       await API.household.add(d); toast('Sent to the committee for approval'); render();
     } else if (f.id === 'leaseform') { await API.admin.setLease(f.dataset.id, d); toast('Lease saved. Tenant notified.'); render();
     } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
+    else if (f.id === 'emform') { await API.emergencies.raise(S.emType, (d.note || '').trim()); S.emType = null; toast('Alert sent. The committee has been notified.'); render(); }
+    else if (f.id === 'cform') { try { await API.contacts.create(d); toast('Contact added'); render(); } catch (x) { $('#cerr').textContent = x.message; } }
+    else if (f.classList.contains('veform')) { try { await API.vendors.update(f.dataset.id, d); S.editVendor = null; S.vErr = ''; toast('Vendor saved'); } catch (x) { S.vErr = x.message; } render(); }
+    else if (f.id === 'gpform') { try { const r = await API.gate.pass({ visitor_name: (d.visitor_name || '').trim(), purpose: (d.purpose || '').trim(), valid_from: new Date(d.valid_from).toISOString(), valid_until: new Date(d.valid_until).toISOString() }); S.gpSel = r.id; S.gpNew = r; S.gpCancel = null; toast('Gate pass created'); render(); } catch (x) { $('#gperr').textContent = x.message; } }
+    else if (f.id === 'gvform') { const inp = $('#gcode'); const v = (inp.value || '').trim(); if (!v) { inp.focus(); return; } await gateVerify(/^[\d\s]+$/.test(v) ? { code: v.replace(/\s+/g, '') } : { token: v }); }
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
   }));
+
+  window.HPWeb = { catPic, S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, home0, reqRow, noticeRow, emType, emCard, vendorOptions };
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
   const poller = HP.live(async () => {
     if (!S.me) return;
+    if (['settings', 'guards', 'users', 'vehicles', 'parking', 'workers'].includes(S.page)) return; // unsaved toggles and inline forms must not be wiped
+    if (S.page === 'gate') return refreshGateLog(); // never redraw the gate page: it would wipe the typed code and the result card
     const pg = $('#page'), top = pg ? pg.scrollTop : 0;
     await render();
     const np = $('#page'); if (np) np.scrollTop = top;
   });
 
   (async () => {
-    try { S.me = await API.auth.me(); S.page = isAdmin() ? 'dashboard' : 'home'; } catch { S.me = null; }
+    const [st, me] = await Promise.all([API.settings.public().catch(() => null), API.auth.me().catch(() => null)]);
+    if (st) { S.settings = st; S.gid = st.google_client_id || ''; Object.assign(SOCIETY, { name: st.society_name || SOCIETY.name, kind: st.society_kind || SOCIETY.kind }); document.title = SOCIETY.name + ' Portal'; }
+    if (me) { S.me = me; S.page = home0(); }
     render();
   })();
 })();

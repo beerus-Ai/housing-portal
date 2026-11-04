@@ -1,0 +1,83 @@
+/* Phone-first polish for /m/. Loaded after ui.css. */
+.mob .tabbar { padding: 6px 8px max(8px, env(safe-area-inset-bottom)); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); box-shadow: 0 -4px 18px color-mix(in srgb, var(--color-text) 7%, transparent); }
+.mob .tab { min-height: 56px; gap: 3px; font-size: 14px; justify-content: center; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.mob .tab i { font-size: 28px; position: relative; z-index: 1; }
+.mob .tab::before { content: ""; position: absolute; top: 4px; width: 56px; height: 34px; border-radius: 17px; background: color-mix(in srgb, var(--color-accent-700) 14%, transparent); transform: scaleX(.3); opacity: 0; transition: transform .28s cubic-bezier(.2,.9,.3,1.2), opacity .2s; }
+.mob .tab.on::before { transform: scaleX(1); opacity: 1; }
+.mob .tab.on i { animation: m-pop .32s cubic-bezier(.2,.9,.3,1.4); }
+.mob .tab .tag { top: 2px; right: 18%; z-index: 2; }
+@keyframes m-pop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
+
+.mob .screen { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); padding-bottom: 28px; gap: var(--space-4, 16px); scroll-padding-bottom: 80px; -webkit-overflow-scrolling: touch; animation: m-in .22s ease-out both; }
+.mob .phone { padding-top: env(safe-area-inset-top, 0px); }
+.mob .screen > :last-child:not(.tabbar) { margin-bottom: 8px; }
+
+.mob .btn, .mob .back, .mob .link-btn, .mob .quick button, .mob .panel, .mob .list-row, .mob .cat, .mob .type-tile { min-height: 52px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.mob .btn-icon { min-width: 52px; min-height: 52px; }
+.mob .btn-lg { min-height: 56px; }
+.mob .input, .mob .screen .input, .mob .m-card .input { min-height: 52px; font-size: 16px; }
+.mob textarea.input { min-height: 120px; }
+.mob input[type=checkbox] { width: 24px; height: 24px; }
+
+@keyframes m-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .mob .screen, .mob .tab.on i { animation: none; }
+  .mob .tab::before { transition: none; }
+}
+
+/* Live badge sits in the flow above the screen, so it never overlaps the greeting/date line */
+.phone > .live { position: static; align-self: flex-end; margin: max(8px, env(safe-area-inset-top)) 16px -4px auto; flex: none; }
+
+/* ===== HSP-20 resident app: emergency, profile, search, FAB ===== */
+.mob .tabbar.five { grid-template-columns: repeat(5, 1fr); }
+.mob .tabbar.five .tab { font-size: 12px; }
+.mob .tab { position: relative; }
+.badge-red { position: absolute; top: 2px; right: 14%; z-index: 2; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #c4142c; color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; }
+.fab { position: absolute; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 6; width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--color-accent-700); color: #fff; font-size: 30px; display: grid; place-items: center; box-shadow: 0 8px 22px color-mix(in srgb, var(--color-text) 30%, transparent); touch-action: manipulation; }
+.fab:active { transform: translateX(-50%) scale(.94); }
+.m-search { position: relative; }
+.m-search .input { padding-left: 46px; width: 100%; }
+.m-search-ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 22px; pointer-events: none; opacity: .6; }
+.m-hit { min-height: 56px; grid-template-columns: 40px minmax(0,1fr); align-items: center; text-align: left; }
+.emg-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.emg-tile { min-height: 124px; padding: 14px 8px; border-radius: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 17px; text-align: center; color: inherit; border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); background: color-mix(in srgb, var(--color-surface) 70%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); touch-action: manipulation; }
+.emg-tile .tile { width: 56px; height: 56px; border-radius: 18px; font-size: 30px; background: color-mix(in srgb, #c4142c 14%, transparent); color: #c4142c; }
+.emg-banner { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; border-radius: 20px; border: 0; background: #c4142c; color: #fff; font-size: 17px; width: 100%; }
+.emg-banner i { font-size: 28px; }
+.emg-banner.static { min-height: 56px; }
+.sheet-back { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, #000 45%, transparent); }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; display: flex; flex-direction: column; gap: 12px; padding: 20px 20px max(20px, env(safe-area-inset-bottom)); border-radius: 28px 28px 0 0; background: var(--color-surface); box-shadow: 0 -10px 30px color-mix(in srgb, #000 25%, transparent); max-height: 90dvh; overflow-y: auto; }
+.emg-send { background: #c4142c; border-color: #c4142c; color: #fff; }
+.pbar { height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 12%, transparent); overflow: hidden; }
+.pbar span { display: block; height: 100%; background: var(--color-accent-700); border-radius: 6px; }
+
+/* Leave room under every screen so the floating + button never covers the last item */
+.phone > .screen, .phone > form.screen { padding-bottom: 120px; }
+
+/* ===== HSP-24 gate access (appended) ===== */
+.mob .tabbar.three { grid-template-columns: repeat(3, 1fr); }
+.gp-card { align-items: stretch; gap: 12px; }
+.gp-qr { align-self: center; width: 100%; background: #fff; padding: 16px; border-radius: 20px; display: flex; justify-content: center; box-sizing: border-box; }
+.gp-qr svg { width: 100%; max-width: 300px; height: auto; aspect-ratio: 1; background: #fff; display: block; }
+.gp-code { text-align: center; font-size: 44px; font-weight: 800; letter-spacing: 8px; font-variant-numeric: tabular-nums; }
+.gate-code { height: 88px; text-align: center; font-size: 48px; font-weight: 800; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
+.gate-go { min-height: 64px; font-size: 20px; }
+.gate-cam { width: 100%; border-radius: 20px; background: #000; max-height: 60vh; object-fit: cover; }
+.gate-res { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 28px 16px; border-radius: 24px; color: #fff; font-size: 18px; }
+.gate-res.ok { background: #0a303e; }
+.gate-res.no { background: #c4142c; }
+.gate-big { font-size: 48px; line-height: 1.1; letter-spacing: 2px; }
+.gate-name { font-size: 24px; font-weight: 700; }
+
+/* ===== Login redesign (phone) ===== */
+.auth-phone { background: linear-gradient(180deg, var(--color-accent-900) 0, var(--color-accent-800) 36%, var(--color-bg) 36%); }
+.auth-top { flex: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: max(18px, env(safe-area-inset-top)) 20px 44px; color: var(--color-bg); }
+.auth-top .eyebrow { color: var(--color-accent-300); }
+.auth-top h1 { margin: 0; font-size: 30px; color: var(--color-bg); }
+.auth-top-anim { width: 104px; height: 104px; border-radius: 28px; padding: 8px; background: color-mix(in srgb, #fff 12%, transparent); border: 1px solid color-mix(in srgb, #fff 24%, transparent); margin-bottom: 6px; }
+.auth-sheet { background: var(--color-bg); border-radius: 30px 30px 0 0; margin-top: -26px; padding-top: 22px; box-shadow: 0 -10px 30px color-mix(in srgb, #0a303e 25%, transparent); position: relative; }
+.auth-sheet h2 { margin: 2px 0 4px; }
+.auth-phone .auth-seg button { min-height: 52px; }
+.auth-phone .input { min-height: 56px; }
+.auth-phone .auth-go { min-height: 60px; font-size: 19px; }
+.auth-phone > form.screen { padding-bottom: 28px; }

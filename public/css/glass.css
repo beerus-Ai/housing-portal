@@ -1,0 +1,2 @@
+/* Glassmorphism is switched off for now (user request). The previous version lives in git history:
+   `git log -- public/css/glass.css` then `git show <commit>:public/css/glass.css` to restore it. */

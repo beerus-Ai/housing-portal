@@ -1,0 +1,39 @@
+/* Sahyadri Heights design tokens (from the Broadsheet system + prototype overrides) */
+:root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-neutral-300: #d7d3d3;
+
+  --color-accent: #0088b0;
+  --color-accent-100: #e9f8ff;
+  --color-accent-200: #cbeeff;
+  --color-accent-300: #99e0ff;
+  --color-accent-600: #1186ac;
+  --color-accent-700: #006786;   /* accent text on light ground */
+  --color-accent-800: #004961;
+  --color-accent-900: #0a303e;   /* hero cards */
+
+  --color-accent-2: #d6006c;
+  --color-accent-2-300: #ffc0d0;
+  --color-accent-2-600: #d82071; /* chips, avatars, current step */
+  --color-accent-2-700: #aa0b56; /* overdue text */
+
+  --font-heading: 'Outfit', system-ui, sans-serif;            /* 500–800 */
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;    /* 400–700 */
+
+  --space-1: 5px; --space-2: 10px; --space-3: 15px; --space-4: 20px; --space-6: 30px; --space-8: 40px;
+
+  --radius-card: 24px;  /* cards, panels, hero */
+  --radius-tile: 14px;  /* inner tiles, photos, list rows */
+  --radius-control: 12px; /* buttons, inputs, segmented */
+  --radius-pill: 999px; /* tags, chips */
+  --radius-phone: 48px;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  --focus-ring: 2px solid var(--color-accent);
+}
+:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
