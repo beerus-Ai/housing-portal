@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="defs_tobe_onboarding" targetNamespace="http://sahyadri-heights.example/bpmn" exporter="hand-authored" exporterVersion="1.0">
+  <collaboration id="collab_tobe_onboarding">
+    <participant id="part_tobe_onboarding" name="To-be: resident onboarding with DPDP consent and committee approval" processRef="tobe_onboarding"/>
+  </collaboration>
+  <process id="tobe_onboarding" name="To-be: resident onboarding with DPDP consent and committee approval" isExecutable="false">
+    <laneSet id="ls_tobe_onboarding">
+      <lane id="l_res" name="Resident / owner">
+        <flowNodeRef>s1</flowNodeRef>
+        <flowNodeRef>t1</flowNodeRef>
+        <flowNodeRef>t6</flowNodeRef>
+        <flowNodeRef>e1</flowNodeRef>
+        <flowNodeRef>e2</flowNodeRef>
+      </lane>
+      <lane id="l_sys" name="Portal">
+        <flowNodeRef>g0</flowNodeRef>
+        <flowNodeRef>t2</flowNodeRef>
+        <flowNodeRef>t4</flowNodeRef>
+        <flowNodeRef>t5</flowNodeRef>
+      </lane>
+      <lane id="l_com" name="Committee member">
+        <flowNodeRef>t3</flowNodeRef>
+        <flowNodeRef>g1</flowNodeRef>
+      </lane>
+    </laneSet>
+    <startEvent id="s1" name="Wants an account"><outgoing>f_tobe_onboarding_1</outgoing></startEvent>
+    <userTask id="t1" name="Fill registration form and tick DPDP consent"><incoming>f_tobe_onboarding_1</incoming><incoming>f_tobe_onboarding_4</incoming><outgoing>f_tobe_onboarding_2</outgoing></userTask>
+    <exclusiveGateway id="g0" name="Form valid and consent given?"><incoming>f_tobe_onboarding_2</incoming><outgoing>f_tobe_onboarding_3</outgoing><outgoing>f_tobe_onboarding_4</outgoing></exclusiveGateway>
+    <serviceTask id="t2" name="Create account as pending; hash password; audit; notify committee"><incoming>f_tobe_onboarding_3</incoming><outgoing>f_tobe_onboarding_5</outgoing></serviceTask>
+    <userTask id="t3" name="Review registration against society records"><incoming>f_tobe_onboarding_5</incoming><outgoing>f_tobe_onboarding_6</outgoing></userTask>
+    <exclusiveGateway id="g1" name="Approve?"><incoming>f_tobe_onboarding_6</incoming><outgoing>f_tobe_onboarding_7</outgoing><outgoing>f_tobe_onboarding_8</outgoing></exclusiveGateway>
+    <serviceTask id="t4" name="Set approved; audit; resident can sign in"><incoming>f_tobe_onboarding_7</incoming><outgoing>f_tobe_onboarding_9</outgoing></serviceTask>
+    <serviceTask id="t5" name="Set rejected; audit; sign-in blocked with message"><incoming>f_tobe_onboarding_8</incoming><outgoing>f_tobe_onboarding_11</outgoing></serviceTask>
+    <userTask id="t6" name="Owner adds family or tenant to own flat (optional)"><incoming>f_tobe_onboarding_9</incoming><outgoing>f_tobe_onboarding_10</outgoing></userTask>
+    <endEvent id="e1" name="Resident active"><incoming>f_tobe_onboarding_10</incoming></endEvent>
+    <endEvent id="e2" name="Not onboarded"><incoming>f_tobe_onboarding_11</incoming></endEvent>
+    <sequenceFlow id="f_tobe_onboarding_1" sourceRef="s1" targetRef="t1"/>
+    <sequenceFlow id="f_tobe_onboarding_2" sourceRef="t1" targetRef="g0"/>
+    <sequenceFlow id="f_tobe_onboarding_3" sourceRef="g0" targetRef="t2" name="Yes"/>
+    <sequenceFlow id="f_tobe_onboarding_4" sourceRef="g0" targetRef="t1" name="No: fix form"/>
+    <sequenceFlow id="f_tobe_onboarding_5" sourceRef="t2" targetRef="t3"/>
+    <sequenceFlow id="f_tobe_onboarding_6" sourceRef="t3" targetRef="g1"/>
+    <sequenceFlow id="f_tobe_onboarding_7" sourceRef="g1" targetRef="t4" name="Yes"/>
+    <sequenceFlow id="f_tobe_onboarding_8" sourceRef="g1" targetRef="t5" name="No"/>
+    <sequenceFlow id="f_tobe_onboarding_9" sourceRef="t4" targetRef="t6"/>
+    <sequenceFlow id="f_tobe_onboarding_10" sourceRef="t6" targetRef="e1"/>
+    <sequenceFlow id="f_tobe_onboarding_11" sourceRef="t5" targetRef="e2"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag_tobe_onboarding">
+    <bpmndi:BPMNPlane id="plane_tobe_onboarding" bpmnElement="collab_tobe_onboarding">
+      <bpmndi:BPMNShape id="sh_part_tobe_onboarding" bpmnElement="part_tobe_onboarding" isHorizontal="true"><omgdc:Bounds x="30" y="20" width="1590" height="480"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_res" bpmnElement="l_res" isHorizontal="true"><omgdc:Bounds x="60" y="20" width="1560" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_sys" bpmnElement="l_sys" isHorizontal="true"><omgdc:Bounds x="60" y="180" width="1560" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_com" bpmnElement="l_com" isHorizontal="true"><omgdc:Bounds x="60" y="340" width="1560" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_s1" bpmnElement="s1"><omgdc:Bounds x="232" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t1" bpmnElement="t1"><omgdc:Bounds x="345" y="65" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_g0" bpmnElement="g0"><omgdc:Bounds x="525" y="235" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t2" bpmnElement="t2"><omgdc:Bounds x="645" y="225" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t3" bpmnElement="t3"><omgdc:Bounds x="795" y="385" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_g1" bpmnElement="g1"><omgdc:Bounds x="975" y="395" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t4" bpmnElement="t4"><omgdc:Bounds x="1095" y="225" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t5" bpmnElement="t5"><omgdc:Bounds x="1095" y="270" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t6" bpmnElement="t6"><omgdc:Bounds x="1245" y="65" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_e1" bpmnElement="e1"><omgdc:Bounds x="1432" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_e2" bpmnElement="e2"><omgdc:Bounds x="1282" y="132" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_1" bpmnElement="f_tobe_onboarding_1"><omgdi:waypoint x="268" y="100"/><omgdi:waypoint x="345" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_2" bpmnElement="f_tobe_onboarding_2"><omgdi:waypoint x="455" y="100"/><omgdi:waypoint x="490" y="100"/><omgdi:waypoint x="490" y="260"/><omgdi:waypoint x="525" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_3" bpmnElement="f_tobe_onboarding_3"><omgdi:waypoint x="575" y="260"/><omgdi:waypoint x="645" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_4" bpmnElement="f_tobe_onboarding_4"><omgdi:waypoint x="550" y="235"/><omgdi:waypoint x="550" y="47"/><omgdi:waypoint x="400" y="47"/><omgdi:waypoint x="400" y="65"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_5" bpmnElement="f_tobe_onboarding_5"><omgdi:waypoint x="755" y="260"/><omgdi:waypoint x="775" y="260"/><omgdi:waypoint x="775" y="420"/><omgdi:waypoint x="795" y="420"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_6" bpmnElement="f_tobe_onboarding_6"><omgdi:waypoint x="905" y="420"/><omgdi:waypoint x="975" y="420"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_7" bpmnElement="f_tobe_onboarding_7"><omgdi:waypoint x="1025" y="420"/><omgdi:waypoint x="1060" y="420"/><omgdi:waypoint x="1060" y="260"/><omgdi:waypoint x="1095" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_8" bpmnElement="f_tobe_onboarding_8"><omgdi:waypoint x="1025" y="420"/><omgdi:waypoint x="1060" y="420"/><omgdi:waypoint x="1060" y="305"/><omgdi:waypoint x="1095" y="305"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_9" bpmnElement="f_tobe_onboarding_9"><omgdi:waypoint x="1205" y="260"/><omgdi:waypoint x="1225" y="260"/><omgdi:waypoint x="1225" y="100"/><omgdi:waypoint x="1245" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_10" bpmnElement="f_tobe_onboarding_10"><omgdi:waypoint x="1355" y="100"/><omgdi:waypoint x="1432" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_onboarding_11" bpmnElement="f_tobe_onboarding_11"><omgdi:waypoint x="1205" y="305"/><omgdi:waypoint x="1243.5" y="305"/><omgdi:waypoint x="1243.5" y="150"/><omgdi:waypoint x="1282" y="150"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

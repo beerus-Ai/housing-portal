@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="defs_tobe_complaint" targetNamespace="http://sahyadri-heights.example/bpmn" exporter="hand-authored" exporterVersion="1.0">
+  <collaboration id="collab_tobe_complaint">
+    <participant id="part_tobe_complaint" name="To-be: resident complaint with WhatsApp intake, AI triage and SLA escalation" processRef="tobe_complaint"/>
+  </collaboration>
+  <process id="tobe_complaint" name="To-be: resident complaint with WhatsApp intake, AI triage and SLA escalation" isExecutable="false">
+    <laneSet id="ls_tobe_complaint">
+      <lane id="l_res" name="Resident (portal or WhatsApp)">
+        <flowNodeRef>s1</flowNodeRef>
+        <flowNodeRef>t1</flowNodeRef>
+        <flowNodeRef>t8</flowNodeRef>
+        <flowNodeRef>e1</flowNodeRef>
+      </lane>
+      <lane id="l_sys" name="Portal and AI service">
+        <flowNodeRef>t2</flowNodeRef>
+        <flowNodeRef>t3</flowNodeRef>
+        <flowNodeRef>t5</flowNodeRef>
+        <flowNodeRef>t9</flowNodeRef>
+      </lane>
+      <lane id="l_com" name="Committee member">
+        <flowNodeRef>t4</flowNodeRef>
+        <flowNodeRef>t7</flowNodeRef>
+        <flowNodeRef>b1</flowNodeRef>
+      </lane>
+      <lane id="l_ven" name="Vendor">
+        <flowNodeRef>t6</flowNodeRef>
+      </lane>
+    </laneSet>
+    <startEvent id="s1" name="Problem noticed"><outgoing>f_tobe_complaint_1</outgoing></startEvent>
+    <userTask id="t1" name="Raise request in portal (photo optional) or send WhatsApp message"><incoming>f_tobe_complaint_1</incoming><outgoing>f_tobe_complaint_2</outgoing></userTask>
+    <serviceTask id="t2" name="Create request; webhook maps sender phone to flat"><incoming>f_tobe_complaint_2</incoming><outgoing>f_tobe_complaint_3</outgoing></serviceTask>
+    <serviceTask id="t3" name="AI triage: strip PII, classify, summarise, suggest vendor (rule-based fallback)"><incoming>f_tobe_complaint_3</incoming><outgoing>f_tobe_complaint_4</outgoing></serviceTask>
+    <userTask id="t4" name="Review suggestion, confirm or change vendor, assign"><incoming>f_tobe_complaint_4</incoming><outgoing>f_tobe_complaint_5</outgoing></userTask>
+    <serviceTask id="t5" name="Notify resident (in-app and WhatsApp); write audit"><incoming>f_tobe_complaint_5</incoming><outgoing>f_tobe_complaint_6</outgoing></serviceTask>
+    <userTask id="t6" name="Do the work; committee marks in progress"><incoming>f_tobe_complaint_6</incoming><outgoing>f_tobe_complaint_7</outgoing></userTask>
+    <userTask id="t7" name="Mark closed (resolved)"><incoming>f_tobe_complaint_7</incoming><outgoing>f_tobe_complaint_8</outgoing></userTask>
+    <userTask id="t8" name="Rate the work 1-5 (owner rates for family)"><incoming>f_tobe_complaint_8</incoming><outgoing>f_tobe_complaint_9</outgoing></userTask>
+    <endEvent id="e1" name="Closed and rated"><incoming>f_tobe_complaint_9</incoming></endEvent>
+    <boundaryEvent id="b1" name="48h SLA elapsed" cancelActivity="false" attachedToRef="t4"><outgoing>f_tobe_complaint_10</outgoing><timerEventDefinition id="b1_td"/></boundaryEvent>
+    <serviceTask id="t9" name="Escalate overdue request to committee; audit"><incoming>f_tobe_complaint_10</incoming></serviceTask>
+    <sequenceFlow id="f_tobe_complaint_1" sourceRef="s1" targetRef="t1"/>
+    <sequenceFlow id="f_tobe_complaint_2" sourceRef="t1" targetRef="t2"/>
+    <sequenceFlow id="f_tobe_complaint_3" sourceRef="t2" targetRef="t3"/>
+    <sequenceFlow id="f_tobe_complaint_4" sourceRef="t3" targetRef="t4"/>
+    <sequenceFlow id="f_tobe_complaint_5" sourceRef="t4" targetRef="t5"/>
+    <sequenceFlow id="f_tobe_complaint_6" sourceRef="t5" targetRef="t6"/>
+    <sequenceFlow id="f_tobe_complaint_7" sourceRef="t6" targetRef="t7"/>
+    <sequenceFlow id="f_tobe_complaint_8" sourceRef="t7" targetRef="t8"/>
+    <sequenceFlow id="f_tobe_complaint_9" sourceRef="t8" targetRef="e1"/>
+    <sequenceFlow id="f_tobe_complaint_10" sourceRef="b1" targetRef="t9"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag_tobe_complaint">
+    <bpmndi:BPMNPlane id="plane_tobe_complaint" bpmnElement="collab_tobe_complaint">
+      <bpmndi:BPMNShape id="sh_part_tobe_complaint" bpmnElement="part_tobe_complaint" isHorizontal="true"><omgdc:Bounds x="30" y="20" width="1740" height="640"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_res" bpmnElement="l_res" isHorizontal="true"><omgdc:Bounds x="60" y="20" width="1710" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_sys" bpmnElement="l_sys" isHorizontal="true"><omgdc:Bounds x="60" y="180" width="1710" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_com" bpmnElement="l_com" isHorizontal="true"><omgdc:Bounds x="60" y="340" width="1710" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_ven" bpmnElement="l_ven" isHorizontal="true"><omgdc:Bounds x="60" y="500" width="1710" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_s1" bpmnElement="s1"><omgdc:Bounds x="232" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t1" bpmnElement="t1"><omgdc:Bounds x="345" y="65" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t2" bpmnElement="t2"><omgdc:Bounds x="495" y="225" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t3" bpmnElement="t3"><omgdc:Bounds x="645" y="225" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t4" bpmnElement="t4"><omgdc:Bounds x="795" y="385" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t5" bpmnElement="t5"><omgdc:Bounds x="945" y="225" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t6" bpmnElement="t6"><omgdc:Bounds x="1095" y="545" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t7" bpmnElement="t7"><omgdc:Bounds x="1245" y="385" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t8" bpmnElement="t8"><omgdc:Bounds x="1395" y="65" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_e1" bpmnElement="e1"><omgdc:Bounds x="1582" y="82" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_b1" bpmnElement="b1"><omgdc:Bounds x="832" y="437" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t9" bpmnElement="t9"><omgdc:Bounds x="1095" y="265" width="110" height="70"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_1" bpmnElement="f_tobe_complaint_1"><omgdi:waypoint x="268" y="100"/><omgdi:waypoint x="345" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_2" bpmnElement="f_tobe_complaint_2"><omgdi:waypoint x="455" y="100"/><omgdi:waypoint x="475" y="100"/><omgdi:waypoint x="475" y="260"/><omgdi:waypoint x="495" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_3" bpmnElement="f_tobe_complaint_3"><omgdi:waypoint x="605" y="260"/><omgdi:waypoint x="645" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_4" bpmnElement="f_tobe_complaint_4"><omgdi:waypoint x="755" y="260"/><omgdi:waypoint x="775" y="260"/><omgdi:waypoint x="775" y="420"/><omgdi:waypoint x="795" y="420"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_5" bpmnElement="f_tobe_complaint_5"><omgdi:waypoint x="905" y="420"/><omgdi:waypoint x="925" y="420"/><omgdi:waypoint x="925" y="260"/><omgdi:waypoint x="945" y="260"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_6" bpmnElement="f_tobe_complaint_6"><omgdi:waypoint x="1055" y="260"/><omgdi:waypoint x="1075" y="260"/><omgdi:waypoint x="1075" y="580"/><omgdi:waypoint x="1095" y="580"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_7" bpmnElement="f_tobe_complaint_7"><omgdi:waypoint x="1205" y="580"/><omgdi:waypoint x="1225" y="580"/><omgdi:waypoint x="1225" y="420"/><omgdi:waypoint x="1245" y="420"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_8" bpmnElement="f_tobe_complaint_8"><omgdi:waypoint x="1355" y="420"/><omgdi:waypoint x="1375" y="420"/><omgdi:waypoint x="1375" y="100"/><omgdi:waypoint x="1395" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_9" bpmnElement="f_tobe_complaint_9"><omgdi:waypoint x="1505" y="100"/><omgdi:waypoint x="1582" y="100"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_tobe_complaint_10" bpmnElement="f_tobe_complaint_10"><omgdi:waypoint x="850" y="473"/><omgdi:waypoint x="850" y="300"/><omgdi:waypoint x="1095" y="300"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
