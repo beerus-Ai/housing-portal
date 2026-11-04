@@ -166,7 +166,7 @@ class AiApiTest extends ApiTestBase {
         TestClient o = resident("sla@example.test", "D-404", "owner", "9000022222");
         long id = o.post("/api/requests", Map.of("category", "lift", "title", "Lift door noisy")).body().get("id").asLong();
         assertEquals(0, admin.post("/api/admin/escalations/run").body().get("escalated").asInt());
-        jdbc.update("UPDATE requests SET created_at = DATEADD('DAY', -3, CURRENT_TIMESTAMP) WHERE id=?", id);
+        jdbc.update("UPDATE requests SET created_at=? WHERE id=?", java.sql.Timestamp.valueOf(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(3)), id);
         assertEquals(1, admin.post("/api/admin/escalations/run").body().get("escalated").asInt());
         assertEquals(0, admin.post("/api/admin/escalations/run").body().get("escalated").asInt(), "only once");
         assertTrue(anyMessage(admin, "Escalated: \"Lift door noisy\""));
@@ -186,10 +186,10 @@ class AiApiTest extends ApiTestBase {
     void overviewAndDigestRunEscalationFirst() {
         TestClient o = resident("sla2@example.test", "D-405", "owner", "9000022223");
         long id = o.post("/api/requests", Map.of("category", "lift", "title", "Lift buzzing")).body().get("id").asLong();
-        jdbc.update("UPDATE requests SET created_at = DATEADD('DAY', -3, CURRENT_TIMESTAMP) WHERE id=?", id);
+        jdbc.update("UPDATE requests SET created_at=? WHERE id=?", java.sql.Timestamp.valueOf(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(3)), id);
         assertEquals(1, admin.get("/api/admin/overview").body().get("ai").get("escalated_open").asInt());
         long id2 = o.post("/api/requests", Map.of("category", "lift", "title", "Lift humming")).body().get("id").asLong();
-        jdbc.update("UPDATE requests SET created_at = DATEADD('DAY', -3, CURRENT_TIMESTAMP) WHERE id=?", id2);
+        jdbc.update("UPDATE requests SET created_at=? WHERE id=?", java.sql.Timestamp.valueOf(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).minusDays(3)), id2);
         JsonNode g = admin.get("/api/admin/digest").body();
         assertEquals(2, g.get("stats").get("escalated").asInt());
         assertTrue(g.get("text").asText().contains("2 are past the 48h target"));
