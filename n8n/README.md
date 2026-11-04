@@ -1,4 +1,6 @@
-# n8n workflows
+# n8n workflows (housing project)
+
+These belong to the Sahyadri Heights housing project (Jira HSP-31). They are saved in the team n8n cloud account (voltedge-demo31.app.n8n.cloud, Personal project) as "Sahyadri: ...", inactive until the Config nodes are filled. That account also hosts unrelated VoltEdge workflows; do not edit those.
 
 Three importable workflows that put the portal inside your automation stack. They were test-imported into a clean n8n 2.29 install; they have **not** been run against live WhatsApp.
 
