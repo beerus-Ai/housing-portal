@@ -1,0 +1,318 @@
+{
+  "id": "shwhatsappintake",
+  "name": "Sahyadri: WhatsApp intake",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "WhatsApp message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sahyadri-whatsapp",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "sahyadri-whatsapp-in"
+    },
+    {
+      "id": "n2",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "portal_url",
+              "type": "string",
+              "value": "https://YOUR-PORTAL-URL"
+            },
+            {
+              "id": "c2",
+              "name": "webhook_secret",
+              "type": "string",
+              "value": "PASTE-SECRET-FROM-SETTINGS-AI-AND-WHATSAPP"
+            },
+            {
+              "id": "c3",
+              "name": "admin_email",
+              "type": "string",
+              "value": "admin@society.test"
+            },
+            {
+              "id": "c4",
+              "name": "admin_password",
+              "type": "string",
+              "value": "PASTE-ADMIN-PASSWORD"
+            },
+            {
+              "id": "c5",
+              "name": "whatsapp_phone_id",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-PHONE-NUMBER-ID"
+            },
+            {
+              "id": "c6",
+              "name": "whatsapp_token",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-ACCESS-TOKEN"
+            },
+            {
+              "id": "c7",
+              "name": "committee_whatsapp",
+              "type": "string",
+              "value": "91XXXXXXXXXX"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Send to portal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $(\"Config\").item.json.portal_url }}/api/whatsapp/webhook",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "secret",
+              "value": "={{ $(\"Config\").item.json.webhook_secret }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($(\"WhatsApp message\").item.json.body) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        240
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sahyadri-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "sahyadri-whatsapp-verify"
+    },
+    {
+      "id": "n6",
+      "name": "Config (verify)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        240
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "portal_url",
+              "type": "string",
+              "value": "https://YOUR-PORTAL-URL"
+            },
+            {
+              "id": "c2",
+              "name": "webhook_secret",
+              "type": "string",
+              "value": "PASTE-SECRET-FROM-SETTINGS-AI-AND-WHATSAPP"
+            },
+            {
+              "id": "c3",
+              "name": "admin_email",
+              "type": "string",
+              "value": "admin@society.test"
+            },
+            {
+              "id": "c4",
+              "name": "admin_password",
+              "type": "string",
+              "value": "PASTE-ADMIN-PASSWORD"
+            },
+            {
+              "id": "c5",
+              "name": "whatsapp_phone_id",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-PHONE-NUMBER-ID"
+            },
+            {
+              "id": "c6",
+              "name": "whatsapp_token",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-ACCESS-TOKEN"
+            },
+            {
+              "id": "c7",
+              "name": "committee_whatsapp",
+              "type": "string",
+              "value": "91XXXXXXXXXX"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Ask portal to verify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        240
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $(\"Config (verify)\").item.json.portal_url }}/api/whatsapp/webhook",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "hub.mode",
+              "value": "={{ $(\"Verify (GET)\").item.json.query[\"hub.mode\"] }}"
+            },
+            {
+              "name": "hub.verify_token",
+              "value": "={{ $(\"Verify (GET)\").item.json.query[\"hub.verify_token\"] }}"
+            },
+            {
+              "name": "hub.challenge",
+              "value": "={{ $(\"Verify (GET)\").item.json.query[\"hub.challenge\"] }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "n8",
+      "name": "Answer Meta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        240
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.data }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n9",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "## WhatsApp intake\nSet the provider webhook (Meta Cloud API or Twilio) to this workflow's production URL, e.g. `https://YOUR-N8N/webhook/sahyadri-whatsapp`.\nEdit the two **Config** nodes once: portal URL and the secret shown in the portal under Settings > AI and WhatsApp.\nThe portal turns each message into a request (flat found from the phone number) and AI sorts it. The committee confirms.",
+        "height": 200,
+        "width": 520
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp message": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Send to portal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Config (verify)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config (verify)": {
+      "main": [
+        [
+          {
+            "node": "Ask portal to verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask portal to verify": {
+      "main": [
+        [
+          {
+            "node": "Answer Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
