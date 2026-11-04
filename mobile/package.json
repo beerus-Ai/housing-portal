@@ -4,6 +4,7 @@
   "private": true,
   "description": "Android app wrapper (Capacitor) for the Sahyadri Heights mobile web app",
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^7.5.0",
     "@capacitor/android": "^7.6.10",
     "@capacitor/cli": "^7.6.10",
     "@capacitor/core": "^7.6.10"
