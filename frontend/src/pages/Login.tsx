@@ -146,6 +146,7 @@ export default function Login() {
             </form>
             {clientId && <GoogleButton clientId={clientId} onCredential={onGoogle} onError={fail} />}
             <p className="small">New here? <button type="button" className="link" onClick={() => { setNotice(''); setMode('join'); }}>Join</button></p>
+            <p className="small"><a href="/app/sahyadri-heights.apk" download>Get the Android app</a></p>
           </>
         ) : (
           <>

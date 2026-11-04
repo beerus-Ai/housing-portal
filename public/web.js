@@ -132,7 +132,8 @@
         <p class="err" id="autherr" role="alert"></p>
         <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
       </form>
-      <p class="am-switch">${login ? 'New here?' : 'Already have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p></div></div>`;
+      <p class="am-switch">${login ? 'New here?' : 'Already have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p>
+      ${login ? `<a class="am-app" href="/app/sahyadri-heights.apk" download>${ic('device-mobile')}Get the Android app<span>APK, 27 MB</span></a>` : ''}</div></div>`;
     initGoogle();
   }
 
