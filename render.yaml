@@ -7,7 +7,7 @@ services:
     name: sahyadri-heights
     runtime: node
     plan: free
-    branch: main
+    branch: feat/HSP-28-admin-overview   # switch to main once PR #16 is merged
     buildCommand: npm ci --omit=dev
     startCommand: node server.js
     healthCheckPath: /api/settings
