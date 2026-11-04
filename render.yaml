@@ -22,6 +22,8 @@ services:
         value: admin@society.test
       - key: ADMIN_PASSWORD   # generated; read it in the Render dashboard under Environment, then sign in and change it
         generateValue: true
+      - key: WHATSAPP_WEBHOOK_SECRET   # generated; paste it into the n8n Config nodes (used by the WhatsApp and phone-call intake workflows)
+        generateValue: true
       # - key: DB_FILE
       #   value: /var/data/portal.db
       # - key: UPLOAD_DIR
