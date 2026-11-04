@@ -116,7 +116,7 @@ input:not([type=checkbox]):focus, select:focus { border-color: var(--color-accen
 .who-t i { font-style: normal; color: var(--color-accent-700); }
 .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--color-accent-2-600); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
 .nav-reveal { position: fixed; top: 16px; left: 16px; z-index: 5; box-shadow: var(--shadow-md); }
-.content { padding: var(--space-8) clamp(16px, 4vw, 56px) 96px; min-width: 0; max-width: 1200px; width: 100%; margin: 0 auto; }
+.content { padding: var(--space-8) clamp(16px, 4vw, 56px) 96px; min-width: 0; max-width: min(100%, 2200px); width: 100%; margin: 0 auto; }
 .page { display: flex; flex-direction: column; gap: var(--space-8); }
 .hero-title { font-size: clamp(2rem, 4vw, 3rem); font-weight: 600; }
 

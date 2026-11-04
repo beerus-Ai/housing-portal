@@ -59,7 +59,7 @@
 .top-shell .nav-grp-items .side-link:hover { transform: none; }
 
 /* ---- estate pages: vehicles, parking, workers, gate overview ---- */
-.es { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-bottom: 40px; }
+.es { width: 100%; max-width: min(100%, 2200px); margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding-bottom: 40px; }
 .es h1, .es h2, .es h3 { font-weight: 600; }
 .es-h h1 { font-size: clamp(28px, 3vw, 38px); }
 .es-h p { margin: 4px 0 0; }
