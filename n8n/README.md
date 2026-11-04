@@ -7,6 +7,7 @@ Three importable workflows that put the portal inside your automation stack. The
 | File | What it does |
 |---|---|
 | `whatsapp-intake.json` | Receives WhatsApp messages from your provider (Meta Cloud API, Twilio, ...), forwards them to `/api/whatsapp/webhook`, and answers Meta's verification handshake. |
+| `phone-call-intake.json` | A caller describes the problem; a voice provider (Twilio style, form data with From and SpeechResult) posts the transcript, which goes through the same intake as WhatsApp. No audio is stored. |
 | `weekly-digest.json` | Every Monday 09:00: log in as the committee admin, fetch `/api/admin/digest`, send it to the committee on WhatsApp. |
 | `sla-escalation-alert.json` | Every 15 minutes: run `/api/admin/escalations/run`; if anything was escalated, alert the committee on WhatsApp. |
 

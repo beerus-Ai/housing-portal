@@ -1,0 +1,265 @@
+{
+  "id": "shvoicecallintake",
+  "name": "Sahyadri: phone call intake",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": [],
+  "nodes": [
+    {
+      "id": "v1",
+      "name": "Incoming call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sahyadri-voice",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "sahyadri-voice-in"
+    },
+    {
+      "id": "v2",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "portal_url",
+              "type": "string",
+              "value": "https://YOUR-PORTAL-URL"
+            },
+            {
+              "id": "c2",
+              "name": "webhook_secret",
+              "type": "string",
+              "value": "PASTE-SECRET-FROM-SETTINGS-AI-AND-WHATSAPP"
+            },
+            {
+              "id": "c3",
+              "name": "society_name",
+              "type": "string",
+              "value": "Sahyadri Heights"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "v3",
+      "name": "Did the caller speak yet?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i1",
+              "leftValue": "={{ $json.body.SpeechResult }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "v4",
+      "name": "Ask for the problem",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        160
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Gather input=\"speech\" method=\"POST\" speechTimeout=\"auto\" language=\"en-IN\"><Say>Welcome to {{ $(\"Config\").item.json.society_name }}. After the tone, please describe the problem in a sentence or two.</Say></Gather><Say>We did not hear anything. Goodbye.</Say></Response>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "v5",
+      "name": "Send to portal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $(\"Config\").item.json.portal_url }}/api/whatsapp/webhook",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "secret",
+              "value": "={{ $(\"Config\").item.json.webhook_secret }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $(\"Incoming call\").item.json.body.From, text: $(\"Incoming call\").item.json.body.SpeechResult }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "v6",
+      "name": "Choose what to say",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ],
+      "parameters": {
+        "jsCode": "const created = Number($input.first().json.created || 0);\nconst say = created\n  ? 'Thank you. Your request has been logged. The committee will update you on WhatsApp. Goodbye.'\n  : 'Thank you. We could not match this phone number to a resident. Please register in the portal with this number, or ask the committee to add it. Goodbye.';\nreturn [{ json: { say } }];"
+      }
+    },
+    {
+      "id": "v7",
+      "name": "Say the result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        -120
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say>{{ $json.say }}</Say></Response>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "v8",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ],
+      "parameters": {
+        "content": "## Phone call intake (housing project)\nTwilio (or any voice provider that posts form data with From and SpeechResult) points a phone number at this workflow's Production URL.\nFirst request: the caller is asked to describe the problem. Twilio speech-to-text posts the words back here, and they go through the same intake as WhatsApp: the flat is found from the caller number, AI sorts the request, the committee confirms.\nNo audio is stored. Edit **Config** once.",
+        "height": 220,
+        "width": 560
+      }
+    }
+  ],
+  "connections": {
+    "Incoming call": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Did the caller speak yet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did the caller speak yet?": {
+      "main": [
+        [
+          {
+            "node": "Send to portal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask for the problem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to portal": {
+      "main": [
+        [
+          {
+            "node": "Choose what to say",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose what to say": {
+      "main": [
+        [
+          {
+            "node": "Say the result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

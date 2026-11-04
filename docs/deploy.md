@@ -65,3 +65,6 @@ Rollback: before any new data is written on Java, point the proxy back at the No
 4. Open the service > Environment, read the generated `ADMIN_PASSWORD`, sign in as `admin@society.test`, then change the password from Profile.
 5. Free plan caveat: data lives on the instance disk and is lost on redeploy or after long sleeps. For a durable demo use a paid plan, add the disk block in `render.yaml` and set `DB_FILE=/var/data/portal.db`, `UPLOAD_DIR=/var/data/uploads`.
 6. WhatsApp: set `WHATSAPP_WEBHOOK_SECRET`, then point the provider webhook at `https://<your-url>/api/whatsapp/webhook?secret=<that secret>`.
+
+### Current deployment
+Live: https://sahyadri-heights.onrender.com (Render free plan, blueprint `sahyadri-heights`, branch `feat/HSP-28-admin-overview`). The admin password is the generated `ADMIN_PASSWORD` under the service Environment tab. First request after sleep can take about 50 seconds.

@@ -10,9 +10,11 @@ Every milestone updates three places: this log and the code on GitHub (PR #16 an
 | 11-04 | Submission documents: requirements, BPMN, architecture, test pack, demo script, privacy, backlog v2 | docs/, commit 14bd872 | HSP-35 (BPMN import pending) |
 | 11-04 | CI green on all five jobs including PostgreSQL 16 tests and packaged boot, Docker image build | Actions run 41781026588 | HSP-34 |
 | 11-04 | n8n workflows for the housing project saved in the team n8n cloud account (inactive until credentials are added) | `n8n/` | HSP-31 |
+| 11-04 | Deployed on Render (free plan): https://sahyadri-heights.onrender.com ; headers and auth checks verified | render.yaml, docs/deploy.md | HSP-36 (Done) |
+| 11-04 | Phone-call intake workflow (voice number -> speech to text -> same intake as WhatsApp) | n8n/phone-call-intake.json | new story in epic HSP-26 |
 | 11-04 | Native NFC and camera QR scanning built into the Android app | commit b956206 | HSP-32 (device test pending) |
 
 ## Open
-- Live URL (HSP-36): needs a hosting sign-in; `render.yaml` is ready.
+- Live URL is up on the Render free plan (sleeps, data resets on redeploy): move to a paid plan with a disk, switch the branch to main after PR #16 merges.
 - Device test of NFC and camera scan (HSP-32), activate n8n workflows (HSP-31), import BPMN into Signavio (HSP-35).
 - Consent for household members on first sign-in (HSP-37), peer review of PR #16 (HSP-38).
