@@ -1,0 +1,32 @@
+# One-click hosting on Render (https://render.com): New > Blueprint > pick this repository.
+# Runs the default Node app. Render gives you an https URL and sets the Secure session cookie correctly behind its proxy.
+# Free plan: the SQLite file and uploaded photos live on the instance disk and are lost on redeploy or after a long sleep.
+# For a durable demo, switch `plan` to a paid one and uncomment the disk block (then DB_FILE and UPLOAD_DIR point at /var/data).
+services:
+  - type: web
+    name: sahyadri-heights
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/settings
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@society.test
+      - key: ADMIN_PASSWORD   # generated; read it in the Render dashboard under Environment, then sign in and change it
+        generateValue: true
+      # - key: DB_FILE
+      #   value: /var/data/portal.db
+      # - key: UPLOAD_DIR
+      #   value: /var/data/uploads
+    # disk:
+    #   name: portal-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

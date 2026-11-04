@@ -21,7 +21,7 @@ const ORDER = { open: 0, assigned: 1, in_progress: 2, closed: 3 };
 
 function createApp(opts = {}) {
   const db = openDb(opts.dbFile);
-  const uploadDir = opts.uploadDir || path.join(__dirname, 'uploads');
+  const uploadDir = opts.uploadDir || process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
   fs.mkdirSync(uploadDir, { recursive: true });
   const app = express();
   app.disable('x-powered-by');
