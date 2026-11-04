@@ -102,6 +102,22 @@ function openDb(file) {
     db.prepare("INSERT INTO users(name,email,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,datetime('now'))")
       .run('Society Admin', email, bcrypt.hashSync(pw, 10), 'admin', 'approved');
   }
+  seedDemoAccounts(db);
   return db;
+}
+// Optional demo accounts (one per role) so a freshly wiped hosted instance can be tested straight away.
+// Only runs when SEED_PASSWORD (8+ chars) is set in the environment; the password is never stored in the repo.
+function seedDemoAccounts(db) {
+  const pw = process.env.SEED_PASSWORD;
+  if (!pw || pw.length < 8) return;
+  const hash = bcrypt.hashSync(pw, 10);
+  const add = db.prepare("INSERT OR IGNORE INTO users(name,email,flat,resident_type,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,?,'approved',datetime('now'))");
+  add.run('Owner One', 'owner1@sahyadri.test', 'B-101', 'owner', hash, 'resident');
+  add.run('Tenant One', 'tenant1@sahyadri.test', 'B-102', 'tenant', hash, 'resident');
+  add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
+  add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
+  const t = db.prepare("SELECT id FROM users WHERE email='tenant1@sahyadri.test'").get();
+  const y = new Date().getFullYear();
+  if (t) db.prepare('INSERT OR IGNORE INTO leases(user_id,start_date,end_date,owner_name) VALUES(?,?,?,?)').run(t.id, `${y}-01-01`, `${y + 1}-12-31`, 'Owner One');
 }
 module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };
