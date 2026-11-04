@@ -6,8 +6,8 @@ Recorded 2026-11-04. Only what was actually run is marked as passed.
 | Suite | Command | Count | Result |
 | --- | --- | --- | --- |
 | Node API (`node:test`) | `npm test` | 48 (41 baseline plus 7 in `test/ai.test.js`) | 48 pass, 0 fail (re-run during this documentation pass) |
-| Java backend (JUnit 5) | `cd backend && ./gradlew test` | 68 | Reported green by the development run before this documentation pass; not re-run here |
-| React (Vitest) | `cd frontend && npm test` | 59 | Reported green by the development run; not re-run here |
+| Java backend (JUnit 5) | `cd backend && ./gradlew test` | 79 | Run on 2026-11-04 after merging the AI workflows: 79 passed, 0 failed (68 existing + 11 new in `AiApiTest`); H2 only, not run on PostgreSQL |
+| React (Vitest) | `cd frontend && npm test` | 65 | Run on 2026-11-04 after merging the AI workflows: 65 passed (59 + 6 new); lint and build clean; checked live against the Node backend |
 
 The AI tests exercise redaction, rule triage, committee-only visibility of triage, webhook handling, simulator, SLA escalation, notice drafter and digest. They run with no API key, so they prove the rule-based path, not LLM output.
 

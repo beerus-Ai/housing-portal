@@ -296,7 +296,7 @@ flowchart LR
 ## 7. Design note
 **Why a Node MVP first.** The brief rewards a working product early. Node with Express and `node:sqlite` has no build step or native dependency, so the five core requirements and their tests existed in the first session. Every rule (role checks, forward-only lifecycle, audit on each change) was captured as an executable test.
 
-**Why then Java and React.** A society portal is long-lived and handed between people; Spring Boot and React are mainstream, widely staffed and have mature tooling (ADR 0001). The strangler approach reused the Node tests as the behavioural spec, and the Java suite (68 tests) and React suite (59 tests) prove parity phase by phase. The Node app stays the system of record until cutover.
+**Why then Java and React.** A society portal is long-lived and handed between people; Spring Boot and React are mainstream, widely staffed and have mature tooling (ADR 0001). The strangler approach reused the Node tests as the behavioural spec, and the Java suite (79 tests) and React suite (65 tests) prove parity phase by phase. The Node app stays the system of record until cutover.
 
 **Why hosted PostgreSQL.** SQLite is a single file on one server: fine for a demo, weak for backups, concurrent writers and managed failover. A hosted PostgreSQL gives backups, point-in-time recovery and TLS connections. `scripts/export-sqlite-to-postgres.js` moves existing data. This is the target, not yet the running state.
 

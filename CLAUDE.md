@@ -16,8 +16,8 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 ## Run
 - `npm start` -> http://localhost:3000. The database starts empty except for the committee admin (`admin@society.test`; set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, required and 12+ characters in production). There is no demo data: register residents through the UI and enter only the minimum data when testing.
 - `npm test` -> Node API tests (`node:test`, 48 including `test/ai.test.js`). Every story ships with a test; testing leads sign off.
-- Java: `cd backend && ./gradlew test` (JUnit, 68 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
-- React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 59), `npm run lint`, `npm run build`.
+- Java: `cd backend && ./gradlew test` (JUnit, 79 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
+- React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 65), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android).
 - Docker Compose (Postgres + Java + nginx/React) and CI are defined (`docker-compose.yml`, `.github/workflows/ci.yml`, `docs/deploy.md`) but have not been run.
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).

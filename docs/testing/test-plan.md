@@ -12,8 +12,8 @@ In scope: all requirements in `docs/requirements.md`, including the AI workflows
 | Level | What | Tool | Count |
 | --- | --- | --- | --- |
 | API / integration (Node) | Express app against a temporary SQLite database, real HTTP | `node:test` (`npm test`) | 41 baseline plus 7 AI tests in `test/ai.test.js` = 48 |
-| API / integration (Java) | Spring Boot with MockMvc and one real-HTTP test, in-memory H2 | JUnit 5 (`cd backend && ./gradlew test`) | 68 |
-| Component / UI (React) | React Testing Library with mocked fetch | Vitest (`cd frontend && npm test`) | 59 |
+| API / integration (Java) | Spring Boot with MockMvc and one real-HTTP test, in-memory H2 | JUnit 5 (`cd backend && ./gradlew test`) | 79 |
+| Component / UI (React) | React Testing Library with mocked fetch | Vitest (`cd frontend && npm test`) | 65 |
 | Manual UI | Role walk-throughs on the React app and phone | Browser, Android phone via adb | see `test-results.md` |
 | Acceptance | Residents at the partner society | `acceptance-plan.md` | not yet done |
 
