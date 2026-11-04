@@ -161,6 +161,59 @@ class AiApiTest extends ApiTestBase {
         assertTrue(r.body().get("replies").get(0).asText().contains("logged as lift"));
     }
 
+    private static String decision(String t) {
+        return (String) AiService.classifyRules(t).get("decision");
+    }
+
+    @Test
+    void messageGateRules() {
+        assertEquals("ignore", decision("Good morning everyone!"));
+        assertEquals("ignore", decision("Thanks for organising the Diwali party"));
+        assertEquals("ignore", decision("Who is coming to the AGM on Sunday?"));
+        assertEquals("review", decision("Is the lift working?"));
+        assertEquals("review", decision("Water tank cleaning on Sunday"));
+        assertEquals("create", decision("Lift is not working since morning"));
+        assertEquals("create", decision("Garbage not collected today"));
+        assertEquals("create", decision("Sparks coming from the switch board"));
+        assertEquals("rules", AiService.classifyRules("hello").get("source"));
+    }
+
+    @Test
+    void publicGroupFlow() {
+        resident("grp@example.test", "E-505", "owner", "9000033333");
+        String secret = admin.get("/api/admin/ai").body().get("webhook_secret").asText();
+        String[] h = {"x-webhook-secret", secret};
+        TestClient anon = client();
+        java.util.function.Function<String, TestClient.Resp> post = text -> anon.call("POST", HOOK, Map.of("from", "919000033333", "text", text, "group", true), h);
+        var chat = post.apply("Good morning everyone, have a great day");
+        assertEquals(0, chat.body().get("created").asInt());
+        assertEquals(1, chat.body().get("ignored").asInt());
+        var unknown = anon.call("POST", HOOK, Map.of("from", "911234500000", "text", "Lift is not working", "group", true), h);
+        assertEquals(0, unknown.body().get("created").asInt());
+        assertEquals(1, unknown.body().get("ignored").asInt());
+        assertEquals(1, post.apply("Is the lift working?").body().get("review").asInt());
+        assertEquals(1, post.apply("Lift is not working since morning").body().get("created").asInt());
+        JsonNode log = admin.get("/api/admin/ai").body();
+        assertEquals(1, log.get("review").size());
+        assertEquals(1, log.get("counts").get("messages_review").asInt());
+        int outs = 0;
+        for (JsonNode m : log.get("messages")) if ("out".equals(m.get("direction").asText())) outs++;
+        assertEquals(1, outs, "only the real request is answered");
+        assertTrue(anyMessage(admin, "WhatsApp message needs review \\(flat E-505\\): Is the lift working\\?"));
+        long id = log.get("review").get(0).get("id").asLong();
+        var ok = admin.post("/api/admin/whatsapp/messages/" + id + "/create-request", Map.of());
+        assertEquals(201, ok.status());
+        assertTrue(ok.body().get("created").asLong() > 0);
+        assertEquals(404, admin.post("/api/admin/whatsapp/messages/" + id + "/create-request", Map.of()).status(), "cannot approve twice");
+        post.apply("Is the water tank clean?");
+        log = admin.get("/api/admin/ai").body();
+        assertEquals(200, admin.post("/api/admin/whatsapp/messages/" + log.get("review").get(0).get("id").asLong() + "/dismiss", Map.of()).status());
+        assertEquals(0, admin.get("/api/admin/ai").body().get("review").size());
+        assertEquals(401, anon.post("/api/admin/whatsapp/messages/" + id + "/dismiss", Map.of()).status());
+        var sim = admin.post("/api/admin/whatsapp/simulate", Map.of("phone", "9000033333", "text", "Happy Diwali all", "group", true));
+        assertEquals("ignore", sim.body().get("decision").asText());
+    }
+
     @Test
     void slaEscalationFlagsOverdueRequestsOnce() {
         TestClient o = resident("sla@example.test", "D-404", "owner", "9000022222");

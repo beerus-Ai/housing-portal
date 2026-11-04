@@ -863,15 +863,34 @@ function createApp(opts = {}) {
     return v;
   };
   const sameSecret = given => { const a = Buffer.from(String(given || '')), b = Buffer.from(waSecret()); return a.length === b.length && crypto.timingSafeEqual(a, b); };
-  const handleWhatsApp = (from, text) => {
+  // Creates the request for a resident's message and sends the private confirmation (used by the intake and by committee approval).
+  const createFromMessage = (u, from, body, msgId) => {
+    const tri = AI.triageRules(body, q('SELECT id,trade FROM vendors'));
+    const title = body.split(/(?<=[.!?])\s|\n/)[0].slice(0, 120);
+    const r = run("INSERT INTO requests(user_id,category,title,description,source) VALUES(?,?,?,?,'whatsapp')", u.id, tri.category, title, body.slice(0, 2000));
+    const id = Number(r.lastInsertRowid);
+    log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via WhatsApp)');
+    applyTriage(id, body);
+    if (msgId) run("UPDATE whatsapp_messages SET status='received', request_id=? WHERE id=?", id, msgId);
+    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via WhatsApp: ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    const text = 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.';
+    waOut(from, text, u.id, id);
+    return { id, text };
+  };
+  // opts.group: the message came from a group. Groups are public, so unknown senders get no reply and confirmations go privately to the sender.
+  const handleWhatsApp = async (from, text, opts = {}) => {
     const body = String(text || '').trim().slice(0, 1000);
     if (!digits(from) || !body) return { replies: [], created: null };
     const reply = (u, t, rid) => { waOut(from, t, u && u.id, rid); return t; };
-    run('INSERT INTO whatsapp_messages(direction,phone,body,status) VALUES(?,?,?,?)', 'in', digits(from), body, 'received');
+    const inId = Number(run('INSERT INTO whatsapp_messages(direction,phone,body,status) VALUES(?,?,?,?)', 'in', digits(from), body, 'received').lastInsertRowid);
+    const mark = st => run('UPDATE whatsapp_messages SET status=? WHERE id=?', st, inId);
     const key = phoneKey(from);
     const u = q("SELECT * FROM users WHERE role='resident' AND status='approved' AND phone IS NOT NULL").find(x => phoneKey(x.phone) === key);
-    if (!u) return { replies: [reply(null, 'Hello from ' + getSetting('society_name') + '. This number is not registered yet. Please register in the portal with this phone number, or ask the committee to add it.')], created: null };
-    run('UPDATE whatsapp_messages SET user_id=? WHERE id=(SELECT MAX(id) FROM whatsapp_messages WHERE direction=? AND phone=?)', u.id, 'in', digits(from));
+    if (!u) {
+      if (opts.group) { mark('ignored'); return { replies: [], created: null, decision: 'ignore' }; }
+      return { replies: [reply(null, 'Hello from ' + getSetting('society_name') + '. This number is not registered yet. Please register in the portal with this phone number, or ask the committee to add it.')], created: null };
+    }
+    run('UPDATE whatsapp_messages SET user_id=? WHERE id=?', u.id, inId);
     const low = body.toLowerCase();
     if (/^(sos|emergency|fire|help me)\b/.test(low)) return { replies: [reply(u, 'For an emergency please use the Emergency button in the app or call the gate directly. WhatsApp is not monitored around the clock.')], created: null };
     if (/^status\b/.test(low)) {
@@ -879,14 +898,16 @@ function createApp(opts = {}) {
       return { replies: [reply(u, mine.length ? mine.map(r => '#' + r.id + ' ' + r.title + ': ' + r.status.replace('_', ' ')).join('\n') : 'You have no requests yet. Just describe the problem and we will log it.')], created: null };
     }
     if (!allowedKeys(u).includes('request.create')) return { replies: [reply(u, 'Your account cannot raise requests. Please contact the committee.')], created: null };
-    const tri = AI.triageRules(body, q('SELECT id,trade FROM vendors'));
-    const title = body.split(/(?<=[.!?])\s|\n/)[0].slice(0, 120);
-    const r = run("INSERT INTO requests(user_id,category,title,description,source) VALUES(?,?,?,?,'whatsapp')", u.id, tri.category, title, body.slice(0, 2000));
-    const id = Number(r.lastInsertRowid);
-    log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via WhatsApp)');
-    applyTriage(id, body);
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via WhatsApp: ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
-    return { replies: [reply(u, 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.', id)], created: id };
+    // Gate: only real requests become tickets. Chatter is ignored silently; unsure messages wait for the committee. Neither sends a reply.
+    const v = await AI.classifyMessage(body);
+    if (v.decision === 'ignore') { mark('ignored'); return { replies: [], created: null, decision: 'ignore', kind: v.kind }; }
+    if (v.decision === 'review') {
+      mark('review');
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'WhatsApp message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
+      return { replies: [], created: null, decision: 'review', kind: v.kind };
+    }
+    const made = createFromMessage(u, from, body, inId);
+    return { replies: [made.text], created: made.id, decision: 'create', kind: v.kind };
   };
   // Meta Cloud API verification handshake
   app.get('/api/whatsapp/webhook', (req, res) => {
@@ -894,31 +915,53 @@ function createApp(opts = {}) {
     res.status(403).json({ error: 'Bad verify token' });
   });
   // Accepts {from,text} (any gateway, or a simulator) or the Meta Cloud API payload. Secret in the x-webhook-secret header or ?secret=.
-  app.post('/api/whatsapp/webhook', (req, res) => {
+  app.post('/api/whatsapp/webhook', async (req, res) => {
     if (!sameSecret(req.get('x-webhook-secret') || req.query.secret)) return res.status(401).json({ error: 'Bad webhook secret' });
     const msgs = [];
     const b = req.body || {};
-    if (typeof b.from === 'string' && typeof b.text === 'string') msgs.push([b.from, b.text]);
-    for (const e of b.entry || []) for (const c of e.changes || []) for (const m of (c.value && c.value.messages) || []) if (m.type === 'text' && m.text) msgs.push([m.from, m.text.body]);
-    let created = 0;
-    for (const [from, text] of msgs.slice(0, 20)) if (handleWhatsApp(from, text).created) created++;
-    res.json({ ok: true, received: msgs.length, created });
+    if (typeof b.from === 'string' && typeof b.text === 'string') msgs.push([b.from, b.text, !!(b.group || b.group_id)]);
+    for (const e of b.entry || []) for (const c of e.changes || []) for (const m of (c.value && c.value.messages) || []) if (m.type === 'text' && m.text) msgs.push([m.from, m.text.body, !!(m.group_id || (c.value && c.value.group_id))]);
+    let created = 0, review = 0, ignored = 0;
+    for (const [from, text, group] of msgs.slice(0, 20)) {
+      const o = await handleWhatsApp(from, text, { group });
+      if (o.created) created++; else if (o.decision === 'review') review++; else if (o.decision === 'ignore') ignored++;
+    }
+    res.json({ ok: true, received: msgs.length, created, review, ignored });
   });
   app.get('/api/admin/ai', auth, admin, (req, res) => {
     const n = (sql, ...p) => one(sql, ...p).n;
     res.json({
       mode: AI.aiMode(), sla_hours: SLA_HOURS, whatsapp_live: !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID),
       webhook_path: '/api/whatsapp/webhook', webhook_secret: waSecret(),
-      counts: { whatsapp_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp'"), messages_in: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in'"), messages_out: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='out'"), triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL') },
+      counts: { whatsapp_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp'"), messages_in: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in'"), messages_out: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='out'"), triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), messages_review: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='review'"), messages_ignored: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='ignored'") },
       messages: q('SELECT m.id,m.direction,m.phone,m.body,m.status,m.request_id,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 30'),
+      review: q("SELECT m.id,m.phone,m.body,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.direction='in' AND m.status='review' ORDER BY m.id DESC LIMIT 50"),
     });
   });
-  app.post('/api/admin/whatsapp/simulate', auth, admin, (req, res) => {
+  app.post('/api/admin/whatsapp/simulate', auth, admin, async (req, res) => {
     const phone = str(req.body.phone, 30), text = str(req.body.text, 1000);
     if (!digits(phone) || !text) return res.status(400).json({ error: 'Phone and message are required' });
-    const out = handleWhatsApp(phone, text);
+    const out = await handleWhatsApp(phone, text, { group: req.body.group === true });
     log(req.user.id, 'whatsapp', out.created, 'simulated', text.slice(0, 80));
-    res.json({ created: out.created, replies: out.replies });
+    res.json({ created: out.created, replies: out.replies, decision: out.decision || (out.created ? 'create' : 'none') });
+  });
+  // Committee review queue: messages the gate was unsure about. Approve turns one into a request, dismiss ignores it.
+  const reviewMsg = id => one("SELECT * FROM whatsapp_messages WHERE id=? AND direction='in' AND status='review'", id);
+  app.post('/api/admin/whatsapp/messages/:id/create-request', auth, admin, (req, res) => {
+    const m = reviewMsg(req.params.id);
+    if (!m) return res.status(404).json({ error: 'Message not waiting for review' });
+    const u = one("SELECT * FROM users WHERE id=? AND role='resident' AND status='approved'", m.user_id);
+    if (!u) return res.status(409).json({ error: 'Sender is no longer an approved resident' });
+    const made = createFromMessage(u, m.phone, m.body, m.id);
+    log(req.user.id, 'whatsapp', m.id, 'review_approved', 'request #' + made.id);
+    res.status(201).json({ created: made.id });
+  });
+  app.post('/api/admin/whatsapp/messages/:id/dismiss', auth, admin, (req, res) => {
+    const m = reviewMsg(req.params.id);
+    if (!m) return res.status(404).json({ error: 'Message not waiting for review' });
+    run("UPDATE whatsapp_messages SET status='ignored' WHERE id=?", m.id);
+    log(req.user.id, 'whatsapp', m.id, 'review_dismissed', '');
+    res.json({ ok: true });
   });
   app.post('/api/admin/ai/draft-notice', auth, admin, async (req, res) => {
     const text = str(req.body.text, 600);

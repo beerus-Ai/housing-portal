@@ -57,6 +57,7 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-WR-09 | AI only suggests: a committee member confirms the vendor assignment; the confirmation is audited **(in progress)** | M (for AI features) |
 | FR-WR-10 | SLA timer of 48 hours; overdue open requests are escalated automatically to the committee (notification, audited) **(in progress)** | C |
 | FR-WR-11 | Status replies are sent back to the requester on WhatsApp for WhatsApp-originated requests **(in progress)** | S |
+| FR-WR-12 | Message gate for public WhatsApp groups: a classifier (rules by default, Claude when a key is set, personal details stripped) decides request / question / chatter. Chatter is ignored without a reply; unsure messages go to a committee **Needs review** queue (create request or dismiss); unknown senders in a group get no reply; confirmations go privately to the sender | M |
 
 ### Epic 4: Notifications
 | ID | Requirement | MoSCoW |

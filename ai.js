@@ -73,6 +73,36 @@ async function triageLlm(text, vendors, base) {
   return { category: j.category, priority: j.priority, summary: String(j.summary || base.summary).slice(0, 110), vendor_id: vendor ? vendor.id : null, confidence: 0.9, source: 'llm' };
 }
 
+// ---- Is this message a request at all? (public groups carry lots of chatter)
+// decision: 'create' (log a request), 'review' (committee decides, nothing is sent back) or 'ignore' (chatter or a plain question).
+const REPORT = ['not working', 'broken', 'stopped working', 'blocked', 'leaking', 'leak', 'no water', 'no power', 'power cut', 'no electricity', 'overflow', 'damaged', 'stuck', 'not clean', 'foul smell', 'complaint', 'please fix', 'please repair', 'need repair', 'needs repair', 'out of order', 'tripping', 'sparking'];
+const ASKS = ['please', 'kindly', 'request', 'complain', 'someone', 'need ', 'needs ', 'urgent', 'not been', 'since '];
+function classifyRules(text) {
+  const t = String(text || '').toLowerCase().trim();
+  const kw = Object.values(KEYWORDS).flat().filter(w => t.includes(w)).length;
+  const urgent = hit(t, URGENT).length, report = hit(t, REPORT).length + (/\b(not|no|isn't|won't|can't|cannot|doesn't|didn't|never|without)\b/.test(t) ? 1 : 0), ask = hit(t, ASKS).length;
+  const signal = kw + urgent + report;
+  const question = /\?\s*$/.test(t) || /^(who|when|what|where|why|how|is there|is the|are the|does|do you|can we|can i|anyone|any one)\b/.test(t);
+  const out = (kind, decision, confidence) => ({ kind, decision, confidence, source: 'rules' });
+  if (signal === 0) return t.length >= 40 && ask ? out('unclear', 'review', 0.4) : out('chatter', 'ignore', 0.85);
+  if (urgent) return out('request', 'create', 0.9);
+  if (question) return out('question', 'review', 0.5);
+  // A topic word alone ("water tank cleaning on Sunday") is not a report: it needs a fault phrase, or a polite ask about a topic.
+  if (!report && !(ask && kw)) return out('unclear', 'review', 0.4);
+  return out('request', 'create', Math.min(0.95, 0.6 + (kw + report) * 0.1));
+}
+async function classifyLlm(text) {
+  const out = await callClaude(
+    'You read one message from a residents WhatsApp group of a housing society. Decide if it reports a fault or asks the society for a service (request), asks a general question (question), or is chat, greetings, announcements, opinions or thanks (chatter). Reply with JSON only: {"kind": "request"|"question"|"chatter", "confidence": 0 to 1}. The text has personal details removed.',
+    redact(text), 60);
+  const j = parseJson(out);
+  if (!j || !['request', 'question', 'chatter'].includes(j.kind)) return null;
+  const c = Math.max(0, Math.min(1, Number(j.confidence) || 0));
+  const decision = c < 0.7 ? 'review' : j.kind === 'request' ? 'create' : 'ignore';
+  return { kind: j.kind, decision, confidence: Number(c.toFixed(2)), source: 'llm' };
+}
+async function classifyMessage(text) { return (await classifyLlm(text)) || classifyRules(text); }
+
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 function draftNoticeRules(rough) {
   const text = String(rough || '').trim().replace(/\s+/g, ' ');
@@ -112,4 +142,4 @@ async function digest(stats) {
   return { text: out || base, source: out ? 'llm' : 'rules' };
 }
 
-module.exports = { redact, triageRules, triageLlm, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => (process.env.ANTHROPIC_API_KEY ? 'llm' : 'rules') };
+module.exports = { redact, triageRules, triageLlm, classifyRules, classifyLlm, classifyMessage, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => (process.env.ANTHROPIC_API_KEY ? 'llm' : 'rules') };

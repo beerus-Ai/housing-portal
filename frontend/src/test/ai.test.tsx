@@ -107,4 +107,43 @@ describe('Settings AI tab', () => {
     expect(await screen.findByText('Request #12 created from WhatsApp')).toBeInTheDocument();
     expect(calls.find((c) => c.url.includes('simulate'))?.body).toEqual({ phone: '+911', text: 'Tap leaking' });
   });
+
+  it('lists messages needing review and creates or dismisses them', async () => {
+    const info: AiInfo = {
+      ...aiInfo, counts: { ...aiInfo.counts, messages_review: 2, messages_ignored: 4 },
+      review: [
+        { id: 31, phone: '+911', body: 'Water leak in basement', created_at: '2026-11-01 10:00:00', resident: 'Asha Rao', flat: 'A-101' },
+        { id: 32, phone: '+912', body: 'Anyone has a plumber?', created_at: '2026-11-01 11:00:00', resident: null, flat: null },
+      ],
+    };
+    const { calls } = mockApi({
+      ...base(admin), 'GET /api/admin/ai': info,
+      'POST /api/admin/whatsapp/messages/31/create-request': { created: 40 },
+      'POST /api/admin/whatsapp/messages/32/dismiss': { ok: true },
+    });
+    renderApp(<Settings />, '/settings?tab=ai');
+    expect(await screen.findByText('Water leak in basement')).toBeInTheDocument();
+    expect(screen.getByText('A-101 · Asha Rao')).toBeInTheDocument();
+    expect(screen.getByTestId('gate-counts')).toHaveTextContent('2 waiting for review · 4 ignored as chatter');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Create request' })[0]);
+    expect(await screen.findByText('Request #40 created')).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Dismiss' })[1]);
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/admin/whatsapp/messages/32/dismiss')).toBe(true));
+    expect(calls.some((c) => c.url === '/api/admin/whatsapp/messages/31/create-request')).toBe(true);
+  });
+
+  it('shows the empty state and sends the group flag from the simulator', async () => {
+    const { calls } = mockApi({
+      ...base(admin), 'GET /api/admin/ai': aiInfo,
+      'POST /api/admin/whatsapp/simulate': { created: null, replies: [], decision: 'ignore' },
+    });
+    renderApp(<Settings />, '/settings?tab=ai');
+    expect(await screen.findByText('Nothing waiting for review')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Resident phone'), '+911');
+    await userEvent.type(screen.getByLabelText('WhatsApp message'), 'good morning all');
+    await userEvent.click(screen.getByLabelText('Sent in a group'));
+    await userEvent.click(screen.getByRole('button', { name: /Send as resident/ }));
+    expect(await screen.findByText('Ignored as chatter')).toBeInTheDocument();
+    expect(calls.find((c) => c.url.includes('simulate'))?.body).toEqual({ phone: '+911', text: 'good morning all', group: true });
+  });
 });

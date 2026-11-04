@@ -155,7 +155,7 @@
         -120
       ],
       "parameters": {
-        "jsCode": "const created = Number($input.first().json.created || 0);\nconst say = created\n  ? 'Thank you. Your request has been logged. The committee will update you on WhatsApp. Goodbye.'\n  : 'Thank you. We could not match this phone number to a resident. Please register in the portal with this number, or ask the committee to add it. Goodbye.';\nreturn [{ json: { say } }];"
+        "jsCode": "const r = $input.first().json;\nconst created = Number(r.created || 0);\nconst say = created\n  ? 'Thank you. Your request has been logged. The committee will update you on WhatsApp. Goodbye.'\n  : (r.review || r.ignored) ? 'Thank you. The committee will look at your message and get back to you. Goodbye.'\n  : 'Thank you. We could not match this phone number to a resident. Please register in the portal with this number, or ask the committee to add it. Goodbye.';\nreturn [{ json: { say } }];"
       }
     },
     {

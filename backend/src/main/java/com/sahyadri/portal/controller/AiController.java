@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -61,6 +62,18 @@ public class AiController {
     public Map<String, Object> simulate(@AuthenticationPrincipal User u, Body body) {
         guard.admin(u);
         return whatsapp.simulate(u, body);
+    }
+
+    @PostMapping("/api/admin/whatsapp/messages/{id}/create-request")
+    public ResponseEntity<Map<String, Object>> approve(@AuthenticationPrincipal User u, @PathVariable("id") String id) {
+        guard.admin(u);
+        return ResponseEntity.status(201).body(whatsapp.approve(u, id));
+    }
+
+    @PostMapping("/api/admin/whatsapp/messages/{id}/dismiss")
+    public Map<String, Object> dismiss(@AuthenticationPrincipal User u, @PathVariable("id") String id) {
+        guard.admin(u);
+        return whatsapp.dismiss(u, id);
     }
 
     @PostMapping("/api/admin/ai/draft-notice")

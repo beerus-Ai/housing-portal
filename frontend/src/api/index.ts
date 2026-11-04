@@ -4,7 +4,7 @@ import { safetyApi } from './safety';
 import type {
   AccessMatrix, AiInfo, Digest, NoticeDraft, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification,
   AuditRow, Comment, Guard, GuardBody, HouseholdBody, HouseholdMember, Lease, LeaseBody, LeaseRow, Me, Notice, NoticeBody,
-  RegisterBody, RequestDetail, RequestStatus, ServiceRequest, Settings, SettingsPatch, Stats, User, Vendor, VendorBody,
+  RegisterBody, RequestDetail, RequestStatus, ServiceRequest, WhatsAppSimResult, Settings, SettingsPatch, Stats, User, Vendor, VendorBody,
 } from './types';
 
 export * from './types';
@@ -90,8 +90,10 @@ export const API = {
     resetPassword: (id: number, password: string) =>
       call<{ ok: true }>('POST', `/api/admin/users/${enc(id)}/reset-password`, { password }),
     ai: () => call<AiInfo>('GET', '/api/admin/ai'),
-    simulateWhatsApp: (phone: string, text: string) =>
-      call<{ created: number | null; replies: string[] }>('POST', '/api/admin/whatsapp/simulate', { phone, text }),
+    simulateWhatsApp: (phone: string, text: string, group?: boolean) =>
+      call<WhatsAppSimResult>('POST', '/api/admin/whatsapp/simulate', group ? { phone, text, group: true } : { phone, text }),
+    createRequestFromMessage: (id: number) => call<{ created: number }>('POST', `/api/admin/whatsapp/messages/${enc(id)}/create-request`),
+    dismissMessage: (id: number) => call<{ ok: true }>('POST', `/api/admin/whatsapp/messages/${enc(id)}/dismiss`),
     draftNotice: (text: string) => call<NoticeDraft>('POST', '/api/admin/ai/draft-notice', { text }),
     digest: () => call<Digest>('GET', '/api/admin/digest'),
     removeUser: (id: number) => call<{ ok: true }>('DELETE', `/api/admin/users/${enc(id)}`),
