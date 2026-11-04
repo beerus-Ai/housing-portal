@@ -57,6 +57,8 @@ export interface Overview {
   estate?: { vehicles?: number; parking_total?: number; parking_assigned?: number; workers_active?: number; workers_inactive?: number; vendors?: number };
   leases?: { ending_60d?: number; tenants_without_lease?: number };
   notices?: { last_30d?: number };
+  /** Absent on older backends. */
+  ai?: { mode?: 'rules' | 'llm'; sla_hours?: number; triaged?: number; urgent_open?: number; escalated_open?: number; whatsapp_requests_30d?: number; whatsapp_messages_7d?: number };
 }
 
 export const safetyApi = {

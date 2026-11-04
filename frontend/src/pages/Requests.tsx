@@ -160,6 +160,36 @@ function CommitteeActions({ r }: { r: RequestDetail }) {
   );
 }
 
+function AiSuggestion({ r }: { r: RequestDetail }) {
+  const qc = useQueryClient();
+  const vendors = useQuery({ queryKey: ['vendors'], queryFn: API.vendors.list });
+  const ai = r.ai!;
+  const sv = ai.vendor_id ? (vendors.data ?? []).find((v) => v.id === ai.vendor_id) : undefined;
+  const use = useMutation({
+    mutationFn: (id: number) => API.requests.assign(r.id, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['request', r.id] });
+      void qc.invalidateQueries({ queryKey: ['requests'] });
+      void qc.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+  return (
+    <section className="card stack" aria-label="AI suggestion">
+      <h2><Icon name="sparkle" /> AI suggestion{r.source === 'whatsapp' ? ' · came in on WhatsApp' : ''}</h2>
+      <p>{cap(ai.category)} · <b>{ai.priority}</b> priority{r.escalated_at ? ' · escalated' : ''}</p>
+      {ai.summary && <p className="muted">{ai.summary}</p>}
+      {sv && r.status !== 'closed' && r.vendor_id !== sv.id && (
+        <div className="row-actions">
+          <span>Suggested vendor: <b>{sv.name}</b></span>
+          <button type="button" className="btn btn-secondary" disabled={use.isPending} onClick={() => use.mutate(sv.id)}>Assign {sv.name}</button>
+        </div>
+      )}
+      <ErrorBanner error={use.error} />
+      <p className="muted small">Suggestion only. {ai.source === 'llm' ? 'Written by an AI model with personal details removed.' : 'Based on keyword rules.'} The committee decides.</p>
+    </section>
+  );
+}
+
 function Rate({ r }: { r: RequestDetail }) {
   const qc = useQueryClient();
   const [n, setN] = useState(0);
@@ -210,6 +240,7 @@ export function RequestDetailPage() {
               </p>
             )}
           </section>
+          {me?.role === 'admin' && r.ai && <AiSuggestion r={r} />}
           {me?.role === 'admin' && <CommitteeActions r={r} />}
           {r.can_rate && <Rate r={r} />}
           {r.status === 'closed' && !r.rating && !r.can_rate && me?.role !== 'admin' && (

@@ -2,7 +2,7 @@
 import { call, enc, qs } from './client';
 import { safetyApi } from './safety';
 import type {
-  AccessMatrix, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification,
+  AccessMatrix, AiInfo, Digest, NoticeDraft, AccessResponse, AdminUser, AdminUserPatch, AdminUserQuery, AppNotification,
   AuditRow, Comment, Guard, GuardBody, HouseholdBody, HouseholdMember, Lease, LeaseBody, LeaseRow, Me, Notice, NoticeBody,
   RegisterBody, RequestDetail, RequestStatus, ServiceRequest, Settings, SettingsPatch, Stats, User, Vendor, VendorBody,
 } from './types';
@@ -89,6 +89,11 @@ export const API = {
     patchUser: (id: number, body: AdminUserPatch) => call<AdminUser>('PATCH', `/api/admin/users/${enc(id)}`, body),
     resetPassword: (id: number, password: string) =>
       call<{ ok: true }>('POST', `/api/admin/users/${enc(id)}/reset-password`, { password }),
+    ai: () => call<AiInfo>('GET', '/api/admin/ai'),
+    simulateWhatsApp: (phone: string, text: string) =>
+      call<{ created: number | null; replies: string[] }>('POST', '/api/admin/whatsapp/simulate', { phone, text }),
+    draftNotice: (text: string) => call<NoticeDraft>('POST', '/api/admin/ai/draft-notice', { text }),
+    digest: () => call<Digest>('GET', '/api/admin/digest'),
     removeUser: (id: number) => call<{ ok: true }>('DELETE', `/api/admin/users/${enc(id)}`),
   },
 };

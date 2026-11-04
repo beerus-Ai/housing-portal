@@ -119,6 +119,20 @@ export interface ServiceRequest {
   can_rate: boolean;
   created_at: string;
   updated_at: string;
+  /** Where the request came in. Missing on older backends. */
+  source?: 'app' | 'whatsapp';
+  escalated_at?: string | null;
+  /** Committee only: the AI triage suggestion. */
+  ai?: AiTriage | null;
+}
+
+export interface AiTriage {
+  category: string;
+  priority: string;
+  summary: string | null;
+  vendor_id: number | null;
+  source: 'rules' | 'llm';
+  confidence?: number;
 }
 
 export interface Notice {
@@ -258,3 +272,16 @@ export interface AuditRow {
   created_at: string;
   actor: string | null;
 }
+
+export interface AiMessage {
+  id: number; direction: 'in' | 'out'; phone: string; body: string; status: string; request_id: number | null;
+  created_at: string; resident: string | null; flat: string | null;
+}
+/** GET /api/admin/ai */
+export interface AiInfo {
+  mode: 'rules' | 'llm'; sla_hours: number; whatsapp_live: boolean; webhook_path: string; webhook_secret: string;
+  counts: { whatsapp_requests: number; messages_in: number; messages_out: number; triaged: number };
+  messages: AiMessage[];
+}
+export interface NoticeDraft { title: string; body: string; source: 'rules' | 'llm' }
+export interface Digest { text: string; source: string; stats: Record<string, unknown> }
