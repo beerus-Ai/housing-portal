@@ -26,9 +26,14 @@ public class RequestService {
     private final AuditService audit;
     private final NotificationService notifications;
     private final PhotoStore photos;
+    private final TriageService triage;
+    private final RequestNotifier notifier;
 
     public RequestService(RequestRepository repo, VendorRepository vendors, AuditService audit,
-                          NotificationService notifications, PhotoStore photos) {
+                          NotificationService notifications, PhotoStore photos,
+                          TriageService triage, RequestNotifier notifier) {
+        this.triage = triage;
+        this.notifier = notifier;
         this.repo = repo;
         this.vendors = vendors;
         this.audit = audit;
@@ -61,6 +66,18 @@ public class RequestService {
     private static Map<String, Object> shape(Map<String, Object> r, User u) {
         Map<String, Object> out = new LinkedHashMap<>(r);
         Object photo = out.remove("photo");
+        Object aiCategory = out.remove("ai_category"), aiPriority = out.remove("ai_priority"), aiSummary = out.remove("ai_summary"),
+                aiVendor = out.remove("ai_vendor_id"), aiSource = out.remove("ai_source"), aiConfidence = out.remove("ai_confidence");
+        if (u != null && u.isAdmin() && aiCategory != null) {
+            Map<String, Object> ai = new LinkedHashMap<>();
+            ai.put("category", aiCategory);
+            ai.put("priority", aiPriority);
+            ai.put("summary", aiSummary);
+            ai.put("vendor_id", aiVendor);
+            ai.put("source", aiSource);
+            ai.put("confidence", aiConfidence);
+            out.put("ai", ai);
+        }
         out.put("has_photo", photo != null && !photo.toString().isEmpty());
         out.put("can_rate", u != null && canRate(u, r));
         return out;
@@ -82,7 +99,9 @@ public class RequestService {
         }
         long id = repo.insert(u.id(), category, title, description, stored);
         audit.log(u.id(), "request", id, "created", category + ": " + title);
-        notifications.notifyAdmins("New " + category + " request from flat " + u.flat() + ": " + title);
+        var tri = triage.apply(id, title + ". " + description);
+        notifications.notifyAdmins("New " + category + " request from flat " + u.flat() + ": " + title
+                + ("urgent".equals(tri.get("priority")) ? " (AI: urgent)" : ""));
         return id;
     }
 
@@ -119,7 +138,7 @@ public class RequestService {
         long cid = repo.insertComment(rid, u.id(), body);
         audit.log(u.id(), "request", rid, "commented", Text.slice(body, 80));
         if (u.isAdmin()) {
-            if (num(r.get("user_id")) != u.id()) notifications.notify(num(r.get("user_id")), "The committee replied on \"" + r.get("title") + "\"");
+            if (num(r.get("user_id")) != u.id()) notifier.notifyRequester(r, "The committee replied on \"" + r.get("title") + "\"");
         } else {
             notifications.notifyAdmins("New message on request \"" + r.get("title") + "\" from flat " + u.flat());
         }
@@ -135,7 +154,7 @@ public class RequestService {
         long rid = num(r.get("id"));
         repo.assign(rid, num(v.get("id")));
         audit.log(u.id(), "request", rid, "assigned", (String) v.get("name"));
-        notifications.notify(num(r.get("user_id")), "Your request \"" + r.get("title") + "\" was assigned to " + v.get("name"));
+        notifier.notifyRequester(r, "Your request \"" + r.get("title") + "\" was assigned to " + v.get("name"));
     }
 
     @Transactional
@@ -153,7 +172,7 @@ public class RequestService {
         repo.setStatus(rid, s);
         String note = b.str("note", 300);
         audit.log(u.id(), "request", rid, "status", cur + " -> " + s + (note.isEmpty() ? "" : ": " + note));
-        notifications.notify(num(r.get("user_id")), "Your request \"" + r.get("title") + "\" is now " + s.replace('_', ' '));
+        notifier.notifyRequester(r, "Your request \"" + r.get("title") + "\" is now " + s.replace('_', ' '));
     }
 
     /** JS Number(x): numbers as is, numeric strings parsed, blank string 0, anything else NaN. */

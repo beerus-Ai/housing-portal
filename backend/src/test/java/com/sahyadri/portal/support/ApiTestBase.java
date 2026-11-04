@@ -25,7 +25,7 @@ public abstract class ApiTestBase {
     protected static final String PW = "Passw0rd!";
     protected static final String CID = "client-123.apps.googleusercontent.com";
 
-    private static final List<String> TABLES = List.of("notifications", "audit", "gate_log", "gate_passes", "resident_tokens",
+    private static final List<String> TABLES = List.of("whatsapp_messages", "notifications", "audit", "gate_log", "gate_passes", "resident_tokens",
             "emergencies", "vehicles", "parking_slots", "workers", "comments", "requests", "vendors", "leases", "notices", "contacts", "settings", "role_permissions", "users");
 
     @Autowired protected MockMvc mvc;
