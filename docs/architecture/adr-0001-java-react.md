@@ -19,3 +19,15 @@ role checks on every route; parameterised queries only; every state change write
 2. Requests, notices, household, vendors, lease, stats/audit/export.
 3. Emergencies, contacts, gate passes + guards.
 4. Cutover: Dockerfiles, Compose, GitHub Actions, switch the proxy to Java, retire Node.
+
+## Status
+Updated 2026-11-04.
+
+| Phase | State |
+| --- | --- |
+| 1 Skeletons (backend auth/settings/access/admin users/audit/notifications; frontend scaffold, login, shell, Home, Settings) | Implemented in `backend/` and `frontend/` |
+| 2 Requests, notices, household, vendors, lease, stats/audit/export | In progress on separate branches |
+| 3 Emergencies, contacts, gate passes + guards | Not started |
+| 4 Cutover infrastructure | Files added: `backend/Dockerfile`, `frontend/Dockerfile` (+ nginx config), `docker-compose.yml`, `.env.example`, `.github/workflows/ci.yml`, `scripts/export-sqlite-to-postgres.js`, `docs/deploy.md`. Not yet exercised on a machine with Docker; the cutover itself has not happened |
+
+The Node app remains the system of record and serves production until phases 2 and 3 reach parity. See `docs/deploy.md` for the cutover checklist and rollback.

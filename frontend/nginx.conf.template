@@ -1,0 +1,70 @@
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+
+    # Security headers. nginx does not inherit add_header into a location that sets its own, so locations repeat them.
+    # CSP: only 'self'. The build has no inline scripts or styles.
+    #
+    # OPTIONAL Google sign-in. Replace the script-src/style-src/img-src/connect-src/frame-src directives in the CSP
+    # strings below with these (adds the Google Identity Services hosts only):
+    #   script-src 'self' https://accounts.google.com/gsi/client;
+    #   style-src 'self' https://accounts.google.com/gsi/style;
+    #   img-src 'self' data: https://*.googleusercontent.com;
+    #   connect-src 'self' https://accounts.google.com/gsi/;
+    #   frame-src https://accounts.google.com/gsi/;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+    # Enable once TLS terminates in front of this container (the Java backend sends HSTS itself for /api in prod):
+    # add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # API -> backend. Host MUST be preserved ($http_host): the backend rejects state-changing calls whose Origin host
+    # differs from Host. Cookies pass through untouched; the backend sets its own security headers on /api.
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_read_timeout 60s;
+        client_max_body_size 8m;
+    }
+
+    # Hashed build assets: cache for a year.
+    location /assets/ {
+        try_files $uri =404;
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header Content-Security-Policy "default-src 'self'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # SPA fallback; index.html is never cached.
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "same-origin" always;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+    }
+}

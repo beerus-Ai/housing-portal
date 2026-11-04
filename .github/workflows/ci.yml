@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'ci/**']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node app (tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  backend:
+    name: Backend (gradle test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - run: ./gradlew test --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-test-report
+          path: backend/build/reports/tests/test
+
+  backend-postgres:
+    name: Backend (PostgreSQL 16 tests + packaged boot)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: portal
+          POSTGRES_USER: portal
+          POSTGRES_PASSWORD: portal-ci-pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portal -d portal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      # Same JUnit suite; env vars override the H2 url in application-test.yml. Flyway runs V1..V3 on the
+      # empty database and ApiTestBase wipes the tables before every test.
+      - name: gradle test against PostgreSQL
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/portal
+          SPRING_DATASOURCE_USERNAME: portal
+          SPRING_DATASOURCE_PASSWORD: portal-ci-pw
+        run: ./gradlew test --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-postgres-test-report
+          path: backend/build/reports/tests/test
+      - name: Reset database for the boot check
+        env:
+          PGPASSWORD: portal-ci-pw
+        run: psql -h localhost -U portal -d portal -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+      - name: Packaged app boots on PostgreSQL (prod profile)
+        timeout-minutes: 5
+        env:
+          SPRING_PROFILES_ACTIVE: prod
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_NAME: portal
+          DB_USER: portal
+          DB_PASSWORD: portal-ci-pw
+          SESSION_SECRET: ci-session-secret-0123456789abcdef
+          ADMIN_EMAIL: admin@ci.test
+          ADMIN_PASSWORD: CiAdminPassw0rd!
+          UPLOAD_DIR: ${{ runner.temp }}/uploads
+        run: |
+          ./gradlew bootJar --no-daemon
+          java -jar build/libs/portal-backend-0.1.0.jar > "$RUNNER_TEMP/app.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/app.pid"
+          fail() { echo "::error::$1"; echo "---- app log ----"; cat "$RUNNER_TEMP/app.log"; kill "$(cat "$RUNNER_TEMP/app.pid")" 2>/dev/null || true; exit 1; }
+          up=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then up=1; break; fi
+            kill -0 "$(cat "$RUNNER_TEMP/app.pid")" 2>/dev/null || fail "app exited during startup"
+            sleep 2
+          done
+          [ "$up" = 1 ] || fail "app did not become healthy in 120 s"
+          curl -fsS http://localhost:8080/api/settings || fail "GET /api/settings failed"
+          echo
+          code=$(curl -sS -o "$RUNNER_TEMP/login.json" -w '%{http_code}' -X POST http://localhost:8080/api/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
+          cat "$RUNNER_TEMP/login.json"; echo
+          [ "$code" = 200 ] || fail "POST /api/login returned $code"
+          grep -q '"role":"admin"' "$RUNNER_TEMP/login.json" || fail "login response is not the admin"
+          kill "$(cat "$RUNNER_TEMP/app.pid")" || true
+
+  frontend:
+    name: Frontend (lint, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    name: Docker images (build only, no push)
+    runs-on: ubuntu-latest
+    needs: [node, backend, backend-postgres, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          tags: portal-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: false
+          tags: portal-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max

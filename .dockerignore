@@ -1,0 +1,15 @@
+# Root context is only used if someone builds the Node app image; keep it small and free of secrets/data.
+node_modules
+uploads
+*.db
+.env
+.env.*
+!.env.example
+.git
+.github
+backend/build
+backend/.gradle
+backend/data
+frontend/node_modules
+frontend/dist
+*.log

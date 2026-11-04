@@ -48,6 +48,11 @@ public class UserRepository {
                 name, email, passwordHash, "admin", "approved", TimeUtil.nowUtc());
     }
 
+    public List<User> approvedResidentsWithPhone() {
+        return db.list("SELECT * FROM users WHERE role='resident' AND status='approved' AND phone IS NOT NULL ORDER BY id")
+                .stream().map(UserRepository::map).toList();
+    }
+
     public boolean adminExists() {
         return db.one("SELECT id FROM users WHERE role='admin' LIMIT 1") != null;
     }

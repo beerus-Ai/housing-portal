@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { openDb, PERMISSIONS, ACCESS_ROLES } = require('./db');
+const AI = require('./ai');
 
 const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping', 'other'];
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
@@ -76,6 +77,53 @@ function createApp(opts = {}) {
   const log = (actor, entity, id, action, detail) =>
     run('INSERT INTO audit(actor_id,entity,entity_id,action,detail) VALUES(?,?,?,?,?)', actor, entity, id, action, detail || null);
   const notify = (uid, msg) => run('INSERT INTO notifications(user_id,message) VALUES(?,?)', uid, msg);
+
+  // ---- WhatsApp and AI workflows (see ai.js). Everything works with no keys: messages are logged and rules answer.
+  const SLA_HOURS = Number(process.env.SLA_HOURS) || 48;
+  const digits = p => String(p || '').replace(/\D/g, '');
+  const phoneKey = p => digits(p).slice(-10);
+  const waOut = (phone, body, userId, requestId) => {
+    const r = run('INSERT INTO whatsapp_messages(direction,phone,body,user_id,request_id,status) VALUES(?,?,?,?,?,?)', 'out', digits(phone), String(body).slice(0, 1000), userId || null, requestId || null, 'logged');
+    const id = Number(r.lastInsertRowid);
+    const tok = process.env.WHATSAPP_TOKEN, pid = process.env.WHATSAPP_PHONE_ID;
+    if (tok && pid && digits(phone)) {
+      fetch('https://graph.facebook.com/v20.0/' + pid + '/messages', {
+        method: 'POST', headers: { authorization: 'Bearer ' + tok, 'content-type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(phone), type: 'text', text: { body: String(body).slice(0, 1000) } }),
+      }).then(x => run('UPDATE whatsapp_messages SET status=? WHERE id=?', x.ok ? 'sent' : 'failed', id)).catch(() => run('UPDATE whatsapp_messages SET status=? WHERE id=?', 'failed', id));
+    }
+    return id;
+  };
+  // Tell the requester in the app and, when the request came in on WhatsApp, on WhatsApp too.
+  const notifyReq = (r, msg) => {
+    notify(r.user_id, msg);
+    if (r.source === 'whatsapp') {
+      const u = one('SELECT id,phone FROM users WHERE id=?', r.user_id);
+      if (u && u.phone) waOut(u.phone, msg, u.id, r.id);
+    }
+  };
+  const applyTriage = (id, text) => {
+    const vendors = q('SELECT id,trade FROM vendors');
+    const t = AI.triageRules(text, vendors);
+    run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', t.category, t.priority, t.summary, t.vendor_id, t.source, t.confidence, id);
+    if (AI.aiMode() === 'llm') {
+      AI.triageLlm(text, vendors, t).then(b => {
+        if (b) run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', b.category, b.priority, b.summary, b.vendor_id, b.source, b.confidence, id);
+      }).catch(() => {});
+    }
+    return t;
+  };
+  const escalateOverdue = () => {
+    const rows = q("SELECT r.id,r.title,r.user_id,r.source,u.flat FROM requests r JOIN users u ON u.id=r.user_id WHERE r.status!='closed' AND r.escalated_at IS NULL AND (julianday('now')-julianday(r.created_at))*24 > ?", SLA_HOURS);
+    for (const r of rows) {
+      run("UPDATE requests SET escalated_at=datetime('now') WHERE id=?", r.id);
+      log(null, 'request', r.id, 'escalated', 'open longer than ' + SLA_HOURS + 'h');
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'Escalated: "' + r.title + '" (flat ' + r.flat + ') has been open over ' + SLA_HOURS + ' hours');
+      notifyReq(r, 'Your request "' + r.title + '" is taking longer than expected, so we escalated it to the committee');
+    }
+    return rows.length;
+  };
+  if (!opts.noTimers) setInterval(() => { try { escalateOverdue(); } catch { /* db closed */ } }, 10 * 60e3).unref();
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
   const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, status: u.status };
 
@@ -214,7 +262,7 @@ function createApp(opts = {}) {
     const s = typeof req.query.status === 'string' && req.query.status ? req.query.status : '';
     const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
     const where = [], p = [];
-    if (s) { where.push('status=?'); p.push(s); } else where.push("role!='guard'");
+    where.push("role!='guard'"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
     if (term) {
       const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
       where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
@@ -449,7 +497,11 @@ function createApp(opts = {}) {
   // The requester rates, except a family member's request, which the flat owner rates. Family never rates.
   const canRate = (u, r) => u.role !== 'admin' && r.status === 'closed' && !r.rating &&
     ((r.user_id === u.id && u.resident_type !== 'family') || (u.resident_type === 'owner' && r.flat === u.flat));
-  const shape = (r, u) => { const { photo, ...rest } = r; return { ...rest, has_photo: !!photo, can_rate: !!u && canRate(u, r) }; };
+  const shape = (r, u) => {
+    const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ...rest } = r;
+    const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence } } : {};
+    return { ...rest, ...ai, has_photo: !!photo, can_rate: !!u && canRate(u, r) };
+  };
 
   app.post('/api/requests', auth, can('request.create'),
     (req, res, next) => upload.single('photo')(req, res, err => (err ? res.status(400).json({ error: err.message }) : next())),
@@ -463,7 +515,8 @@ function createApp(opts = {}) {
       const r = run('INSERT INTO requests(user_id,category,title,description,photo) VALUES(?,?,?,?,?)',
         req.user.id, category, title, description, req.file ? req.file.filename : null);
       log(req.user.id, 'request', r.lastInsertRowid, 'created', `${category}: ${title}`);
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New ${category} request from flat ${req.user.flat}: ${title}`);
+      const tri = applyTriage(Number(r.lastInsertRowid), title + '. ' + description);
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New ${category} request from flat ${req.user.flat}: ${title}${tri.priority === 'urgent' ? ' (AI: urgent)' : ''}`);
       res.status(201).json({ id: Number(r.lastInsertRowid) });
     });
 
@@ -499,7 +552,7 @@ function createApp(opts = {}) {
     if (!body) return res.status(400).json({ error: 'Write a message first' });
     const c = run('INSERT INTO comments(request_id,user_id,body) VALUES(?,?,?)', r.id, req.user.id, body);
     log(req.user.id, 'request', r.id, 'commented', body.slice(0, 80));
-    if (req.user.role === 'admin') { if (r.user_id !== req.user.id) notify(r.user_id, `The committee replied on "${r.title}"`); }
+    if (req.user.role === 'admin') { if (r.user_id !== req.user.id) notifyReq(r, `The committee replied on "${r.title}"`); }
     else for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New message on request "${r.title}" from flat ${req.user.flat}`);
     res.status(201).json({ id: Number(c.lastInsertRowid) });
   });
@@ -510,7 +563,7 @@ function createApp(opts = {}) {
     if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
     run("UPDATE requests SET vendor_id=?, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, updated_at=datetime('now') WHERE id=?", v.id, r.id);
     log(req.user.id, 'request', r.id, 'assigned', v.name);
-    notify(r.user_id, `Your request "${r.title}" was assigned to ${v.name}`);
+    notifyReq(r, `Your request "${r.title}" was assigned to ${v.name}`);
     res.json({ ok: true });
   });
   app.post('/api/requests/:id/status', auth, admin, (req, res) => {
@@ -523,7 +576,7 @@ function createApp(opts = {}) {
     if (!r.vendor_id) return res.status(409).json({ error: 'Assign a vendor first' });
     run("UPDATE requests SET status=?, updated_at=datetime('now') WHERE id=?", s, r.id);
     log(req.user.id, 'request', r.id, 'status', `${r.status} -> ${s}${req.body.note ? ': ' + str(req.body.note, 300) : ''}`);
-    notify(r.user_id, `Your request "${r.title}" is now ${s.replace('_', ' ')}`);
+    notifyReq(r, `Your request "${r.title}" is now ${s.replace('_', ' ')}`);
     res.json({ ok: true });
   });
   app.post('/api/requests/:id/rate', auth, (req, res) => {
@@ -642,7 +695,7 @@ function createApp(opts = {}) {
     if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
     const r = run('INSERT INTO notices(title,body,author_id) VALUES(?,?,?)', title, body, req.user.id);
     log(req.user.id, 'notice', r.lastInsertRowid, 'posted', title);
-    for (const u of q("SELECT id FROM users WHERE status='approved' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`);
+    for (const u of q("SELECT id FROM users WHERE status='approved' AND role!='guard' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`); // guards cannot read notices, so do not notify them
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
   app.delete('/api/notices/:id', auth, admin, (req, res) => {
@@ -802,8 +855,90 @@ function createApp(opts = {}) {
     FROM gate_log l LEFT JOIN users u ON u.id=l.guard_id ORDER BY l.id DESC LIMIT 100`)));
 
   // ---- gate overview (guard or committee). "today" is the UTC calendar day (SQLite 'now'), same clock gate_log uses.
+  // ---- WhatsApp intake: a resident messages the society number, the message becomes a request (flat found from their registered phone).
+  const waSecret = () => {
+    if (process.env.WHATSAPP_WEBHOOK_SECRET) return process.env.WHATSAPP_WEBHOOK_SECRET;
+    let v = getSetting('whatsapp_secret');
+    if (!v) { v = crypto.randomBytes(18).toString('hex'); run('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)', 'whatsapp_secret', v); }
+    return v;
+  };
+  const sameSecret = given => { const a = Buffer.from(String(given || '')), b = Buffer.from(waSecret()); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+  const handleWhatsApp = (from, text) => {
+    const body = String(text || '').trim().slice(0, 1000);
+    if (!digits(from) || !body) return { replies: [], created: null };
+    const reply = (u, t, rid) => { waOut(from, t, u && u.id, rid); return t; };
+    run('INSERT INTO whatsapp_messages(direction,phone,body,status) VALUES(?,?,?,?)', 'in', digits(from), body, 'received');
+    const key = phoneKey(from);
+    const u = q("SELECT * FROM users WHERE role='resident' AND status='approved' AND phone IS NOT NULL").find(x => phoneKey(x.phone) === key);
+    if (!u) return { replies: [reply(null, 'Hello from ' + getSetting('society_name') + '. This number is not registered yet. Please register in the portal with this phone number, or ask the committee to add it.')], created: null };
+    run('UPDATE whatsapp_messages SET user_id=? WHERE id=(SELECT MAX(id) FROM whatsapp_messages WHERE direction=? AND phone=?)', u.id, 'in', digits(from));
+    const low = body.toLowerCase();
+    if (/^(sos|emergency|fire|help me)\b/.test(low)) return { replies: [reply(u, 'For an emergency please use the Emergency button in the app or call the gate directly. WhatsApp is not monitored around the clock.')], created: null };
+    if (/^status\b/.test(low)) {
+      const mine = q("SELECT id,title,status FROM requests WHERE user_id=? OR user_id IN (SELECT id FROM users WHERE flat=? AND flat IS NOT NULL) ORDER BY id DESC LIMIT 3", u.id, u.flat || '');
+      return { replies: [reply(u, mine.length ? mine.map(r => '#' + r.id + ' ' + r.title + ': ' + r.status.replace('_', ' ')).join('\n') : 'You have no requests yet. Just describe the problem and we will log it.')], created: null };
+    }
+    if (!allowedKeys(u).includes('request.create')) return { replies: [reply(u, 'Your account cannot raise requests. Please contact the committee.')], created: null };
+    const tri = AI.triageRules(body, q('SELECT id,trade FROM vendors'));
+    const title = body.split(/(?<=[.!?])\s|\n/)[0].slice(0, 120);
+    const r = run("INSERT INTO requests(user_id,category,title,description,source) VALUES(?,?,?,?,'whatsapp')", u.id, tri.category, title, body.slice(0, 2000));
+    const id = Number(r.lastInsertRowid);
+    log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via WhatsApp)');
+    applyTriage(id, body);
+    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via WhatsApp: ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    return { replies: [reply(u, 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.', id)], created: id };
+  };
+  // Meta Cloud API verification handshake
+  app.get('/api/whatsapp/webhook', (req, res) => {
+    if (req.query['hub.mode'] === 'subscribe' && sameSecret(req.query['hub.verify_token'])) return res.status(200).send(String(req.query['hub.challenge'] || ''));
+    res.status(403).json({ error: 'Bad verify token' });
+  });
+  // Accepts {from,text} (any gateway, or a simulator) or the Meta Cloud API payload. Secret in the x-webhook-secret header or ?secret=.
+  app.post('/api/whatsapp/webhook', (req, res) => {
+    if (!sameSecret(req.get('x-webhook-secret') || req.query.secret)) return res.status(401).json({ error: 'Bad webhook secret' });
+    const msgs = [];
+    const b = req.body || {};
+    if (typeof b.from === 'string' && typeof b.text === 'string') msgs.push([b.from, b.text]);
+    for (const e of b.entry || []) for (const c of e.changes || []) for (const m of (c.value && c.value.messages) || []) if (m.type === 'text' && m.text) msgs.push([m.from, m.text.body]);
+    let created = 0;
+    for (const [from, text] of msgs.slice(0, 20)) if (handleWhatsApp(from, text).created) created++;
+    res.json({ ok: true, received: msgs.length, created });
+  });
+  app.get('/api/admin/ai', auth, admin, (req, res) => {
+    const n = (sql, ...p) => one(sql, ...p).n;
+    res.json({
+      mode: AI.aiMode(), sla_hours: SLA_HOURS, whatsapp_live: !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID),
+      webhook_path: '/api/whatsapp/webhook', webhook_secret: waSecret(),
+      counts: { whatsapp_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp'"), messages_in: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in'"), messages_out: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='out'"), triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL') },
+      messages: q('SELECT m.id,m.direction,m.phone,m.body,m.status,m.request_id,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 30'),
+    });
+  });
+  app.post('/api/admin/whatsapp/simulate', auth, admin, (req, res) => {
+    const phone = str(req.body.phone, 30), text = str(req.body.text, 1000);
+    if (!digits(phone) || !text) return res.status(400).json({ error: 'Phone and message are required' });
+    const out = handleWhatsApp(phone, text);
+    log(req.user.id, 'whatsapp', out.created, 'simulated', text.slice(0, 80));
+    res.json({ created: out.created, replies: out.replies });
+  });
+  app.post('/api/admin/ai/draft-notice', auth, admin, async (req, res) => {
+    const text = str(req.body.text, 600);
+    if (text.length < 5) return res.status(400).json({ error: 'Type a few words about the notice first' });
+    res.json(await AI.draftNotice(text));
+  });
+  const digestStats = () => {
+    const n = (sql, ...p) => one(sql, ...p).n;
+    return {
+      sla_hours: SLA_HOURS, open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"), unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL"),
+      escalated: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND escalated_at IS NOT NULL"), urgent: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND ai_priority='urgent'"),
+      pending_users: n("SELECT COUNT(*) AS n FROM users WHERE role='resident' AND status='pending'"), whatsapp_7d: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp' AND created_at >= datetime('now','-7 days')"),
+    };
+  };
+  app.get('/api/admin/digest', auth, admin, async (req, res) => { escalateOverdue(); res.json({ ...(await AI.digest(digestStats())), stats: digestStats() }); });
+  app.post('/api/admin/escalations/run', auth, admin, (req, res) => res.json({ escalated: escalateOverdue() }));
+
   // One call for the committee dashboard: every headline number across residents, requests, safety, gate, estate and leases.
   app.get('/api/admin/overview', auth, admin, (req, res) => {
+    escalateOverdue();
     const n = (sql, ...p) => one(sql, ...p).n;
     const people = "role='resident'";
     const today = new Date().toISOString().slice(0, 10);
@@ -847,6 +982,7 @@ function createApp(opts = {}) {
         tenants_without_lease: n(`SELECT COUNT(*) AS n FROM users u WHERE u.role='resident' AND u.status='approved' AND u.resident_type='tenant' AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.user_id=u.id)`),
       },
       notices: { last_30d: n("SELECT COUNT(*) AS n FROM notices WHERE created_at >= datetime('now','-30 days')") },
+      ai: { mode: AI.aiMode(), sla_hours: SLA_HOURS, triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), urgent_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND ai_priority='urgent'"), escalated_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND escalated_at IS NOT NULL"), whatsapp_requests_30d: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp' AND created_at >= datetime('now','-30 days')"), whatsapp_messages_7d: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in' AND created_at >= datetime('now','-7 days')") },
     });
   });
 

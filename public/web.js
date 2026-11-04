@@ -39,7 +39,7 @@
   // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
   const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six']];
   const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
-    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin' };
+    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', ai: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin' };
   const COLKEY = 'hp.navc';
   const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
   const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
@@ -49,7 +49,7 @@
   const can = p => !S.me || S.me.role === 'admin' || !Array.isArray(S.me.permissions) || S.me.permissions.includes(p);
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
-    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin() };
+    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const navFor = () => (NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner).filter(([k]) => isGuard() || allowed(k));
   const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
@@ -106,7 +106,7 @@
       await loadGsi(); if (!$('#gbtn') || !window.google || !google.accounts) throw new Error('Google sign-in could not load');
       google.accounts.id.initialize({ client_id: S.gid, callback: async resp => {
         const err = $('#autherr'); if (err) err.textContent = '';
-        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message); }
+        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message, 'error'); }
       } });
       google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(360, box.clientWidth || 360) });
     } catch (x) { const b = $('#gbtn'); if (b) { b.textContent = x.message; b.classList.add('err'); } }
@@ -169,13 +169,18 @@
         const rateBlock = d.can_rate ? `<div class="col callout" style="gap:var(--space-2)"><h4>Resolved. How was the work?</h4><div class="row" style="gap:4px">${stars('rate')}</div><span class="sm" style="color:var(--color-accent-800)">Rating closes the request. The committee sees it against the vendor.</span></div>`
           : d.status === 'closed' && !d.rating && !isAdmin() ? '<p class="callout" style="margin:0">Resolved. The flat owner rates the work to close it.</p>'
           : d.rating ? `<p class="row" style="gap:6px;margin:0">${ic('star', '')}You rated this <strong>${d.rating} of 5</strong>${d.rating_comment ? ': ' + esc(d.rating_comment) : ''}.</p>` : '';
+        const sv = d.ai && d.ai.vendor_id ? vendors.find(v => v.id === d.ai.vendor_id) : null;
+        const aiBlock = isAdmin() && d.ai ? `<div class="callout col" style="gap:var(--space-2)"><h6 style="margin:0">${ic('sparkle')} AI suggestion${d.source === 'whatsapp' ? ' · came in on WhatsApp' : ''}</h6>
+          <span>${esc(catLabel(d.ai.category))} · <strong>${esc(d.ai.priority)}</strong> priority${d.escalated_at ? ' · escalated' : ''}</span>${d.ai.summary ? `<span class="muted sm">${esc(d.ai.summary)}</span>` : ''}
+          ${sv && d.status !== 'closed' && d.vendor_id !== sv.id ? `<div class="row"><span class="sm">Suggested vendor: <strong>${esc(sv.name)}</strong></span><button class="btn btn-secondary" data-act="useai" data-id="${d.id}" data-v="${sv.id}">Assign ${esc(sv.name)}</button></div>` : ''}
+          <span class="muted xs">Suggestion only. ${esc(d.ai.source === 'llm' ? 'Written by an AI model with personal details removed.' : 'Based on keyword rules.')} The committee decides.</span></div>` : '';
         const adminBlock = isAdmin() && d.status !== 'closed' ? `<div class="soft-card col"><h6 style="margin:0">Committee</h6><div class="row"><div class="field grow"><label for="vs">Assign vendor</label><select class="input" id="vs">${vendorOptions(vendors, d.vendor_id)}</select></div>
             <button class="btn btn-secondary" data-act="assign" data-id="${d.id}" style="align-self:flex-end">Assign</button></div>
             <div class="row">${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
         detail = `<span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · Flat ${esc(d.flat)}</span><h1 style="max-width:none">${esc(d.title)}</h1>${stepper(d, d.history)}
           <div class="lead" style="gap:var(--space-6)"><div class="col"><div class="row" style="gap:var(--space-6);font-size:14px"><div class="col" style="gap:2px"><span class="muted xs">Assigned to</span><span>${esc(d.vendor_name || 'Not yet assigned')}</span></div>
           <div class="col" style="gap:2px"><span class="muted xs">Raised by</span><span>${esc(d.resident_name)}</span></div><div class="col" style="gap:2px"><span class="muted xs">Raised</span><span>${esc(stamp(d.created_at))}</span></div></div>
-          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${adminBlock}
+          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${aiBlock}${adminBlock}
           <div class="col" style="gap:var(--space-2)"><h6 style="margin:0">History</h6>${d.history.map(h => `<div class="hist"><span class="muted">${esc(stamp(h.created_at))}</span><span><strong style="font-weight:600">${esc(h.action.replace('_', ' '))}</strong> ${esc(h.detail || '')} — ${esc(h.actor || 'system')}</span></div>`).join('')}</div></div>
           <figure style="margin:0">${d.has_photo ? `<img class="photo" style="height:240px;border-radius:14px" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : `<div style="height:240px;border-radius:14px;overflow:hidden">${photoSlot('No photo attached', 'camera')}</div>`}<figcaption class="muted sm">Photo attached by resident</figcaption></figure></div>`;
         S.selId = d.id;
@@ -257,7 +262,7 @@
     async notices() {
       const ns = await API.notices.list();
       const form = isAdmin() ? `<form id="nform" class="col" style="gap:var(--space-4)"><h2>Post a notice</h2><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150" placeholder="e.g. Diwali lighting in the courtyard"></div>
-        <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><div class="row"><button class="btn btn-primary">${ic('megaphone')}Post and notify residents</button></div></form>` : '';
+        <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><div class="row"><button class="btn btn-primary">${ic('megaphone')}Post and notify residents</button><button type="button" class="btn btn-secondary" data-act="draftnotice">${ic('sparkle')}Draft with AI</button></div><span class="muted sm">Type a few rough words in Details, then Draft with AI. Check the text before you post.</span></form>` : '';
       page(isAdmin() ? `<div class="split-eq" style="grid-template-columns:minmax(0,560px) minmax(0,1fr)">${form}<div class="col" style="gap:var(--space-4)"><h6 style="margin:0">On the board</h6>${ns.map(noticeRow).join('') || '<p class="muted">No notices.</p>'}</div></div>`
         : `<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Notice board</h2>${ns.map(n => `<article class="notice-card"><span class="tile lg">${ic(noticeIcon(n))}</span><span class="col" style="gap:4px"><span class="muted sm">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title" style="font-size:22px">${esc(n.title)}</span><span>${esc(n.body)}</span></span></article>`).join('') || '<p class="muted">No notices.</p>'}</div>`);
     },
@@ -413,7 +418,7 @@
         setTimeout(loop, 250);
       };
       loop();
-    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied')); }
+    } catch (x) { stopScan(); toast('Could not open the camera: ' + (x.message || 'permission denied'), 'error'); }
   }
 
   // ---------- events (delegated; no inline handlers under the CSP)
@@ -444,7 +449,14 @@
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    useai: async el => { await API.requests.assign(el.dataset.id, Number(el.dataset.v)); toast('Assigned'); render(); },
+    draftnotice: async el => {
+      const rough = (($('#nb') || {}).value || ($('#nt') || {}).value || '').trim();
+      if (rough.length < 5) return toast('Type a few words in Details first', 'error');
+      el.disabled = true;
+      try { const d = await API.admin.draftNotice(rough); $('#nt').value = d.title; $('#nb').value = d.body; toast('Draft ready. Check it before posting.'); } finally { el.disabled = false; }
+    },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved. The resident can now rate it.' : 'Work started'); render(); },
     emsel: el => { S.emType = el.dataset.k; render().then(() => { const n = $('#emn'); if (n) { n.scrollIntoView({ block: 'center' }); n.focus(); } }); },
     emcancel: () => { S.emType = null; render(); },
@@ -460,15 +472,15 @@
     gpclose: () => { S.gpSel = null; S.gpCancel = null; render(); },
     gpask: el => { S.gpCancel = Number(el.dataset.id); render(); },
     gpkeep: () => { S.gpCancel = null; render(); },
-    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message); } render(); },
+    gpcancel: async el => { S.gpCancel = null; try { await API.gate.cancel(el.dataset.id); toast('Pass cancelled'); } catch (x) { toast(x.message, 'error'); } render(); },
     gshare: async el => {
       const text = el.dataset.text;
       if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch (x) { /* dismissed */ } return; }
-      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.'); }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch (x) { toast('Could not copy. Read the code out instead.', 'error'); }
     },
     gmask: () => { S.gmRot = true; render(); },
     gmkeep: () => { S.gmRot = false; render(); },
-    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message); } render(); },
+    gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message, 'error'); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },

@@ -17,10 +17,19 @@
   S.veh = { type: 'car', q: '', list: [], confirm: null }; S.pk = { data: null, vehicles: [], sel: null, confirm: null }; S.wk = { list: [], edit: null, confirm: null };
   const TABBY = ['approvals', 'requests', 'emergency', 'notices'];
   const TABS = {
-    resident: () => [['home', 'Home', 'house'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['profile', 'Profile', 'user-circle']],
+    resident: () => [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['menu', 'Menu', 'squares-four']],
     guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['profile', 'Profile', 'user-circle']],
-    admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone']],
+    admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['menu', 'Menu', 'squares-four']],
   };
+  // which bottom tab is highlighted: every sub-screen belongs to a parent tab; anything that is not a tab belongs to Menu
+  const activeTab = tabs => {
+    if (S.sub === 'alerts') return isAdmin() ? 'menu' : null;
+    if (S.sub) return 'menu';
+    const t = S.tab === 'raise' ? 'requests' : S.tab;
+    return tabs.some(x => x[0] === t) ? t : 'menu';
+  };
+  // consistent sub-screen header: back arrow + large title
+  const head = (title, to, act = 'tab') => `<div class="sub-head"><button class="back-ic" data-act="${act}" data-tab="${esc(to)}" aria-label="Back">${ic('arrow-left')}</button><h1 class="am-h1">${esc(title)}</h1></div>`;
   const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
   const dateShort = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -42,7 +51,7 @@
   };
   // ---------- airbnb-style building blocks
   const amHead = (title, sub, adm) => `<div class="am-head">${HP.logo(44, 'am-logo')}<div class="col grow" style="gap:0;min-width:0"><span class="am-soc">${esc(SOCIETY.name)}</span><span class="muted xs">${esc(sub)}</span></div>
-    ${adm ? `<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="profile" aria-label="Profile" style="font-size:24px">${ic('user-circle')}</button>` : ''}<button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div><h1 class="am-h1">${esc(title)}</h1>`;
+    <button class="btn btn-ghost btn-icon" data-act="tab" data-tab="profile" aria-label="Profile" style="font-size:24px">${ic('user-circle')}</button><button class="btn btn-ghost btn-icon" data-act="tab" data-tab="alerts" aria-label="Alerts" style="font-size:24px">${ic('bell')}</button></div><h1 class="am-h1">${esc(title)}</h1>`;
   const amChips = list => `<div class="am-chips" role="list">${list.filter(c => c[3]).map(([i, l, k, , n]) => `<button class="am-chip ${k === 'menu' ? 'more' : ''}" role="listitem" data-act="${['approvals', 'requests', 'emergency', 'notices'].includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${k}" data-k="${k}"><span class="am-chip-ic">${ic(i)}${n ? `<span class="badge-pink">${n}</span>` : ''}</span><span>${esc(l)}</span></button>`).join('')}</div>`;
   const amSection = (t, cards) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2><div class="am-row">${cards}</div></section>`;
   // card variants (one palette): dk = dark teal, wh = white, sf = soft teal tint
@@ -87,18 +96,22 @@
     <span class="col grow" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(t[2])}</span><span class="muted xs">${admin ? esc(e.flat) + ' · ' + esc(e.user_name || '') + ' · ' : ''}${esc(stamp(e.created_at))}</span>${e.note ? `<span class="sm">${esc(e.note)}</span>` : ''}</span>${emgTag(e)}</div>
     ${admin && e.status === 'active' ? `<button class="btn btn-primary btn-lg" data-act="emgresolve" data-id="${e.id}">${ic('check-circle')}Mark resolved</button>` : ''}</div>`; };
 
-  async function render() {
+  // renders are queued so a slow earlier screen can never overwrite a newer one
+  let rq = Promise.resolve(), rn = 0;
+  function render() { const t = ++rn; rq = rq.then(() => (t === rn ? doRender() : undefined)).catch(() => {}); return rq; }
+  async function doRender() {
     if (!S.me) return authView();
     stopScan();
     if (isGuard() && !['gate', 'gatelog', 'profile'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
-    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']();
+    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
     let pending = 0;
     if (isAdmin()) {
       pending = (await API.admin.users('pending').catch(() => [])).length;
       S.emgActive = (await API.emergencies.list().catch(() => [])).filter(e => e.status === 'active').length;
     }
-    const bar = tabs.map(([k, l, i]) => `<button class="tab ${S.tab === k && !S.sub ? 'on' : ''}" data-act="tab" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="badge-pink">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
-    const fab = !isAdmin() && !isGuard() && !S.sub && S.tab !== 'raise' ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
+    const cur = activeTab(tabs);
+    const bar = tabs.map(([k, l, i]) => `<button class="tab ${cur === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${cur === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="badge-pink">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
+    const fab = !isAdmin() && !isGuard() && !S.sub && !S.selId && ['home', 'requests', 'emergency', 'alerts', 'menu'].includes(S.tab) ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
     app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : tabs.length < 4 ? 'three' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
@@ -137,10 +150,10 @@
       const { open } = residentSummary(reqs, S.me, notices); S.idx = { reqs, notices };
       const parkOn = feat('parking');
       const chips = [['list-checks', 'Requests', 'requests', true], ['plus-circle', 'Raise', 'raise', can('request.create')], ['siren', 'Emergency', 'emergency', feat('emergency') && can('emergency.raise')],
-        ['qr-code', 'Gate pass', 'gatepass', gateOn], ['car', 'Vehicles', 'vehicles', parkOn && can('vehicle.manage')], ['megaphone', 'Notices', 'notices-sub', noteOn], ['address-book', 'Contacts', 'contacts-sub', feat('contacts') && can('contacts.read')], ['squares-four', 'More', 'menu', true]];
+        ['qr-code', 'Gate pass', 'gatepass', gateOn], ['car', 'Vehicles', 'vehicles', parkOn && can('vehicle.manage')], ['megaphone', 'Notices', 'notices-sub', noteOn], ['address-book', 'Contacts', 'contacts-sub', feat('contacts') && can('contacts.read')], ['squares-four', 'Menu', 'menu', true]];
       const sorted = [...reqs].sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id).slice(0, 8);
       const activePasses = passes.filter(p => p.status === 'active').length;
-      const glance = amBig('list-checks', open.length, 'Open requests', 'requests', 'dk') + (gateOn ? amBig('qr-code', activePasses, 'Active gate passes', 'gatepass', 'sf') : '') + (noteOn ? amBig('megaphone', notices.length, 'Notices', 'notices-sub', 'sf') : '');
+      const glance = amBig('list-checks', open.length, 'Open requests', 'requests', 'dk') + (gateOn ? amBig('qr-code', activePasses, 'Active gate passes', 'gatepass', 'dk') : '') + (noteOn ? amBig('megaphone', notices.length, 'Notices', 'notices-sub', 'dk') : '');
       const secs = [
         amSection('At a glance', glance),
         amSection('Your requests', sorted.map(amReq).join('') + (can('request.create') ? amCard('plus-circle', 'Raise a request', 'Takes a minute', 'quick', 'raise', 'dk') : '')),
@@ -172,7 +185,7 @@
         <p class="muted sm" style="margin:0;text-align:center">Show this at the gate to walk in. The same code is what is written on an NFC tag, so a tag can be tapped instead.</p>
         ${c === 'rotate' ? `<div class="callout col" style="gap:8px"><b class="sm">Reset your QR? The old QR and any NFC tag stop working.</b><div class="two"><button class="btn btn-primary" data-act="gprotyes">Yes, reset</button><button class="btn btn-secondary" data-act="gpno">Keep it</button></div></div>`
           : `<button class="btn btn-secondary btn-lg" data-act="gprotask">${ic('arrows-clockwise')}Reset my QR</button>`}</div>` : '';
-      screen(`${back('Home', 'home')}<h2>Gate pass</h2>${qrCard}
+      screen(`${head('Gate pass', 'menu')}${qrCard}
         <form id="gpform" class="m-card col"><h3>Invite a visitor</h3><div class="field"><label for="gvn">Visitor name</label><input class="input" id="gvn" name="visitor_name" required maxlength="100"></div>
         <div class="field"><label for="gpu">Purpose (optional)</label><input class="input" id="gpu" name="purpose" maxlength="100" placeholder="e.g. Delivery, guest"></div>
         <div class="field"><label for="gvf">Valid from</label><input class="input" id="gvf" name="valid_from" type="datetime-local" required value="${inp(now)}"></div>
@@ -187,7 +200,7 @@
     async gate() {
       if (isAdmin()) return gateOverview();
       const canScan = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
-      screen(`${isAdmin() ? back('Dashboard', 'home') : ''}<h2>Gate</h2>
+      screen(`<h1 class="am-h1">Gate</h1>
         <form id="gateform" class="col" style="gap:12px"><input class="input gate-code" id="gcode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="6-digit code"><button class="btn btn-primary btn-lg gate-go">${ic('shield-check')}Verify</button></form>
         ${canScan ? `<button class="btn btn-secondary btn-lg" data-act="gscan">${ic('scan')}Scan QR</button><div id="gcam"></div>` : '<p class="muted sm" style="margin:0">QR scanning is not supported on this device. Type the 6-digit code instead.</p>'}
         <div id="gres" aria-live="assertive"></div>`);
@@ -197,7 +210,7 @@
 
     async gatelog() {
       const rows = await API.gate.log();
-      screen(`${isAdmin() ? back('Dashboard', 'home') : ''}<h2>Gate log</h2>${rows.map(r => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="list-title" style="font-size:16px">${esc(r.subject || 'Unknown')}</span><span class="tag ${r.result === 'allowed' ? 'tag-accent' : 'tag-accent-2'}">${r.result === 'allowed' ? 'Allowed' : 'Denied'}</span></div>
+      screen(`<h1 class="am-h1">Gate log</h1>${rows.map(r => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="list-title" style="font-size:16px">${esc(r.subject || 'Unknown')}</span><span class="tag ${r.result === 'allowed' ? 'tag-accent' : 'tag-accent-2'}">${r.result === 'allowed' ? 'Allowed' : 'Denied'}</span></div>
         <span class="muted xs">${esc(stamp(r.created_at))}${r.flat ? ' · Flat ' + esc(r.flat) : ''}${r.guard_name ? ' · ' + esc(r.guard_name) : ''}</span>${r.result !== 'allowed' && r.reason ? `<span class="sm">${esc(reasonText(r.reason))}</span>` : ''}</div>`).join('') || '<p class="muted">No entries yet.</p>'}`);
     },
 
@@ -212,16 +225,16 @@
           : d.rating ? `<p class="row" style="gap:6px;margin:0">${ic('star')}You rated this <strong>${d.rating} of 5</strong>. Thank you.</p>` : '';
         const adm = isAdmin() && d.status !== 'closed' ? `<div class="m-card"><select class="input" id="vs" aria-label="Vendor">${vendorOpts(vendors, d.vendor_id)}</select><div class="two"><button class="btn btn-secondary" data-act="assign" data-id="${d.id}">Assign</button>
           ${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
-        return screen(`${back('Requests', 'requests')}<div class="m-photo">${d.has_photo ? `<img class="photo" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : photoSlot('No photo attached', 'camera')}</div>
+        return screen(`${head('Request ' + rid(d), 'requests')}<div class="m-photo">${d.has_photo ? `<img class="photo" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : photoSlot('No photo attached', 'camera')}</div>
           <span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · ${esc(d.flat)}</span><h3>${esc(d.title)}</h3><p class="sm" style="margin:0;white-space:pre-line">${esc(d.description)}</p>
           ${stepper(d, d.history, true)}${adm}${rate}`);
       }
-      screen(`<h2>${isAdmin() ? 'Requests' : S.me.resident_type === 'family' ? 'Flat requests' : 'My requests'}</h2>${reqs.map(reqCard).join('') || '<p class="muted">Nothing here yet.</p>'}`);
+      screen(`<h1 class="am-h1">${isAdmin() ? 'Requests' : S.me.resident_type === 'family' ? 'Flat requests' : 'My requests'}</h1>${reqs.map(reqCard).join('') || '<p class="muted">Nothing here yet.</p>'}`);
     },
 
     async raise() {
       const tiles = CATS.map(([k, l, i]) => `<button type="button" class="cat ${S.cat === k ? 'on' : ''}" style="font-size:11px;padding:8px 0" data-act="cat" data-c="${k}" aria-pressed="${S.cat === k}">${ic(i)}${l}</button>`).join('');
-      screen(`<h2>New request</h2><form id="raiseform" class="col" style="gap:var(--space-3);flex:1"><div class="cat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:6px" role="group" aria-label="Category">${tiles}</div>
+      screen(`${head('New request', 'home')}<form id="raiseform" class="col" style="gap:var(--space-3);flex:1"><div class="cat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:6px" role="group" aria-label="Category">${tiles}</div>
         <label class="drop" id="drop" style="height:200px">${ic('camera')}<span class="list-title" style="font-size:16px">Take or add a photo</span><span class="xs" id="pn">JPG, PNG or WebP, up to 5 MB</span><input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment"></label>
         <div class="field"><label for="t">Short title</label><input class="input" id="t" name="title" required maxlength="120" placeholder="e.g. Bathroom tap dripping"></div>
         <div class="field"><label for="w">Where</label><input class="input" id="w" name="where" value="Flat ${esc(S.me.flat)}" maxlength="100"></div>
@@ -233,35 +246,33 @@
       const ms = await API.household.list();
       const open = S.sub === 'add';
       const tiles = [['family', 'users', 'Family member'], ['tenant', 'house-line', 'Tenant']].map(([k, i, l]) => `<button type="button" class="type-tile ${S.rtype === k ? 'on' : ''}" style="align-items:center" data-act="rtype" data-t="${k}">${ic(i)}<b style="font-size:14px">${l}</b></button>`).join('');
-      screen(`${back('Profile', 'profile')}<h2>Household</h2><span class="muted sm">Flat ${esc(S.me.flat)}</span>${ms.map((m, i) => `<div class="member" style="grid-template-columns:44px minmax(0,1fr);padding:12px;border-radius:20px"><span class="avatar ${i ? 'blue' : ''}" style="width:44px;height:44px">${esc(initials(m.name))}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(m.name)}</span><span class="row xs" style="gap:6px">${esc(TYPE[m.resident_type] || '')}<span class="tag ${m.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${m.status === 'approved' ? 'Active' : 'Pending approval'}</span></span></span></div>`).join('')}
+      screen(`${head('Household', 'menu')}<span class="muted sm">Flat ${esc(S.me.flat)}</span>${ms.map((m, i) => `<div class="member" style="grid-template-columns:44px minmax(0,1fr);padding:12px;border-radius:20px"><span class="avatar ${i ? 'blue' : ''}" style="width:44px;height:44px">${esc(initials(m.name))}</span><span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(m.name)}</span><span class="row xs" style="gap:6px">${esc(TYPE[m.resident_type] || '')}<span class="tag ${m.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${m.status === 'approved' ? 'Active' : 'Pending approval'}</span></span></span></div>`).join('')}
         <form id="hhform" class="col"><h3>Add someone</h3><div class="type-tiles" style="grid-template-columns:repeat(2,minmax(0,1fr))">${tiles}</div>
         <div class="field"><label for="hn">Full name</label><input class="input" id="hn" name="name" required maxlength="100"></div><div class="field"><label for="hp">Mobile</label><input class="input" id="hp" name="phone" inputmode="tel" maxlength="20"></div>
         <div class="field"><label for="he">Email</label><input class="input" id="he" name="email" type="email" required></div><div class="field"><label for="hw">Temporary password (8+)</label><input class="input" id="hw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
-        <label class="consent sm"><input type="checkbox" name="consent" required>This person agrees to their details being stored (DPDP Act, 2023).</label><button class="btn btn-primary btn-lg">${ic('user-plus')}Send for approval</button></form>
-        <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
+        <label class="consent sm"><input type="checkbox" name="consent" required>This person agrees to their details being stored (DPDP Act, 2023).</label><button class="btn btn-primary btn-lg">${ic('user-plus')}Send for approval</button></form>`);
       void open;
     },
 
     async lease() {
       const li = leaseInfo(await API.lease.get());
-      screen(`<h2>Your lease</h2>${li ? `<div class="hero m-hero"><div class="soft sm" style="font-weight:600">Lease on ${esc(S.me.flat)}</div><div class="fig" style="font-size:36px;margin-top:6px">${li.left} days left</div><div class="soft sm" style="margin-top:4px">Ends ${esc(li.ends)}</div>
+      screen(`${head('Your lease', 'menu')}${li ? `<div class="hero m-hero"><div class="soft sm" style="font-weight:600">Lease on ${esc(S.me.flat)}</div><div class="fig" style="font-size:36px;margin-top:6px">${li.left} days left</div><div class="soft sm" style="margin-top:4px">Ends ${esc(li.ends)}</div>
         <div style="height:6px;border-radius:6px;background:color-mix(in srgb,var(--color-bg) 22%,transparent);margin-top:12px;overflow:hidden"><span style="display:block;height:100%;width:${li.pct}%;background:var(--color-accent-300)"></span></div></div>
         <div class="soft-card" style="padding:4px 14px;border-radius:20px">${li.rows.map(([i, k, v]) => `<div class="row" style="flex-wrap:nowrap;padding:8px 0;gap:var(--space-2)">${ic(i).replace('<i ', '<i style="font-size:18px;color:var(--color-accent-700)" ')}<span class="col" style="gap:0"><span class="muted xs">${esc(k)}</span><span class="sm" style="font-weight:600">${esc(v)}</span></span></div>`).join('')}</div>`
-        : '<p class="callout">No lease is on file yet. The committee adds it after verifying your rent agreement.</p>'}
-        <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
+        : '<p class="callout">No lease is on file yet. The committee adds it after verifying your rent agreement.</p>'}`);
     },
 
     async notices() {
       const ns = await API.notices.list();
       const form = isAdmin() ? `<form id="nform" class="m-card"><h3>Post a notice</h3><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150"></div>
         <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><button class="btn btn-primary btn-lg">${ic('megaphone')}Post and notify</button></form>` : '';
-      screen(`<h2>Notices</h2>${form}${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}${isAdmin() ? `<button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>` : ''}`);
+      screen(`${head('Notices', 'menu')}${form}${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`);
     },
 
     async approvals() {
       const us = (await API.admin.users()).filter(u => u.role !== 'admin');
       const rows = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 6)];
-      screen(`<h2>Approvals</h2><span class="muted sm">Check against the flat register before approving.</span>${rows.map(u => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span>
+      screen(`<h1 class="am-h1">Approvals</h1><span class="muted sm">Check against the flat register before approving.</span>${rows.map(u => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span>
         <span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(u.name)}</span><span class="muted xs">${esc(u.flat)} · ${esc(TYPE[u.resident_type] || '')} · ${esc(day(u.created_at))}</span></span></div>
         ${u.status === 'pending' ? `<div class="two"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></div>`
           : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}" style="align-self:flex-start">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</div>`).join('') || '<p class="muted">No residents yet.</p>'}`);
@@ -272,21 +283,20 @@
       S.idx = { reqs, notices }; const act = emg.filter(e => e.status === 'active');
       const a = adminSummary(reqs, s), unList = a.open.filter(r => !r.vendor_id), un = unList.length;
       const chips = [['user-check', 'Approvals', 'approvals', true, pend.length], ['list-checks', 'Requests', 'requests', true], ['siren', 'Emergencies', 'emergency', feat('emergency')], ['shield-check', 'Gate', 'gate', feat('gate')],
-        ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'More', 'menu', true]];
+        ['garage', 'Parking', 'parking', feat('parking')], ['hard-hat', 'Workers', 'workers', true], ['gear-six', 'Settings', 'settings-sub', true], ['squares-four', 'Menu', 'menu', true]];
       const attn = amBig('user-check', pend.length, 'Pending approvals', 'approvals', 'dk') + amBig('siren', act.length, 'Active emergencies', 'emergency', act.length ? 'dk has-alert' : 'dk') + amBig('user-gear', un, 'Unassigned requests', 'requests', 'dk');
-      const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'sf') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'sf');
+      const week = amBig('clipboard-text', a.open.length, 'Open requests', 'requests', 'wh') + amBig('timer', a.overdue, 'Past 48 hours', 'requests', 'wh') + amBig('star', s.avg_rating ? s.avg_rating.toFixed(1) : '-', 'Average rating', 'requests', 'wh') + amBig('megaphone', s.notices_30d, 'Notices, 30 days', 'notices', 'wh');
       const recent = [...reqs].sort((x, y) => y.id - x.id).slice(0, 8).map(amReq).join('');
       screen(`${amHead(`${greet()}, ${firstName(S.me.name)}`, `${dateShort()} · Committee`, true)}${searchBox()}${amChips(chips)}
         ${amSection('Needs your attention', attn)}${glanceSection(ov)}${amSection('This week', week)}${recent ? amSection('Recent activity', recent) : ''}${catSection()}
-        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>
-        <button class="link-btn" style="text-align:center;min-height:44px" data-act="logout">Sign out</button>`);
+        <div class="two"><button class="btn btn-secondary btn-lg" data-act="quick" data-k="gate">${ic('shield-check')}Gate</button><button class="btn btn-secondary btn-lg" data-act="quick" data-k="leases-sub">${ic('file-text')}Leases</button></div>`);
     },
 
     async alerts() { return SUB.alerts(!isAdmin()); },
 
     async menu() {
       const groups = menuGroups().map(([t, items]) => [t, items.filter(i => i[4])]).filter(g => g[1].length);
-      screen(`${back('Home', 'home')}<h1 class="am-h1">Menu</h1>${groups.map(([t, items]) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2>${items.map(([i, l, d, k]) => `<button class="am-list" data-act="${TABBY.includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${esc(k)}" data-k="${esc(k)}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(l)}</b><span class="muted sm">${esc(d)}</span></span>${ic('caret-right')}</button>`).join('')}</section>`).join('')}`);
+      screen(`<h1 class="am-h1">Menu</h1>${groups.map(([t, items]) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2>${items.map(([i, l, d, k]) => `<button class="am-list" data-act="${TABBY.includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${esc(k)}" data-k="${esc(k)}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(l)}</b><span class="muted sm">${esc(d)}</span></span>${ic('caret-right')}</button>`).join('')}</section>`).join('')}<button class="am-list" data-act="logout"><span class="am-li">${ic('sign-out')}</span><span class="col grow" style="gap:0;text-align:left"><b>Sign out</b><span class="muted sm">${esc(S.me.name)}</span></span></button>`);
     },
 
     async vehicles() {
@@ -298,7 +308,7 @@
         <div class="two"><div class="field"><label for="vmk">Make</label><input class="input" id="vmk" name="make" maxlength="40"></div><div class="field"><label for="vcl">Colour</label><input class="input" id="vcl" name="color" maxlength="30"></div></div>
         <div class="field"><label for="vst">Parking sticker</label><input class="input" id="vst" name="sticker" maxlength="30"></div><p class="err" id="verr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('plus-circle')}Add vehicle</button></form>`;
       const search = adm ? `<div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="vq" type="search" placeholder="Search plate, flat or owner" autocomplete="off" aria-label="Search vehicles" value="${esc(S.veh.q)}"></div>` : '';
-      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Vehicles</h1>${adm ? '' : `<span class="muted sm">Flat ${esc(S.me.flat)}</span>`}${search}${form}<div id="vlist" class="col" style="gap:12px"></div>`);
+      screen(`${head('Vehicles', 'menu')}${adm ? '' : `<span class="muted sm">Flat ${esc(S.me.flat)}</span>`}${search}${form}<div id="vlist" class="col" style="gap:12px"></div>`);
       drawVehicles();
     },
 
@@ -318,7 +328,7 @@
       const list = await API.emergencies.list().catch(() => []);
       if (isAdmin()) {
         const sorted = [...list.filter(e => e.status === 'active'), ...list.filter(e => e.status !== 'active')];
-        return screen(`<h2>Emergencies</h2>${S.emgActive ? `<div class="emg-banner static">${ic('siren')}<b>${S.emgActive} active</b></div>` : '<p class="callout">No active emergencies.</p>'}${sorted.map(e => emgRow(e, true)).join('')}`);
+        return screen(`<h1 class="am-h1">Emergencies</h1>${S.emgActive ? `<div class="emg-banner static">${ic('siren')}<b>${S.emgActive} active</b></div>` : '<p class="callout">No active emergencies.</p>'}${sorted.map(e => emgRow(e, true)).join('')}`);
       }
       const sel = S.sheet ? emgType(S.sheet) : null;
       const tiles = EMERGENCY_TYPES.map(([k, i, l]) => `<button class="emg-tile" data-act="emgpick" data-k="${esc(k)}"><span class="tile lg">${ic(i)}</span><b>${esc(l)}</b></button>`).join('');
@@ -326,12 +336,12 @@
         <p class="muted sm" style="text-align:center;margin:0">The committee and security will be told it is from Flat ${esc(S.me.flat)}.</p>
         <div class="field"><label for="enote">Note (optional)</label><textarea class="input" id="enote" name="note" maxlength="300" style="min-height:80px">${esc(S.note)}</textarea></div>
         <button class="btn btn-primary btn-lg emg-send">${ic('paper-plane-tilt')}Send alert</button><button type="button" class="btn btn-secondary btn-lg" data-act="emgcancel">Cancel</button></form>` : '';
-      screen(`<h2>Emergency</h2><p class="muted sm" style="margin:0">Tap what is happening. The committee is alerted straight away.</p><div class="emg-grid">${tiles}</div>
+      screen(`<h1 class="am-h1">Emergency</h1><p class="muted sm" style="margin:0">Tap what is happening. The committee is alerted straight away.</p><div class="emg-grid">${tiles}</div>
         <h3>Recent alerts for your flat</h3>${list.map(e => emgRow(e, false)).join('') || '<p class="muted">No alerts raised.</p>'}${sheet}`);
     },
 
     async profile() {
-      if (isGuard()) return screen(`<div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">Security guard</span></div>
+      if (isGuard()) return screen(`<h1 class="am-h1">Profile</h1><div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">Security guard</span></div>
         <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
       const m = S.me, ms = await API.household.list().catch(() => []);
       const pct = Math.round([m.name, m.phone, m.flat, m.email].filter(v => v && String(v).trim()).length / 4 * 100);
@@ -342,7 +352,7 @@
       const pw = S.pf === 'pw' ? `<form id="pwform" class="m-card"><div class="field"><label for="pc">Current password</label><input class="input" id="pc" name="current" type="password" required autocomplete="current-password"></div>
         <div class="field"><label for="pnw">New password (8+ characters)</label><input class="input" id="pnw" name="next" type="password" required minlength="8" autocomplete="new-password"></div><p class="err" id="perr" role="alert"></p>
         <div class="two"><button class="btn btn-primary btn-lg">Update</button><button type="button" class="btn btn-secondary btn-lg" data-act="pform" data-f="">Cancel</button></div></form>` : '';
-      screen(`<div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(m.name))}</span><h2 style="margin:0">${esc(m.name)}</h2><span class="muted sm">Flat ${esc(m.flat)} · ${esc(TYPE[m.resident_type] || '')}</span></div>
+      screen(`${head('Profile', 'menu')}<div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(m.name))}</span><h2 style="margin:0">${esc(m.name)}</h2><span class="muted sm">Flat ${esc(m.flat)} · ${esc(TYPE[m.resident_type] || '')}</span></div>
         <div class="m-card"><b class="sm">Profile ${pct}% complete</b><div class="pbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>${pct < 100 ? '<span class="muted xs">Add the missing details below.</span>' : ''}</div>
         <div class="soft-card" style="padding:4px 14px;border-radius:20px">${row('user', 'Name', m.name)}${row('house', 'Flat', m.flat)}${row('identification-badge', 'Resident type', TYPE[m.resident_type] || '')}${row('phone', 'Phone', m.phone)}${row('envelope-simple', 'Email', m.email)}</div>
         ${f || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="edit">' + ic('pencil-simple') + 'Edit details</button>'}
@@ -358,12 +368,12 @@
   const SUB = {
     async alerts(tab) {
       const ns = await API.notifications.list();
-      screen(`${tab === true ? '' : back('Back', 'home')}<h2>Alerts</h2>${ns.map(n => `<div class="m-card"><span class="sm">${esc(n.message)}</span><span class="muted xs">${n.is_read ? '' : '<span class="tag tag-accent-2">New</span> '}${esc(stamp(n.created_at))}</span></div>`).join('') || '<p class="muted">No alerts.</p>'}`);
+      screen(`${tab === true ? '<h1 class="am-h1">Alerts</h1>' : head('Alerts', 'home')}${ns.map(n => `<div class="m-card"><span class="sm">${esc(n.message)}</span><span class="muted xs">${n.is_read ? '' : '<span class="tag tag-accent-2">New</span> '}${esc(stamp(n.created_at))}</span></div>`).join('') || '<p class="muted">No alerts.</p>'}`);
       await API.notifications.markRead();
     },
     async 'leases-sub'() {
       const ts = await API.admin.leases();
-      screen(`${back('Dashboard', 'home')}<h2>Tenant leases</h2>${ts.map(t => { const li = leaseInfo(t.end_date ? t : null);
+      screen(`${head('Tenant leases', 'menu')}${ts.map(t => { const li = leaseInfo(t.end_date ? t : null);
         return `<button class="list-row m-card" style="grid-template-columns:44px minmax(0,1fr)" data-act="leaseopen" data-id="${t.user_id}"><span class="avatar light" style="width:44px;height:44px">${esc(initials(t.name))}</span>
           <span class="col" style="gap:2px"><span class="list-title" style="font-size:16px">${esc(t.name)}</span><span class="muted xs">Flat ${esc(t.flat)}</span>
           <span style="align-self:flex-start">${li ? `<span class="tag ${li.left < 60 ? 'tag-accent-2' : 'tag-accent'}">${li.left} days left</span>` : '<span class="tag tag-neutral">No lease on file</span>'}</span></span></button>`; }).join('') || '<p class="callout">No approved tenants yet.</p>'}`);
@@ -372,7 +382,7 @@
       const t = (await API.admin.leases()).find(x => x.user_id === S.leaseId);
       if (!t) return go('home', null, 'leases-sub');
       const f = (id, label, name, val, extra = '') => `<div class="field"><label for="${id}">${label}</label><input class="input" id="${id}" name="${name}" value="${esc(val || '')}" ${extra}></div>`;
-      screen(`<button class="back" data-act="leasesback">${ic('caret-left')}Leases</button><h3>${esc(t.name)} · ${esc(t.flat)}</h3>
+      screen(`${head(t.name, 'leases-sub', 'leasesback')}<span class="muted sm">Flat ${esc(t.flat)}</span>
         <form id="leaseform" class="col" data-id="${t.user_id}">${f('ls', 'Lease starts', 'start_date', t.start_date, 'type="date" required')}${f('le', 'Lease ends', 'end_date', t.end_date, 'type="date" required')}
         ${f('lo', 'Flat owner', 'owner_name', t.owner_name, 'maxlength="100"')}${f('lp', 'Owner phone', 'owner_phone', t.owner_phone, 'maxlength="20" inputmode="tel"')}
         ${f('lv', 'Police verified on', 'police_verified_on', t.police_verified_on, 'type="date"')}${f('la', 'Rent agreement', 'agreement', t.agreement, 'maxlength="200"')}${f('lk', 'Parking', 'parking', t.parking, 'maxlength="100"')}
@@ -380,59 +390,58 @@
     },
     async 'settings-sub'() {
       const row = (i, t, d, sub) => `<button class="am-list" data-act="quick" data-k="${sub}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${t}</b><span class="muted sm">${d}</span></span>${ic('caret-right')}</button>`;
-      screen(`${back('Dashboard', 'home')}<h1 class="am-h1">Settings</h1>${row('buildings', 'General', 'Society name and type', 'set-general')}${row('shield-check', 'Access control', 'Who can do what', 'set-access')}
+      screen(`${head('Settings', 'menu')}${row('buildings', 'General', 'Society name and type', 'set-general')}${row('shield-check', 'Access control', 'Who can do what', 'set-access')}
         ${row('users-three', 'Users', 'Search, edit, suspend', 'set-users')}${row('toggle-right', 'Features', 'Switch parts of the app on or off', 'set-features')}${row('shield-star', 'Guards', 'Security staff accounts', 'set-guards')}
         ${row('hard-hat', 'Workers', 'Staff, shifts and contacts', 'workers')}${feat('parking') ? row('garage', 'Parking', 'Slots and assignments', 'parking') : ''}`);
     },
     async 'set-general'() {
       const st = await API.admin.settings();
-      screen(`${setBack()}<h1 class="am-h1">General</h1><form id="setform" class="m-card am-form"><div class="field"><label for="sn">Society name</label><input class="input" id="sn" name="society_name" required maxlength="100" value="${esc(st.society_name || SOCIETY.name)}"></div>
+      screen(`${head('General', 'settings-sub')}<form id="setform" class="m-card am-form"><div class="field"><label for="sn">Society name</label><input class="input" id="sn" name="society_name" required maxlength="100" value="${esc(st.society_name || SOCIETY.name)}"></div>
         <div class="field"><label for="sk">Society type</label><input class="input" id="sk" name="society_kind" maxlength="100" value="${esc(st.society_kind || SOCIETY.kind)}"></div><p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">Save</button></form>`);
     },
     async 'set-access'() {
       const ac = await API.admin.access(); S.set.access = ac; S.set.matrix = JSON.parse(JSON.stringify(ac.matrix || {}));
       const roles = ac.roles || ['owner', 'tenant', 'family'];
-      screen(`${setBack()}<h1 class="am-h1">Access control</h1><div class="m-card am-form">${(ac.permissions || []).map(p => `<div class="am-perm"><b>${esc(p.label)}</b><div class="am-sws">${roles.map(r => `<div class="col" style="gap:2px;align-items:center"><span class="muted xs">${esc(TYPE[r] || r)}</span>${swBtn(!!(S.set.matrix[r] || {})[p.key], 'mtgl', `data-r="${esc(r)}" data-p="${esc(p.key)}"`, `${p.label}: ${TYPE[r] || r}`)}</div>`).join('')}</div></div>`).join('')}
+      screen(`${head('Access control', 'settings-sub')}<div class="m-card am-form">${(ac.permissions || []).map(p => `<div class="am-perm"><b>${esc(p.label)}</b><div class="am-sws">${roles.map(r => `<div class="col" style="gap:2px;align-items:center"><span class="muted xs">${esc(TYPE[r] || r)}</span>${swBtn(!!(S.set.matrix[r] || {})[p.key], 'mtgl', `data-r="${esc(r)}" data-p="${esc(p.key)}"`, `${p.label}: ${TYPE[r] || r}`)}</div>`).join('')}</div></div>`).join('')}
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="accsave">Save access</button></div>`);
     },
     async 'set-features'() {
       const st = await API.admin.settings(); S.set.features = { emergency: true, gate: true, contacts: true, notices: true, parking: true, ...(st.features || {}) };
       const L = { emergency: ['siren', 'Emergency alerts'], gate: ['shield-check', 'Gate passes'], contacts: ['address-book', 'Society contacts'], notices: ['megaphone', 'Notices'], parking: ['garage', 'Vehicles and parking'] };
-      screen(`${setBack()}<h1 class="am-h1">Features</h1><div class="m-card am-form">${Object.keys(L).map(k => `<div class="am-perm am-frow"><span class="am-li">${ic(L[k][0])}</span><b class="grow">${L[k][1]}</b>${swBtn(S.set.features[k] !== false, 'ftgl', `data-f="${k}"`, L[k][1])}</div>`).join('')}
+      screen(`${head('Features', 'settings-sub')}<div class="m-card am-form">${Object.keys(L).map(k => `<div class="am-perm am-frow"><span class="am-li">${ic(L[k][0])}</span><b class="grow">${L[k][1]}</b>${swBtn(S.set.features[k] !== false, 'ftgl', `data-f="${k}"`, L[k][1])}</div>`).join('')}
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg" data-act="featsave">Save features</button></div>`);
     },
     async 'set-users'() {
       S.set.users = await API.admin.allUsers({}); S.set.q = ''; S.set.open = null; S.set.confirm = null; S.set.reset = false;
-      screen(`${setBack()}<h1 class="am-h1">Users</h1><div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="us" type="search" placeholder="Search name, flat or email" autocomplete="off" aria-label="Search users"></div><p class="err" id="serr" role="alert"></p><div id="ulist" class="col" style="gap:12px"></div>`);
+      screen(`${head('Users', 'settings-sub')}<div class="m-search am-search"><span class="m-search-ic">${ic('magnifying-glass')}</span><input class="input" id="us" type="search" placeholder="Search name, flat or email" autocomplete="off" aria-label="Search users"></div><p class="err" id="serr" role="alert"></p><div id="ulist" class="col" style="gap:12px"></div>`);
       drawUsers();
     },
     async 'set-guards'() {
       S.set.guards = await API.gate.guards(); S.set.gconfirm = null;
-      screen(`${setBack()}<h1 class="am-h1">Guards</h1><div id="glist" class="col" style="gap:12px"></div><form id="gform" class="m-card am-form"><h3>Add a guard</h3><div class="field"><label for="gn">Name</label><input class="input" id="gn" name="name" required maxlength="100"></div>
+      screen(`${head('Guards', 'settings-sub')}<div id="glist" class="col" style="gap:12px"></div><form id="gform" class="m-card am-form"><h3>Add a guard</h3><div class="field"><label for="gn">Name</label><input class="input" id="gn" name="name" required maxlength="100"></div>
         <div class="field"><label for="ge">Email</label><input class="input" id="ge" name="email" type="email" required autocomplete="off"></div><div class="field"><label for="gw">Password (8+)</label><input class="input" id="gw" name="password" type="password" minlength="8" required autocomplete="new-password"></div>
         <p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('user-plus')}Add guard</button></form>`);
       drawGuards();
     },
     async 'vendors-sub'() {
       const vs = await API.vendors.list();
-      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Vendors</h1>${vs.map(v => `<a class="m-card am-vrow" href="tel:${esc(String(v.phone || '').replace(/[^+\d]/g, ''))}"><span class="am-li">${ic('storefront')}</span><span class="col grow" style="gap:0"><b>${esc(v.name)}</b><span class="muted xs">${esc(catLabel(v.trade))}</span><span class="sm">${esc(v.phone || '')}</span></span></a>`).join('') || '<p class="muted">No vendors yet.</p>'}`);
+      screen(`${head('Vendors', 'menu')}${vs.map(v => `<a class="m-card am-vrow" href="tel:${esc(String(v.phone || '').replace(/[^+\d]/g, ''))}"><span class="am-li">${ic('storefront')}</span><span class="col grow" style="gap:0"><b>${esc(v.name)}</b><span class="muted xs">${esc(catLabel(v.trade))}</span><span class="sm">${esc(v.phone || '')}</span></span></a>`).join('') || '<p class="muted">No vendors yet.</p>'}`);
     },
     async 'audit-sub'() {
       const rows = await API.admin.audit();
-      screen(`${back('Menu', 'menu')}<h1 class="am-h1">Audit trail</h1>${rows.map(r => `<div class="m-card" style="gap:2px"><b class="sm">${esc(r.actor || 'System')} · ${esc(r.action)} ${esc(r.entity)}${r.entity_id ? ' #' + esc(r.entity_id) : ''}</b>${r.detail ? `<span class="sm">${esc(r.detail)}</span>` : ''}<span class="muted xs">${esc(stamp(r.created_at))}</span></div>`).join('') || '<p class="muted">Nothing recorded yet.</p>'}`);
+      screen(`${head('Audit trail', 'menu')}${rows.map(r => `<div class="m-card" style="gap:2px"><b class="sm">${esc(r.actor || 'System')} · ${esc(r.action)} ${esc(r.entity)}${r.entity_id ? ' #' + esc(r.entity_id) : ''}</b>${r.detail ? `<span class="sm">${esc(r.detail)}</span>` : ''}<span class="muted xs">${esc(stamp(r.created_at))}</span></div>`).join('') || '<p class="muted">Nothing recorded yet.</p>'}`);
     },
-    async 'notices-sub'() { const ns = await API.notices.list(); screen(`${back('Home', 'home')}<h2>Notices</h2>${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
+    async 'notices-sub'() { const ns = await API.notices.list(); screen(`${head('Notices', 'menu')}${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`); },
     async 'contacts-sub'() {
       const CONTACTS = (await API.contacts.list().catch(() => [])).map(c => [c.icon || 'phone', c.name, c.role, c.phone || '']);
-      screen(`${back('Back', isAdmin() ? 'home' : 'profile')}<h2>Who to call</h2>${CONTACTS.length ? CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('') : '<p class="muted">The committee has not added any contacts yet.</p>'}`);
+      screen(`${head('Who to call', 'menu')}${CONTACTS.length ? CONTACTS.map(([i, n, r, p]) => `<a class="member" style="grid-template-columns:48px minmax(0,1fr);text-decoration:none;color:inherit;border-radius:20px" href="tel:${esc(p.replace(/[^+\d]/g, ''))}"><span class="tile lg" style="width:48px;height:48px;border-radius:50%">${ic(i)}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(n)}</span><span class="muted xs">${esc(r)}</span><span class="sm" style="font-weight:600;color:var(--color-accent-700)">${esc(p)}</span></span></a>`).join('') : '<p class="muted">The committee has not added any contacts yet.</p>'}`);
     },
   };
 
   // ---------- settings helpers
-  const setBack = () => `<button class="back" data-act="quick" data-k="settings-sub">${ic('caret-left')}Settings</button>`;
   const swBtn = (on, act, attrs, label) => `<button type="button" class="am-sw ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${esc(label)}" data-act="${act}" ${attrs}><span class="am-knob"></span><span class="am-st">${on ? 'On' : 'Off'}</span></button>`;
   const setErr = m => { const e = $('#serr'); if (e) e.textContent = m || ''; };
-  const trySet = async fn => { setErr(''); try { await fn(); } catch (x) { setErr(x.message); toast(x.message); } };
+  const trySet = async fn => { setErr(''); try { await fn(); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
   function drawUsers() {
     const box = $('#ulist'); if (!box) return;
     const q = S.set.q.trim().toLowerCase();
@@ -472,6 +481,7 @@
         ['garage', 'Parking', adm ? 'Slots and assignments' : 'Your slots', 'parking', park && (adm || can('parking.view'))],
         ['file-text', 'Leases', adm ? 'Tenant leases' : 'Your lease', adm ? 'leases-sub' : 'lease', adm || S.me.resident_type === 'tenant'],
         ['qr-code', 'Gate pass', 'Invite a visitor', 'gatepass', !adm && gateOn]]],
+      ['Account', [['user-circle', 'Profile', 'Your details and password', 'profile', true]]],
       ['Administration', [
         ['user-check', 'Approvals', 'New residents', 'approvals', adm],
         ['users-three', 'Residents', 'Search, edit, suspend', 'set-users', adm],
@@ -523,7 +533,7 @@
         <button class="btn btn-secondary btn-lg" data-act="pkclose">Close</button></div>` : '';
       body = `${groups}${form}${sheet}`;
     }
-    screen(`${back('Menu', 'menu')}<h1 class="am-h1">Parking</h1>${stats}${body}`);
+    screen(`${head('Parking', 'menu')}${stats}${body}`);
   }
 
   // ---------- workers
@@ -542,7 +552,7 @@
         ${S.wk.confirm === x.id ? `<div class="callout col" style="gap:8px"><b class="sm">Remove ${esc(x.name)}?</b><div class="two"><button class="btn btn-primary" data-act="wkrmyes" data-id="${x.id}">Yes, remove</button><button class="btn btn-secondary" data-act="wkrmno">Keep</button></div></div>`
           : `<div class="am-acts"><button class="btn btn-secondary" data-act="wkedit" data-id="${x.id}">${ic('pencil-simple')}Edit</button><button class="btn btn-secondary" data-act="wktoggle" data-id="${x.id}">${x.status === 'inactive' ? 'Activate' : 'Set inactive'}</button><button class="btn btn-secondary" data-act="wkrmask" data-id="${x.id}" aria-label="Remove ${esc(x.name)}">${ic('trash')}</button></div>`}</div>`).join('')}</section>`;
     }).join('') || '<p class="muted">No workers yet.</p>';
-    screen(`${back('Menu', 'menu')}<h1 class="am-h1">Workers</h1>${form}${groups}`);
+    screen(`${head('Workers', 'menu')}${form}${groups}`);
   }
   const wkReload = async () => { S.wk.list = await API.admin.workers(); drawWorkers(); };
 
@@ -559,7 +569,7 @@
   };
   async function gateOverview() {
     const o = await API.gate.overview();
-    screen(`${back('Dashboard', 'home')}<h1 class="am-h1">Gate</h1><span class="muted sm">Live overview, refreshes every few seconds</span><div id="ovbody" class="col" style="gap:16px">${ovBody(o)}</div>`);
+    screen(`${head('Gate', 'menu')}<span class="muted sm">Live overview, refreshes every few seconds</span><div id="ovbody" class="col" style="gap:16px">${ovBody(o)}</div>`);
     clearInterval(ovTimer);
     ovTimer = setInterval(async () => {
       const b = $('#ovbody'); if (!b || S.tab !== 'gate' || S.sub || document.hidden) { if (!b) clearInterval(ovTimer); return; }
@@ -609,7 +619,7 @@
         if (cam === me) me.t = setTimeout(tick, 250);
       };
       tick();
-    } catch { stopScan(); toast('Camera not available. Type the code instead.'); }
+    } catch { stopScan(); toast('Camera not available. Type the code instead.', 'error'); }
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopScan(); });
 
@@ -660,7 +670,7 @@
     gpshare: async () => {
       const v = S.gp.view, text = `Gate pass for ${v.visitor_name} at ${SOCIETY.name}, Flat ${S.me.flat}. Code ${v.code}. Valid until ${stamp(v.valid_until)}.`;
       if (navigator.share) { try { await navigator.share({ title: 'Gate pass', text }); } catch { /* cancelled */ } return; }
-      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.'); }
+      try { await navigator.clipboard.writeText(text); toast('Pass details copied'); } catch { toast('Could not copy. Read the code out instead.', 'error'); }
     },
     tab: el => el.dataset.tab === 'settings-sub' ? go('home', null, 'settings-sub') : (el.dataset.tab === 'alerts' && isAdmin() ? go(S.tab, null, 'alerts') : go(el.dataset.tab)),
     emgpick: el => { S.sheet = el.dataset.k; S.note = ''; render(); },
@@ -678,7 +688,7 @@
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thank you. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
   };
@@ -713,7 +723,7 @@
       if (S.photo) fd.set('photo', S.photo);
       const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
     } else if (f.id === 'gateform') {
-      const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code'); return; }
+      const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code', 'error'); return; }
       await doVerify({ code });
     } else if (f.id === 'gpform') {
       const err = $('#gperr'); err.textContent = '';

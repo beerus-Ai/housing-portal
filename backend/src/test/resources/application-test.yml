@@ -1,3 +1,15 @@
 spring:
   datasource:
     url: jdbc:h2:mem:${random.uuid};DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;NON_KEYWORDS=KEY,VALUE
+
+portal:
+  upload-dir: ${java.io.tmpdir}/portal-test-uploads
+  scheduling:
+    enabled: false
+
+# Tests never call out: blank these even if the developer machine has them set.
+ANTHROPIC_API_KEY: ""
+WHATSAPP_TOKEN: ""
+WHATSAPP_PHONE_ID: ""
+WHATSAPP_WEBHOOK_SECRET: ""
+SLA_HOURS: "48"

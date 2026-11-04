@@ -81,6 +81,13 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS role_permissions(
     role TEXT NOT NULL, permission TEXT NOT NULL, allowed INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(role, permission));
   `);
+  // AI workflow columns and the WhatsApp message log (additive; safe to re-run).
+  const cols = db.prepare('PRAGMA table_info(requests)').all().map(c => c.name);
+  for (const [name, type] of [['source', "TEXT NOT NULL DEFAULT 'app'"], ['ai_category', 'TEXT'], ['ai_priority', 'TEXT'], ['ai_summary', 'TEXT'], ['ai_vendor_id', 'INTEGER'], ['ai_source', 'TEXT'], ['ai_confidence', 'REAL'], ['escalated_at', 'TEXT']])
+    if (!cols.includes(name)) db.exec('ALTER TABLE requests ADD COLUMN ' + name + ' ' + type);
+  db.exec(`CREATE TABLE IF NOT EXISTS whatsapp_messages(
+    id INTEGER PRIMARY KEY, direction TEXT NOT NULL, phone TEXT NOT NULL, body TEXT NOT NULL, user_id INTEGER, request_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'logged', created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };

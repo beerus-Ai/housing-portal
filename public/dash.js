@@ -121,6 +121,10 @@
     if (feat('emergency')) attn.push(stat(em.length ? 's-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + ' · ' + e.flat).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
     attn.push(stat(unassigned.length ? 's-dark' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
     attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
+    if (ov && ov.ai) {
+      const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0);
+      attn.push(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
+    }
     const max = Math.max(1, ...a.weeks), total = a.weeks.reduce((x, y) => x + y, 0);
     const chart = `<div class="ds-chart"><div class="ds-chart-h"><div><div class="ds-big">${a.weeks[7]}</div><div class="muted sm">raised this week · ${total} in 8 weeks</div></div></div>
       <div class="ds-bars" role="img" aria-label="Requests raised per week, last 8 weeks: ${a.weeks.join(', ')}">${a.weeks.map((n, i) => `<div class="ds-bar-c"><span class="muted xs">${n}</span><span class="ds-bar-b ${i === 7 ? 'now' : ''}" style="height:${Math.max(4, Math.round(n / max * 110))}px"></span><span class="muted xs">${i === 7 ? 'Now' : (7 - i) + 'w'}</span></div>`).join('')}</div></div>`;

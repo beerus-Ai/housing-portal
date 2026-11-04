@@ -6,14 +6,14 @@
   const { S, PAGES, ACT, page, render } = W;
   const $ = (s, r = document) => r.querySelector(s);
 
-  const SECS = [['general', 'General', 'buildings'], ['access', 'Access control', 'lock-key'], ['users', 'Users', 'users-three'], ['guards', 'Guards', 'identification-card'], ['estate', 'Estate', 'garage'], ['features', 'Features', 'toggle-right'], ['signin', 'Sign-in', 'sign-in']];
+  const SECS = [['general', 'General', 'buildings'], ['access', 'Access control', 'lock-key'], ['users', 'Users', 'users-three'], ['guards', 'Guards', 'identification-card'], ['estate', 'Estate', 'garage'], ['features', 'Features', 'toggle-right'], ['ai', 'AI and WhatsApp', 'sparkle'], ['signin', 'Sign-in', 'sign-in']];
   const FEATS = [['emergency', 'Emergency alerts', 'Residents can raise alerts that reach the committee.'], ['gate', 'Gate and visitor passes', 'Gate passes, QR codes and the guard screen.'], ['contacts', 'Contacts', 'The "Who to call" directory.'], ['notices', 'Notices', 'The notice board.'], ['parking', 'Vehicles and parking', 'The vehicle register and parking slots.']];
   const KINDS = ['Co-operative Housing Society', 'Apartment Owners Association', 'Residential Complex', 'Gated Community'];
-  const ST = { settings: null, access: null, draft: null, orig: null, users: [], guards: [], pw: null, del: null, gdel: null, q: '', stf: '' };
+  const ST = { ai: null, digest: '', settings: null, access: null, draft: null, orig: null, users: [], guards: [], pw: null, del: null, gdel: null, q: '', stf: '' };
   const clone = o => JSON.parse(JSON.stringify(o || {}));
   const sec = () => (SECS.some(s => s[0] === S.setSec) ? S.setSec : 'general');
   const setErr = m => { const e = $('#sterr'); if (e) e.textContent = m || ''; };
-  const run = fn => async (...a) => { setErr(''); try { await fn(...a); } catch (x) { setErr(x.message); toast(x.message); } };
+  const run = fn => async (...a) => { setErr(''); try { await fn(...a); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
 
   const sw = (attrs, label, on) => `<label class="st-sw"><input type="checkbox" role="switch" ${attrs} ${on ? 'checked' : ''}><span class="st-sw-t" aria-hidden="true"></span><span class="sr">${esc(label)}</span></label>`;
   const field = (id, label, input, hint) => `<div class="field"><label for="${id}">${label}</label>${input}${hint ? `<span class="muted sm">${hint}</span>` : ''}</div>`;
@@ -53,6 +53,22 @@
       <ol class="st-how"><li>In Google Cloud Console, create an OAuth client of type "Web application".</li><li>Add this site's address under Authorised JavaScript origins.</li><li>Paste the client ID here and save.</li></ol>
       <p class="callout st-note">${ic('info')} Google only signs in people who already have an approved account here. It never creates one.</p>${saveRow('Save')}</form>`;
 
+  const aiPanel = () => {
+    const a = ST.ai, url = location.origin + a.webhook_path;
+    const msgs = a.messages.map(m => `<li class="st-user"><div class="st-user-h"><span class="tag ${m.direction === 'in' ? 'tag-accent' : 'tag-outline'}">${m.direction === 'in' ? 'From' : 'To'}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(m.resident || m.phone)}${m.flat ? ' · ' + esc(m.flat) : ''}</b><span class="st-ell">${esc(m.body)}</span></span><span class="muted sm">${esc(m.status)}${m.request_id ? ' · #' + m.request_id : ''}</span></div></li>`).join('');
+    return `<h2>AI and WhatsApp</h2><p class="muted">Residents can message the society's WhatsApp number. Each message becomes a request, sorted by AI, and status updates go back to the same chat. AI only suggests; the committee decides.</p>
+    <div class="st-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-3);margin:var(--space-4) 0">
+      <div class="soft-card col" style="gap:2px"><span class="muted xs">AI mode</span><b>${a.mode === 'llm' ? 'AI model' : 'Keyword rules'}</b></div>
+      <div class="soft-card col" style="gap:2px"><span class="muted xs">Requests via WhatsApp</span><b>${esc(a.counts.whatsapp_requests)}</b></div>
+      <div class="soft-card col" style="gap:2px"><span class="muted xs">Requests sorted by AI</span><b>${esc(a.counts.triaged)}</b></div>
+      <div class="soft-card col" style="gap:2px"><span class="muted xs">Escalate after</span><b>${esc(a.sla_hours)} hours</b></div></div>
+    <p class="callout st-note">${ic('info')} ${a.whatsapp_live ? 'WhatsApp is connected: replies are sent to residents.' : 'WhatsApp is not connected yet, so replies are only logged below. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID to send them.'} ${a.mode === 'llm' ? '' : 'Set ANTHROPIC_API_KEY to let an AI model refine the sorting. Names, phone numbers and flat numbers are removed before anything is sent.'}</p>
+    <h3>Connect WhatsApp</h3><ol class="st-how"><li>In your WhatsApp provider (Meta Cloud API, Twilio or similar), set the webhook to <code>${esc(url)}?secret=${esc(a.webhook_secret)}</code>.</li><li>Make sure each resident's phone number is on their profile. The flat is found from the number.</li></ol>
+    <h3>Try it</h3><form id="stsim" class="row st-form" style="align-items:flex-end;flex-wrap:wrap">${field('stsp', 'Resident phone', '<input class="input" id="stsp" name="phone" inputmode="tel" maxlength="30" placeholder="Number on a resident profile" required>')}${field('stst', 'WhatsApp message', '<input class="input" id="stst" name="text" maxlength="300" placeholder="Lift is stuck on floor 3" required>')}<button class="btn btn-primary">${ic('paper-plane-tilt')}Send as resident</button></form>
+    <h3>Weekly digest</h3><div class="row"><button type="button" class="btn btn-secondary" data-act="stdigest">${ic('sparkle')}Write this week's digest</button></div><p class="callout" id="stdigest" ${ST.digest ? '' : 'hidden'}>${esc(ST.digest)}</p>
+    <h3>Messages</h3><ul class="st-users" style="list-style:none;padding:0;margin:0">${msgs || '<li class="muted">No messages yet.</li>'}</ul>`;
+  };
+
   const userRow = u => {
     const stag = { approved: 'tag-accent', pending: 'tag-accent-2', suspended: 'tag-danger', rejected: 'tag-neutral' }[u.status] || 'tag-neutral';
     const ctl = u.status === 'approved' || u.status === 'suspended';
@@ -89,9 +105,10 @@
       if (s === 'access') { ST.access = await API.admin.access(); ST.orig = clone(ST.access.matrix); ST.draft = clone(ST.access.matrix); }
       else if (s === 'users') { ST.users = (await API.admin.allUsers()).filter(u => u.role !== 'admin' && u.role !== 'guard'); if (S.suq != null) { ST.q = S.suq; S.suq = null; } }
       else if (s === 'guards') ST.guards = await API.gate.guards();
+      else if (s === 'ai') ST.ai = await API.admin.ai();
       else ST.settings = await API.admin.settings();
     } catch (x) { loadErr = x.message; }
-    const body = loadErr ? '' : { general, access, users, guards, estate, features, signin }[s]();
+    const body = loadErr ? '' : { general, access, users, guards, estate, features, signin, ai: aiPanel }[s]();
     page(`<div class="st"><header class="st-head"><h1>Settings</h1></header><div class="st-grid">
       <nav class="st-nav" aria-label="Settings sections">${SECS.map(([k, l, i]) => `<button type="button" class="st-tab ${k === s ? 'on' : ''}" data-act="stsec" data-s="${k}" ${k === s ? 'aria-current="page"' : ''}>${ic(i)}<span>${l}</span></button>`).join('')}</nav>
       <section class="st-panel" aria-live="polite"><p class="err" id="sterr" role="alert">${esc(loadErr)}</p>${body}</section></div></div>`);
@@ -100,6 +117,7 @@
   };
   PAGES.users = () => { S.setSec = 'users'; return PAGES.settings(); };
   PAGES.guards = () => { S.setSec = 'guards'; return PAGES.settings(); };
+  PAGES.ai = () => { S.setSec = 'ai'; return PAGES.settings(); };
 
   // ---------- events
   ACT.stsec = el => { if (el.dataset.s === sec() && S.page === 'settings') return; if (isDirty() && sec() === 'access' && S.page === 'settings' && !confirmLeave()) return; S.setSec = el.dataset.s; S.page = 'settings'; ST.pw = ST.del = ST.gdel = null; render(); };
@@ -114,6 +132,7 @@
   ACT.stdel = el => { ST.del = Number(el.dataset.id); ST.pw = null; drawUsers(); };
   ACT.stdelkeep = () => { ST.del = null; drawUsers(); };
   ACT.stdelok = run(async el => { await API.admin.removeUser(el.dataset.id); ST.del = null; toast('Removed'); await reload(); });
+  ACT.stdigest = run(async () => { const d = await API.admin.digest(); ST.digest = d.text; const p = $('#stdigest'); if (p) { p.textContent = d.text; p.hidden = false; } });
   ACT.stgd = el => { ST.gdel = Number(el.dataset.id); render(); };
   ACT.stgdkeep = () => { ST.gdel = null; render(); };
   ACT.stgdok = run(async el => { ST.gdel = null; await API.gate.removeGuard(el.dataset.id); toast('Guard removed'); render(); });
@@ -142,6 +161,8 @@
         await API.admin.setSettings({ features }); S.me.features = Object.assign({}, S.me.features, features); setErr(''); await render(); toast('Features saved');
       } else if (f.id === 'stsignin') {
         const id = (d.google_client_id || '').trim(); await API.admin.setSettings({ google_client_id: id }); S.gid = id; setErr(''); ok(id ? 'Google sign-in is on' : 'Google sign-in is off');
+      } else if (f.id === 'stsim') {
+        const r = await API.admin.simulateWhatsApp(d.phone.trim(), d.text.trim()); setErr(''); toast(r.created ? 'Request #' + r.created + ' created from WhatsApp' : (r.replies[0] || 'Message received')); await render();
       } else if (f.id === 'stguard') {
         await API.gate.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); setErr(''); toast('Guard added'); await render();
       } else if (f.classList.contains('st-uflat')) {
@@ -149,6 +170,6 @@
       } else if (f.classList.contains('st-upw')) {
         await API.admin.resetPassword(f.dataset.id, d.password); ST.pw = null; toast('Password reset'); drawUsers();
       }
-    } catch (x) { setErr(x.message); toast(x.message); }
+    } catch (x) { setErr(x.message); toast(x.message, 'error'); }
   }, true);
 })();

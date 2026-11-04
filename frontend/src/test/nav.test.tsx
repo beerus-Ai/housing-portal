@@ -30,7 +30,7 @@ describe('navFor', () => {
     expect(labels(admin)).toEqual(expect.arrayContaining(['Dashboard', 'Approvals', 'Settings']));
     expect(labels(admin)).not.toContain('Home');
     expect(labels(resident())).not.toContain('Settings');
-    expect(labels({ ...resident(), role: 'guard' })).toEqual(['Gate', 'Log']);
+    expect(labels({ ...resident(), role: 'guard' })).toEqual(['Gate', 'Log', 'Profile']);
   });
 });
 

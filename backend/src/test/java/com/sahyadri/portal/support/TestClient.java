@@ -57,8 +57,30 @@ public class TestClient {
             if (s instanceof MockHttpSession ms) session = ms;
             if (session != null && session.isInvalid()) session = null;
             String text = r.getResponse().getContentAsString(StandardCharsets.UTF_8);
-            JsonNode json = text.isEmpty() ? null : MAPPER.readTree(text);
+            JsonNode json;
+            try {
+                json = text.isEmpty() ? null : MAPPER.readTree(text);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException notJson) {
+                json = null; // CSV and binary downloads: read them from raw()
+            }
             return new Resp(r.getResponse().getStatus(), json, r.getResponse());
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** multipart/form-data POST with text fields and optional file parts: {name, filename, contentType, bytes}. */
+    public Resp multipart(String url, java.util.Map<String, String> fields, Object[]... files) {
+        try {
+            var b = MockMvcRequestBuilders.multipart(url);
+            if (session != null) b.session(session);
+            fields.forEach(b::param);
+            for (Object[] f : files) {
+                b.file(new org.springframework.mock.web.MockMultipartFile((String) f[0], (String) f[1], (String) f[2], (byte[]) f[3]));
+            }
+            MvcResult r = mvc.perform(b).andReturn();
+            String text = r.getResponse().getContentAsString(StandardCharsets.UTF_8);
+            return new Resp(r.getResponse().getStatus(), text.isEmpty() ? null : MAPPER.readTree(text), r.getResponse());
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
