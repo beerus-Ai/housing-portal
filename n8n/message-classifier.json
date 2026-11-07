@@ -34,7 +34,12 @@
       "typeVersion": 1.2,
       "position": [240, 220],
       "parameters": {
-        "model": "gpt-4o-mini",
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
         "options": { "temperature": 0 }
       },
       "credentials": {
