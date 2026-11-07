@@ -172,7 +172,7 @@
       { l: 'Vehicles', icon: 'car', go: 'vehicles', show: allowed('vehicles') }, { l: 'Parking', icon: 'garage', go: 'parking', show: allowed('parking') }, { l: 'Workers', icon: 'hard-hat', go: 'workers' },
       { l: 'Vendors', icon: 'toolbox', go: 'vendors' }, { l: 'Gate', icon: 'shield-check', go: 'gate', show: feat('gate') }, { l: 'Guards', icon: 'identification-card', go: 'guards' }, { l: 'Settings', icon: 'gear-six', go: 'settings' }];
     const attn = [stat(s.pending_users ? 's-dark' : 's-tint', 'user-check', s.pending_users, 'Pending approvals', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
-    if (feat('emergency')) attn.push(stat(em.length ? 's-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + ' · ' + e.flat).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
+    if (feat('emergency')) attn.push(stat(em.length ? 's-red ds-glow-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + (e.flat ? ' · ' + e.flat : '')).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
     attn.push(stat(unassigned.length ? 's-dark' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
     attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
     if (ov && ov.ai) {
@@ -196,10 +196,7 @@
       ${search('Search requests, notices and residents')}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
       ${glance(ov)}
-      ${section('Requests this week', chart)}
       ${section('Open requests', carousel(openCards.length ? openCards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">All clear</span><span class="ds-meta">No open requests.</span></span></div>'], 'Open requests'), 'requests')}
-      ${section('By category', carousel(catCards, 'Requests by category'))}
-      ${section('Vendor ratings', carousel(vc.length ? vc : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">No vendors yet</span></span></div>'], 'Vendor ratings'), 'vendors')}
       ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}</div>`);
     announceNew(reqs);
   };

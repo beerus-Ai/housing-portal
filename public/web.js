@@ -59,10 +59,17 @@
   async function render() {
     if (!S.me) { stopScan(); return authView(); }
     if (S.page !== 'gate') stopScan();
-    let pending = 0, activeEm = 0;
-    if (isAdmin()) { pending = (await API.admin.users('pending')).length; try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; } }
-    const navBtn = (k, label, icon, extra = '') => `<button class="btn side-link ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
-    const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` } : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` } : { n: 0, h: '' };
+    let pending = 0, activeEm = 0, unassigned = 0;
+    if (isAdmin()) {
+      pending = (await API.admin.users('pending')).length;
+      try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; }
+      try { const ov = await API.admin.overview(); unassigned = (ov.requests && ov.requests.unassigned) || 0; } catch (e) { unassigned = 0; }
+    }
+    const navBtn = (k, label, icon, extra = '', cls = '') => `<button class="btn side-link ${cls} ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
+    const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` }
+      : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` }
+      : k === 'requests' && unassigned ? { n: unassigned, h: `<span class="tag tag-accent-2" aria-label="${unassigned} unassigned requests">${unassigned}</span>` }
+      : { n: 0, h: '' };
     const items = navFor(), col = loadCollapsed();
     let nav;
     if (isGuard()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
@@ -71,11 +78,12 @@
       if (g === 'home') return its.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
       const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), c = col.includes(g), on = its.some(([k]) => k === S.page);
       return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
-        <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h)).join('')}</div></div>`;
+        <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('')}</div></div>`;
     }).join('');
     const who = isAdmin() || isGuard() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
+      ${isAdmin() && activeEm ? `<button class="emg-banner" data-act="nav" data-page="emergencies" aria-label="${activeEm} active emergencies, view now">${ic('siren')}<span><strong>${activeEm} active emergenc${activeEm > 1 ? 'ies' : 'y'}</strong> — tap to view</span></button>` : ''}
       <aside class="sidebar">
         <div class="side-brand side-brand-logo"><span class="side-logo">${HP.logo(44)}</span></div>
         <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
