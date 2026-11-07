@@ -944,28 +944,39 @@ function createApp(opts = {}) {
   };
   const sameTgSecret = given => { const a = Buffer.from(String(given || '')), b = Buffer.from(tgSecret()); return a.length === b.length && crypto.timingSafeEqual(a, b); };
   // Logs the outbound message and, when a bot token is set, delivers it to the chat through the Telegram Bot API.
-  const tgSend = (chatId, body, userId, requestId) => {
+  const tgSend = (chatId, body, userId, requestId, extra) => {
     const r = run("INSERT INTO whatsapp_messages(direction,channel,phone,body,user_id,request_id,status) VALUES('out','telegram',?,?,?,?,?)", String(chatId), String(body).slice(0, 1000), userId || null, requestId || null, 'logged');
     const id = Number(r.lastInsertRowid);
     const tok = process.env.TELEGRAM_BOT_TOKEN;
     if (tok && chatId) {
-      fetch('https://api.telegram.org/bot' + tok + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: String(body).slice(0, 4000) }) })
+      fetch('https://api.telegram.org/bot' + tok + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ chat_id: chatId, text: String(body).slice(0, 4000) }, extra || {})) })
         .then(x => run('UPDATE whatsapp_messages SET status=? WHERE id=?', x.ok ? 'sent' : 'failed', id)).catch(() => run('UPDATE whatsapp_messages SET status=? WHERE id=?', 'failed', id));
     }
     return id;
   };
+  // A one-tap keyboard that asks the resident to share their own phone number (used to link an unlinked Telegram account).
+  const tgContactKb = { reply_markup: { keyboard: [[{ text: '📱 Share my phone number', request_contact: true }]], one_time_keyboard: true, resize_keyboard: true } };
   // A registered resident links their Telegram once (by sharing their contact), then messages the bot like WhatsApp. Matching is by the linked Telegram id; replies go to the chat the message came from.
   const handleTelegram = async (chatId, fromId, text, opts = {}) => {
     const body = String(text || '').trim().slice(0, 1000), addr = String(fromId || '');
     if (!addr || !body) return { replies: [], created: null };
-    const send = (a, t, uid, rid) => tgSend(chatId, t, uid, rid);
+    const send = (a, t, uid, rid, extra) => tgSend(chatId, t, uid, rid, extra);
     const reply = (u, t, rid) => { send(addr, t, u && u.id, rid); return t; };
     const inId = Number(run("INSERT INTO whatsapp_messages(direction,channel,phone,body,status) VALUES('in','telegram',?,?,?)", addr, body, 'received').lastInsertRowid);
     const mark = st => run('UPDATE whatsapp_messages SET status=? WHERE id=?', st, inId);
     const u = one("SELECT * FROM users WHERE role='resident' AND status='approved' AND telegram_id=?", addr);
+    // /start is onboarding, not a request: greet a linked resident, or prompt an unlinked one to share their number.
+    if (body === '/start') {
+      mark('ignored');
+      if (u) send(addr, 'Hi ' + u.name + ', your Telegram is linked to flat ' + (u.flat || '') + '. Just describe any problem and we will log it as a request.', u.id, null);
+      else if (!opts.group) send(chatId, 'Welcome to ' + getSetting('society_name') + '. Link your flat by sharing your phone number with the button below.', null, null, tgContactKb);
+      return { replies: [], created: null, decision: 'start' };
+    }
     if (!u) {
       if (opts.group) { mark('ignored'); return { replies: [], created: null, decision: 'ignore' }; }
-      return { replies: [reply(null, 'Hello from ' + getSetting('society_name') + '. This Telegram account is not linked to a flat yet. Tap to share your phone number with this bot, or ask the committee to link it.')], created: null };
+      const t = 'Hello from ' + getSetting('society_name') + '. This Telegram account is not linked to a flat yet. Tap the button to share your phone number, or ask the committee to link it.';
+      send(chatId, t, null, null, tgContactKb);
+      return { replies: [t], created: null };
     }
     run('UPDATE whatsapp_messages SET user_id=? WHERE id=?', u.id, inId);
     return processMsg({ u, from: addr, body, inId, channel: 'telegram', send, reply, mark });
@@ -980,7 +991,7 @@ function createApp(opts = {}) {
       // The resident shared their own number: link this Telegram id to the matching registered phone.
       const key = phoneKey(m.contact.phone_number);
       const u = q("SELECT * FROM users WHERE role='resident' AND status='approved' AND phone IS NOT NULL").find(x => phoneKey(x.phone) === key);
-      if (u) { run('UPDATE users SET telegram_id=? WHERE id=?', String(fromU.id), u.id); linked = true; tgSend(chat.id, 'Thanks ' + u.name + ', your Telegram is now linked to flat ' + (u.flat || '') + '. Message us anytime to raise a request.', u.id, null); }
+      if (u) { run('UPDATE users SET telegram_id=? WHERE id=?', String(fromU.id), u.id); linked = true; tgSend(chat.id, 'Thanks ' + u.name + ', your Telegram is now linked to flat ' + (u.flat || '') + '. Message us anytime to raise a request.', u.id, null, { reply_markup: { remove_keyboard: true } }); }
       else tgSend(chat.id, 'That number is not registered in the portal yet. Please register first, then share your contact again.', null, null);
     } else if (typeof m.text === 'string' && m.text.trim()) {
       const o = await handleTelegram(chat.id, fromU.id, m.text, { group });

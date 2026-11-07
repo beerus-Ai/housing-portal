@@ -101,6 +101,20 @@ test('telegram: chatter is ignored, unsure waits for review, unknown sender in a
   } finally { close(); }
 });
 
+test('telegram /start prompts an unlinked user and makes no request', async () => {
+  const { admin, client, close } = await boot();
+  const anon = client();
+  try {
+    const sec = (await admin('GET', '/api/admin/ai')).body.telegram_webhook_secret;
+    const hdr = { 'x-telegram-bot-api-secret-token': sec };
+    const start = await anon('POST', '/api/telegram/webhook', { message: { from: { id: 321 }, chat: { id: 321, type: 'private' }, text: '/start' } }, hdr);
+    assert.deepEqual([start.body.created, start.body.review, start.body.ignored], [0, 0, 0]);
+    const cfg = (await admin('GET', '/api/admin/ai')).body;
+    assert.equal(cfg.counts.telegram_requests, 0);
+    assert.ok(cfg.messages.some(m => m.channel === 'telegram' && m.direction === 'out'), 'onboarding prompt was sent');
+  } finally { close(); }
+});
+
 test('telegram simulate is committee-only and runs the gate', async () => {
   const { admin, person, client, close } = await boot();
   try {
