@@ -920,9 +920,13 @@ function createApp(opts = {}) {
   const processMsg = async ({ u, from, body, inId, channel, send, reply, mark }) => {
     const chLabel = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
     const low = body.toLowerCase();
-    if (/\b(sos|emergency|fire|ambulance|gas leak|help me|accident|intruder|break[- ]?in)\b/.test(low)) {
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'Possible EMERGENCY from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
-      return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted.')], created: null };
+    if (/\b(sos|emergency|fire|ambulance|gas leak|accident|intruder|break[- ]?in|robbery|burglar|assault|attack|fight|fighting|danger|trapped|injured|unconscious|threat|violence)\b|\b(help\s*(me|us|please)|please\s*help|need\s*help|someone\s*help)\b/.test(low)) {
+      const etype = /\bfire\b/.test(low) ? 'fire' : /\b(theft|intruder|break|robbery|burglar)/.test(low) ? 'theft' : /\b(ambulance|injur|medical|unconscious|accident)/.test(low) ? 'medical' : /\b(fight|violen|assault|attack|threat)/.test(low) ? 'violence' : /\b(lift|elevator|trapped)\b/.test(low) ? 'lift' : 'other';
+      // Flag it as a real emergency on the committee dashboard (unless this resident already has one open), not just a notification.
+      if (!one("SELECT id FROM emergencies WHERE user_id=? AND status='active' LIMIT 1", u.id)) run("INSERT INTO emergencies(user_id,type,note,status) VALUES(?,?,?,'active')", u.id, etype, body.slice(0, 300));
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'EMERGENCY (' + etype + ') from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
+      mark('received');
+      return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted and it is flagged as an emergency in the portal.')], created: null };
     }
     if (/^status\b/.test(low)) {
       const mine = q("SELECT id,title,status FROM requests WHERE user_id=? OR user_id IN (SELECT id FROM users WHERE flat=? AND flat IS NOT NULL) ORDER BY id DESC LIMIT 3", u.id, u.flat || '');
