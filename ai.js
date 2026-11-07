@@ -101,7 +101,27 @@ async function classifyLlm(text) {
   const decision = c < 0.7 ? 'review' : j.kind === 'request' ? 'create' : 'ignore';
   return { kind: j.kind, decision, confidence: Number(c.toFixed(2)), source: 'llm' };
 }
-async function classifyMessage(text) { return (await classifyLlm(text)) || classifyRules(text); }
+// Delegate the request/chatter decision to an n8n workflow that uses its own free LLM (no API key here).
+// Returns null when CLASSIFY_WEBHOOK_URL is unset or on any error, so the model/rule gate still runs.
+async function classifyN8n(text) {
+  const url = process.env.CLASSIFY_WEBHOOK_URL;
+  if (!url) return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const res = await fetch(url, { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: redact(text) }) });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const item = Array.isArray(raw) ? raw[0] : raw; // n8n may wrap the result in an array
+    const j = item && (item.kind ? item : parseJson(item.text || item.output || item.response || ''));
+    if (!j || !['request', 'question', 'chatter'].includes(j.kind)) return null;
+    const c = Math.max(0, Math.min(1, Number(j.confidence) || 0));
+    const decision = c < 0.7 ? 'review' : j.kind === 'request' ? 'create' : 'ignore';
+    return { kind: j.kind, decision, confidence: Number(c.toFixed(2)), source: 'n8n' };
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+// Gate order: free n8n LLM first, then an in-app model if a key is set, then the rule-based fallback.
+async function classifyMessage(text) { return (await classifyN8n(text)) || (await classifyLlm(text)) || classifyRules(text); }
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 function draftNoticeRules(rough) {
@@ -142,4 +162,4 @@ async function digest(stats) {
   return { text: out || base, source: out ? 'llm' : 'rules' };
 }
 
-module.exports = { redact, triageRules, triageLlm, classifyRules, classifyLlm, classifyMessage, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => (process.env.ANTHROPIC_API_KEY ? 'llm' : 'rules') };
+module.exports = { redact, triageRules, triageLlm, classifyRules, classifyLlm, classifyN8n, classifyMessage, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => ((process.env.CLASSIFY_WEBHOOK_URL || process.env.ANTHROPIC_API_KEY) ? 'llm' : 'rules') };
