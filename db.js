@@ -88,6 +88,11 @@ function openDb(file) {
   db.exec(`CREATE TABLE IF NOT EXISTS whatsapp_messages(
     id INTEGER PRIMARY KEY, direction TEXT NOT NULL, phone TEXT NOT NULL, body TEXT NOT NULL, user_id INTEGER, request_id INTEGER,
     status TEXT NOT NULL DEFAULT 'logged', created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+  // Multi-channel intake (WhatsApp is the default; Telegram added): the message channel, and the resident's linked Telegram id (additive, safe to re-run).
+  if (!db.prepare('PRAGMA table_info(whatsapp_messages)').all().some(c => c.name === 'channel'))
+    db.exec("ALTER TABLE whatsapp_messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'whatsapp'");
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'telegram_id'))
+    db.exec('ALTER TABLE users ADD COLUMN telegram_id TEXT');
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
