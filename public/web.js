@@ -77,8 +77,7 @@
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
       <aside class="sidebar">
-        <div class="side-brand"><span class="side-logo">${HP.logo(44)}</span>
-          <div class="col side-t" style="gap:0"><span class="eyebrow">${esc(SOCIETY.kind)}</span><span class="brand-name">${esc(SOCIETY.name)}</span></div></div>
+        <div class="side-brand side-brand-logo"><span class="side-logo">${HP.logo(44)}</span></div>
         <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
         <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
         <div class="side-tools" role="group" aria-label="Menu layout">

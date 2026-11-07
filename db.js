@@ -124,5 +124,18 @@ function seedDemoAccounts(db) {
   const t = db.prepare("SELECT id FROM users WHERE email='tenant1@sahyadri.test'").get();
   const y = new Date().getFullYear();
   if (t) db.prepare('INSERT OR IGNORE INTO leases(user_id,start_date,end_date,owner_name) VALUES(?,?,?,?)').run(t.id, `${y}-01-01`, `${y + 1}-12-31`, 'Owner One');
+  // Example vendors (trade matches a request category so AI vendor suggestion works).
+  const vend = db.prepare('INSERT OR IGNORE INTO vendors(name,trade,phone) VALUES(?,?,?)');
+  for (const row of [['AquaFix Plumbing', 'plumbing', '+91 98200 11001'], ['Voltas Electricals', 'electrical', '+91 98200 11002'], ['OtisCare Lifts', 'lift', '+91 98200 11003'], ['SparkleClean Services', 'housekeeping', '+91 98200 11004'], ['SecureGuard Systems', 'security', '+91 98200 11005'], ['FixItAll Handyman', 'other', '+91 98200 11006']]) vend.run(...row);
+  // Example "who to call" contacts.
+  const cont = db.prepare('INSERT OR IGNORE INTO contacts(name,role,phone,icon) VALUES(?,?,?,?)');
+  for (const row of [['Society Office', 'Manager', '+91 22 2555 0100', 'briefcase'], ['Main Gate Security', 'Guard desk', '+91 98200 22001', 'shield-check'], ['AquaFix Plumbing', 'Plumber on call', '+91 98200 11001', 'drop'], ['Voltas Electricals', 'Electrician on call', '+91 98200 11002', 'wrench'], ['OtisCare Lifts', 'Lift breakdown', '+91 98200 11003', 'elevator'], ['Emergency / Ambulance', 'Medical', '108', 'first-aid'], ['Fire Brigade', 'Fire', '101', 'fire']]) cont.run(...row);
+  // A few sample requests so the dashboard lists and charts are not empty (only when there are none).
+  if (db.prepare('SELECT COUNT(*) AS n FROM requests').get().n === 0) {
+    const owner = db.prepare("SELECT id FROM users WHERE email='owner1@sahyadri.test'").get();
+    const req = db.prepare("INSERT INTO requests(user_id,category,title,description,source,status) VALUES(?,?,?,?,?,?)");
+    if (owner) { req.run(owner.id, 'plumbing', 'Kitchen tap leaking', 'The kitchen tap has been dripping since yesterday.', 'app', 'open'); req.run(owner.id, 'electrical', 'Corridor light not working', 'The 3rd floor corridor light is out.', 'app', 'open'); }
+    if (t) req.run(t.id, 'housekeeping', 'Garbage not collected', 'Garbage on B wing was not collected today.', 'app', 'open');
+  }
 }
 module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };

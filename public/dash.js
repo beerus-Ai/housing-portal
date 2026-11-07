@@ -105,6 +105,50 @@
     } catch { return ''; }
   }
 
+  // ---------- new-request alert: a short chime + a 3s pop-up, then the matching card flashes
+  let actx;
+  function chime(urgent) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      const t0 = actx.currentTime, notes = urgent ? [880, 1174, 880] : [660, 988];
+      notes.forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain(), t = t0 + i * 0.16;
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.17);
+      });
+    } catch {}
+  }
+  function requestPop(r) {
+    const urgent = r.category === 'security' || (r.ai && r.ai.priority === 'urgent');
+    const destLabel = urgent ? 'Emergencies' : catLabel(r.category);
+    const destSel = urgent ? '.ds-stat[data-page="emergencies"]' : `.ds-catcard[data-c="${r.category}"]`;
+    const channel = r.source === 'telegram' ? 'Telegram' : r.source === 'whatsapp' ? 'WhatsApp' : 'the app';
+    chime(urgent);
+    const el = document.createElement('div');
+    el.className = 'rq-pop' + (urgent ? ' rq-pop-urgent' : '');
+    el.setAttribute('role', 'alert');
+    el.innerHTML = `<div class="rq-pop-card"><span class="rq-pop-ic">${ic(urgent ? 'siren' : catIcon(r.category))}</span>
+      <div class="rq-pop-b"><span class="rq-pop-k">New request · via ${esc(channel)}</span><span class="rq-pop-t">${esc(r.title)}</span>
+      <span class="rq-pop-m">${esc(rid(r))} · Flat ${esc(r.flat || '-')} · <b>&rarr; ${esc(destLabel)}</b></span></div></div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('on'));
+    const dest = document.querySelector(destSel);
+    if (dest) { dest.classList.add('rq-flash'); setTimeout(() => dest.classList.remove('rq-flash'), 3200); }
+    setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, 3000);
+  }
+  // The dashboard re-renders on every data change (the live pulse). On each render, announce any request
+  // whose id is newer than the last one we announced (D.announcedId persists across renders).
+  function announceNew(reqs) {
+    const maxId = Math.max(0, ...reqs.map(r => r.id || 0));
+    if (D.announcedId == null) { D.announcedId = maxId; return; } // baseline on first load, don't pop existing
+    if (maxId > D.announcedId) {
+      reqs.filter(r => (r.id || 0) > D.announcedId).sort((a, b) => a.id - b.id).slice(-3).forEach(requestPop);
+      D.announcedId = maxId;
+    }
+  }
+
   // ---------- committee Dashboard
   PAGES.dashboard = async () => {
     const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
@@ -122,7 +166,8 @@
     attn.push(stat(unassigned.length ? 's-dark' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
     attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
     if (ov && ov.ai) {
-      const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0);
+      const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0), tg = ai.telegram_requests_30d || 0;
+      attn.unshift(stat(tg ? 's-dark' : 's-tint', 'telegram-logo', tg, 'Via Telegram', tg ? 'AI-sorted via n8n' : 'Free LLM gate is on', 'ai'));
       attn.unshift(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
     }
     const max = Math.max(1, ...a.weeks), total = a.weeks.reduce((x, y) => x + y, 0);
@@ -146,5 +191,6 @@
       ${section('By category', carousel(catCards, 'Requests by category'))}
       ${section('Vendor ratings', carousel(vc.length ? vc : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">No vendors yet</span></span></div>'], 'Vendor ratings'), 'vendors')}
       ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}</div>`);
+    announceNew(reqs);
   };
 })();
