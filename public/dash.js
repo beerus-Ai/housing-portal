@@ -23,6 +23,8 @@
   // Category photo card (4:3 photo, dark strip with the label and count); falls back to solid dark teal with the icon when the photo is missing.
   const catCard = (k, l, i, open, raised) => `<button type="button" class="cat-photo ds-catcard" data-act="catfilter" data-c="${k}" aria-label="Show open ${esc(l)} requests">${W.catPic(k)}<span class="cat-ic">${ic(i)}</span><span class="cat-strip"><b>${esc(l)}</b><span>${open} open · ${raised} in 30 days</span></span></button>`;
   const stat = (cls, icon, n, label, sub, pg) => `<button type="button" class="ds-stat ${cls}" data-act="nav" data-page="${pg}"><span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
+  // Channel card: lists the requests that arrived on that channel (setup stays in Settings, not here).
+  const chanCard = (cls, icon, n, label, sub, src) => `<button type="button" class="ds-stat ${cls}" data-act="srcfilter" data-src="${src}"><span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
 
   // ---------- search (requests, notices, people)
   function results(q) {
@@ -167,8 +169,8 @@
     attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
     if (ov && ov.ai) {
       const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0), tg = ai.telegram_requests_30d || 0;
-      attn.unshift(stat(tg ? 's-dark' : 's-tint', 'telegram-logo', tg, 'Via Telegram', tg ? 'AI-sorted via n8n' : 'Free LLM gate is on', 'ai'));
-      attn.unshift(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
+      attn.unshift(chanCard(tg ? 's-dark' : 's-tint', 'telegram-logo', tg, 'Via Telegram', tg ? 'Tap to see them' : 'Free LLM gate is on', 'telegram'));
+      attn.unshift(chanCard(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'Tap to see them' : 'AI triage is on'), 'whatsapp'));
     }
     const max = Math.max(1, ...a.weeks), total = a.weeks.reduce((x, y) => x + y, 0);
     const chart = `<div class="ds-chart"><div class="ds-chart-h"><div><div class="ds-big">${a.weeks[7]}</div><div class="muted sm">raised this week · ${total} in 8 weeks</div></div></div>

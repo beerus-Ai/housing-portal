@@ -525,6 +525,7 @@ function createApp(opts = {}) {
     if (req.user.role !== 'admin') { where.push('(r.user_id=? OR u.flat=?)'); p.push(req.user.id, req.user.flat || ''); }
     if (STATUSES.includes(req.query.status)) { where.push('r.status=?'); p.push(req.query.status); }
     if (CATEGORIES.includes(req.query.category)) { where.push('r.category=?'); p.push(req.query.category); }
+    if (['whatsapp', 'telegram', 'app'].includes(req.query.source)) { where.push('r.source=?'); p.push(req.query.source); }
     res.json(q(`${REQ_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY r.id DESC`, ...p).map(r => shape(r, req.user)));
   });
   app.get('/api/requests/:id', auth, (req, res) => {

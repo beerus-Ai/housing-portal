@@ -18,7 +18,7 @@ window.API = (() => {
       changePassword: (current, next) => call('POST', '/api/me/password', { current, next }),
     },
     requests: {
-      list: params => call('GET', '/api/requests' + qs(params)), // { status, category }
+      list: params => call('GET', '/api/requests' + qs(params)), // admin filters: { status, category, source: 'whatsapp'|'telegram'|'app' }
       get: rid => call('GET', `/api/requests/${id(rid)}`),
       create: formData => call('POST', '/api/requests', formData), // multipart: category, title, description, photo
       photoUrl: rid => `/api/requests/${id(rid)}/photo`,

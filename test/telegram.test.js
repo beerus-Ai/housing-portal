@@ -72,6 +72,12 @@ test('telegram: resident links by sharing contact, then a real message becomes a
     const real = await post({ message: { from: { id: 555 }, chat: { id: 555, type: 'private' }, text: 'Lift is not working since morning' } });
     assert.equal(real.body.created, 1);
 
+    // The "Via Telegram" dashboard card filters the requests list by source.
+    const tgReqs = (await admin('GET', '/api/requests?source=telegram')).body;
+    assert.equal(tgReqs.length, 1);
+    assert.equal(tgReqs[0].source, 'telegram');
+    assert.equal((await admin('GET', '/api/requests?source=whatsapp')).body.length, 0);
+
     const cfg = (await admin('GET', '/api/admin/ai')).body;
     assert.equal(cfg.counts.telegram_requests, 1);
     assert.ok(cfg.messages.some(m => m.channel === 'telegram' && m.direction === 'in'));

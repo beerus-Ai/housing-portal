@@ -7,7 +7,7 @@
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
 
   const root = $('#root');
-  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '', settings: null };
+  const S = { nav: { pos: 'side', hidden: false }, me: null, leaseId: null, catFilter: '', srcFilter: '', page: 'home', selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', filter: '', emType: null, delContact: null, editVendor: null, delVendor: null, vErr: '', gpSel: null, gpNew: null, gpCancel: null, gmRot: false, gdDel: null, gdErr: '', settings: null };
   // Menu layout is the user's choice: on the side or on top, shown or hidden. Remembered in this browser.
   const NAVKEY = 'hp.nav';
   const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
@@ -158,10 +158,11 @@
   // ---------- pages
   const PAGES = {
     async requests() {
-      const [all, vendors] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter } : {}), isAdmin() ? API.vendors.list() : []]);
+      const [all, vendors] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter, source: S.srcFilter } : {}), isAdmin() ? API.vendors.list() : []]);
       const reqs = (S.catFilter ? all.filter(isOpen) : all).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
       const sel = reqs.find(r => r.id === S.selId) || reqs.find(isOpen) || reqs[0];
-      const heading = isAdmin() ? 'All requests' : S.me.resident_type === 'family' ? `Flat ${S.me.flat} requests` : 'My requests';
+      const srcName = S.srcFilter === 'telegram' ? 'Telegram' : S.srcFilter === 'whatsapp' ? 'WhatsApp' : '';
+      const heading = isAdmin() ? (srcName ? `${srcName} requests` : 'All requests') : S.me.resident_type === 'family' ? `Flat ${S.me.flat} requests` : 'My requests';
       let detail = '<p class="muted">Nothing here yet. Raise your first request.</p>';
       if (sel) {
         const d = await API.requests.get(sel.id);
@@ -185,7 +186,7 @@
           <figure style="margin:0">${d.has_photo ? `<img class="photo" style="height:240px;border-radius:14px" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : `<div style="height:240px;border-radius:14px;overflow:hidden">${photoSlot('No photo attached', 'camera')}</div>`}<figcaption class="muted sm">Photo attached by resident</figcaption></figure></div>`;
         S.selId = d.id;
       }
-      const filter = isAdmin() ? `<div class="row"><select class="input" id="fs" style="width:auto" aria-label="Filter by status"><option value="">Any status</option>${['open', 'assigned', 'in_progress', 'closed'].map(s => `<option value="${s}" ${S.filter === s ? 'selected' : ''}>${s.replace('_', ' ')}</option>`).join('')}</select>${S.catFilter ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearcat">${esc(catLabel(S.catFilter))} ✕</button>` : ''}<a href="${API.admin.exportUrl}">Export CSV</a></div>` : '';
+      const filter = isAdmin() ? `<div class="row"><select class="input" id="fs" style="width:auto" aria-label="Filter by status"><option value="">Any status</option>${['open', 'assigned', 'in_progress', 'closed'].map(s => `<option value="${s}" ${S.filter === s ? 'selected' : ''}>${s.replace('_', ' ')}</option>`).join('')}</select>${S.catFilter ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearcat">${esc(catLabel(S.catFilter))} ✕</button>` : ''}${srcName ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearsrc">Via ${esc(srcName)} ✕</button>` : ''}<a href="${API.admin.exportUrl}">Export CSV</a></div>` : '';
       page(`<div class="split"><div class="col" style="gap:var(--space-1)"><h2 style="margin-bottom:var(--space-3)">${heading}</h2>${filter}${reqs.map(reqRow).join('') || '<p class="muted">No requests.</p>'}</div><div class="col" style="gap:var(--space-4)">${detail}</div></div>`);
     },
 
@@ -430,8 +431,10 @@
   document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
   const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
-    catfilter: el => { S.catFilter = el.dataset.c; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
+    catfilter: el => { S.catFilter = el.dataset.c; S.srcFilter = ''; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
+    srcfilter: el => { S.srcFilter = el.dataset.src; S.catFilter = ''; S.filter = ''; S.selId = null; go('requests'); }, // a "Via WhatsApp/Telegram" card lists requests from that channel
+    clearsrc: () => { S.srcFilter = ''; render(); },
     lease: el => { S.leaseId = Number(el.dataset.id); render(); },
     navpos: () => { S.nav.pos = S.nav.pos === 'top' ? 'side' : 'top'; saveNav(); applyNav(); },
     navhide: () => { S.nav.hidden = !S.nav.hidden; saveNav(); applyNav(); if (!S.nav.hidden) { const f = document.querySelector('.side-link.on'); if (f) f.focus(); } },
