@@ -171,3 +171,49 @@ test('notice drafter and weekly digest', async () => {
     assert.equal((await o('GET', '/api/admin/digest')).status, 403);
   } finally { close(); }
 });
+
+test('message gate: chatter is ignored, unsure goes to review, real requests are logged', () => {
+  const AIm = require('../ai');
+  const d = t => AIm.classifyRules(t).decision;
+  assert.equal(d('Good morning everyone!'), 'ignore');
+  assert.equal(d('Thanks for organising the Diwali party'), 'ignore');
+  assert.equal(d('Who is coming to the AGM on Sunday?'), 'ignore');
+  assert.equal(d('Is the lift working?'), 'review');
+  assert.equal(d('Water tank cleaning on Sunday'), 'review');
+  assert.equal(d('Lift is not working since morning'), 'create');
+  assert.equal(d('Garbage not collected today'), 'create');
+  assert.equal(d('Sparks coming from the switch board'), 'create');
+});
+
+test('public group: chatter makes no ticket and no reply, review queue, committee approves or dismisses', async () => {
+  const { admin, person, client, close } = await boot();
+  const anon = client();
+  try {
+    await person('grp@example.test', 'E-505', 'owner', '9000033333');
+    const cfg = (await admin('GET', '/api/admin/ai')).body;
+    const hdr = { 'x-webhook-secret': cfg.webhook_secret };
+    const post = text => anon('POST', '/api/whatsapp/webhook', { from: '919000033333', text, group: true }, hdr);
+    const chat = await post('Good morning everyone, have a great day');
+    assert.deepEqual([chat.body.created, chat.body.ignored], [0, 1]);
+    const unknown = await anon('POST', '/api/whatsapp/webhook', { from: '911234500000', text: 'Lift is not working', group: true }, hdr);
+    assert.deepEqual([unknown.body.created, unknown.body.ignored], [0, 1]);
+    const unsure = await post('Is the lift working?');
+    assert.equal(unsure.body.review, 1);
+    const real = await post('Lift is not working since morning');
+    assert.equal(real.body.created, 1);
+    let log = (await admin('GET', '/api/admin/ai')).body;
+    assert.equal(log.review.length, 1);
+    assert.equal(log.counts.messages_review, 1);
+    assert.equal(log.messages.filter(m => m.direction === 'out').length, 1, 'only the real request is answered');
+    const id = log.review[0].id;
+    const ok = await admin('POST', `/api/admin/whatsapp/messages/${id}/create-request`, {});
+    assert.equal(ok.status, 201);
+    assert.ok(ok.body.created);
+    assert.equal((await admin('POST', `/api/admin/whatsapp/messages/${id}/create-request`, {})).status, 404, 'cannot approve twice');
+    await post('Is the water tank clean?');
+    log = (await admin('GET', '/api/admin/ai')).body;
+    assert.equal((await admin('POST', `/api/admin/whatsapp/messages/${log.review[0].id}/dismiss`, {})).status, 200);
+    assert.equal((await admin('GET', '/api/admin/ai')).body.review.length, 0);
+    assert.equal((await anon('POST', `/api/admin/whatsapp/messages/${id}/dismiss`, {})).status, 401);
+  } finally { close(); }
+});

@@ -277,10 +277,14 @@ export interface AiMessage {
   id: number; direction: 'in' | 'out'; phone: string; body: string; status: string; request_id: number | null;
   created_at: string; resident: string | null; flat: string | null;
 }
+/** A group message the gate was unsure about. */
+export interface AiReviewMessage { id: number; phone: string; body: string; created_at: string; resident: string | null; flat: string | null }
+export interface WhatsAppSimResult { created: number | null; replies: string[]; decision?: 'create' | 'review' | 'ignore' | 'none' }
 /** GET /api/admin/ai */
 export interface AiInfo {
   mode: 'rules' | 'llm'; sla_hours: number; whatsapp_live: boolean; webhook_path: string; webhook_secret: string;
-  counts: { whatsapp_requests: number; messages_in: number; messages_out: number; triaged: number };
+  counts: { whatsapp_requests: number; messages_in: number; messages_out: number; triaged: number; messages_review?: number; messages_ignored?: number };
+  review?: AiReviewMessage[];
   messages: AiMessage[];
 }
 export interface NoticeDraft { title: string; body: string; source: 'rules' | 'llm' }

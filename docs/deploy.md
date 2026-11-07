@@ -56,3 +56,15 @@ Only after phases 2 and 3 reach parity (all `test/*.test.js` behaviours covered)
 10. Monitor logs and health for the first day; keep Node stopped but intact.
 
 Rollback: before any new data is written on Java, point the proxy back at the Node app (unchanged, frozen `portal.db`) and unfreeze it; no data is lost. After writes on Java, the rollback loses them unless you replay them manually: decide on a cut-off (for example 1 hour) after which you roll forward instead. Retire Node (delete code, archive `portal.db`) only after an agreed stable period.
+
+## Hosted demo (Render, default Node app)
+`render.yaml` at the repo root defines one web service. To publish:
+1. Sign in at https://render.com with the GitHub account that owns this repository.
+2. New > Blueprint > select `beerus-Ai/housing-portal` (branch `main` once PR #16 is merged, or pick the feature branch).
+3. Apply. Render builds with `npm ci --omit=dev`, starts `node server.js` and gives an `https://sahyadri-heights-xxxx.onrender.com` URL.
+4. Open the service > Environment, read the generated `ADMIN_PASSWORD`, sign in as `admin@society.test`, then change the password from Profile.
+5. Free plan caveat: data lives on the instance disk and is lost on redeploy or after long sleeps. For a durable demo use a paid plan, add the disk block in `render.yaml` and set `DB_FILE=/var/data/portal.db`, `UPLOAD_DIR=/var/data/uploads`.
+6. WhatsApp: set `WHATSAPP_WEBHOOK_SECRET`, then point the provider webhook at `https://<your-url>/api/whatsapp/webhook?secret=<that secret>`.
+
+### Current deployment
+Live: https://sahyadri-heights.onrender.com (Render free plan, blueprint `sahyadri-heights`, branch `feat/HSP-28-admin-overview`). The admin password is the generated `ADMIN_PASSWORD` under the service Environment tab. First request after sleep can take about 50 seconds.

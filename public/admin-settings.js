@@ -56,6 +56,7 @@
   const aiPanel = () => {
     const a = ST.ai, url = location.origin + a.webhook_path;
     const msgs = a.messages.map(m => `<li class="st-user"><div class="st-user-h"><span class="tag ${m.direction === 'in' ? 'tag-accent' : 'tag-outline'}">${m.direction === 'in' ? 'From' : 'To'}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(m.resident || m.phone)}${m.flat ? ' · ' + esc(m.flat) : ''}</b><span class="st-ell">${esc(m.body)}</span></span><span class="muted sm">${esc(m.status)}${m.request_id ? ' · #' + m.request_id : ''}</span></div></li>`).join('');
+    const rev = (a.review || []).map(m => `<li class="st-user"><div class="st-user-h"><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(m.flat || 'Flat unknown')} · ${esc(m.resident || m.phone)}</b><span>${esc(m.body)}</span><span class="muted sm">${esc(m.created_at)}</span></span><button type="button" class="btn btn-primary" data-act="stmkreq" data-id="${esc(m.id)}">Create request</button><button type="button" class="btn btn-secondary" data-act="stmdismiss" data-id="${esc(m.id)}">Dismiss</button></div></li>`).join('');
     return `<h2>AI and WhatsApp</h2><p class="muted">Residents can message the society's WhatsApp number. Each message becomes a request, sorted by AI, and status updates go back to the same chat. AI only suggests; the committee decides.</p>
     <div class="st-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-3);margin:var(--space-4) 0">
       <div class="soft-card col" style="gap:2px"><span class="muted xs">AI mode</span><b>${a.mode === 'llm' ? 'AI model' : 'Keyword rules'}</b></div>
@@ -63,9 +64,11 @@
       <div class="soft-card col" style="gap:2px"><span class="muted xs">Requests sorted by AI</span><b>${esc(a.counts.triaged)}</b></div>
       <div class="soft-card col" style="gap:2px"><span class="muted xs">Escalate after</span><b>${esc(a.sla_hours)} hours</b></div></div>
     <p class="callout st-note">${ic('info')} ${a.whatsapp_live ? 'WhatsApp is connected: replies are sent to residents.' : 'WhatsApp is not connected yet, so replies are only logged below. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID to send them.'} ${a.mode === 'llm' ? '' : 'Set ANTHROPIC_API_KEY to let an AI model refine the sorting. Names, phone numbers and flat numbers are removed before anything is sent.'}</p>
+    <p class="muted" id="stcounts">${esc((a.counts.messages_review) || 0)} waiting for review · ${esc((a.counts.messages_ignored) || 0)} ignored as chatter</p>
     <h3>Connect WhatsApp</h3><ol class="st-how"><li>In your WhatsApp provider (Meta Cloud API, Twilio or similar), set the webhook to <code>${esc(url)}?secret=${esc(a.webhook_secret)}</code>.</li><li>Make sure each resident's phone number is on their profile. The flat is found from the number.</li></ol>
-    <h3>Try it</h3><form id="stsim" class="row st-form" style="align-items:flex-end;flex-wrap:wrap">${field('stsp', 'Resident phone', '<input class="input" id="stsp" name="phone" inputmode="tel" maxlength="30" placeholder="Number on a resident profile" required>')}${field('stst', 'WhatsApp message', '<input class="input" id="stst" name="text" maxlength="300" placeholder="Lift is stuck on floor 3" required>')}<button class="btn btn-primary">${ic('paper-plane-tilt')}Send as resident</button></form>
+    <h3>Try it</h3><form id="stsim" class="row st-form" style="align-items:flex-end;flex-wrap:wrap">${field('stsp', 'Resident phone', '<input class="input" id="stsp" name="phone" inputmode="tel" maxlength="30" placeholder="Number on a resident profile" required>')}${field('stst', 'WhatsApp message', '<input class="input" id="stst" name="text" maxlength="300" placeholder="Lift is stuck on floor 3" required>')}<label class="row" style="gap:var(--space-2)"><input type="checkbox" id="stsg" name="group"> Sent in a group</label><button class="btn btn-primary">${ic('paper-plane-tilt')}Send as resident</button></form>
     <h3>Weekly digest</h3><div class="row"><button type="button" class="btn btn-secondary" data-act="stdigest">${ic('sparkle')}Write this week's digest</button></div><p class="callout" id="stdigest" ${ST.digest ? '' : 'hidden'}>${esc(ST.digest)}</p>
+    <section class="soft-card" aria-label="Needs review"><h3>Needs review</h3><ul class="st-users" style="list-style:none;padding:0;margin:0">${rev || '<li class="muted">Nothing waiting for review</li>'}</ul></section>
     <h3>Messages</h3><ul class="st-users" style="list-style:none;padding:0;margin:0">${msgs || '<li class="muted">No messages yet.</li>'}</ul>`;
   };
 
@@ -133,6 +136,8 @@
   ACT.stdelkeep = () => { ST.del = null; drawUsers(); };
   ACT.stdelok = run(async el => { await API.admin.removeUser(el.dataset.id); ST.del = null; toast('Removed'); await reload(); });
   ACT.stdigest = run(async () => { const d = await API.admin.digest(); ST.digest = d.text; const p = $('#stdigest'); if (p) { p.textContent = d.text; p.hidden = false; } });
+  ACT.stmkreq = run(async el => { const r = await API.admin.createRequestFromMessage(el.dataset.id); toast('Request #' + r.created + ' created'); await render(); });
+  ACT.stmdismiss = run(async el => { await API.admin.dismissMessage(el.dataset.id); toast('Dismissed'); await render(); });
   ACT.stgd = el => { ST.gdel = Number(el.dataset.id); render(); };
   ACT.stgdkeep = () => { ST.gdel = null; render(); };
   ACT.stgdok = run(async el => { ST.gdel = null; await API.gate.removeGuard(el.dataset.id); toast('Guard removed'); render(); });
@@ -162,7 +167,8 @@
       } else if (f.id === 'stsignin') {
         const id = (d.google_client_id || '').trim(); await API.admin.setSettings({ google_client_id: id }); S.gid = id; setErr(''); ok(id ? 'Google sign-in is on' : 'Google sign-in is off');
       } else if (f.id === 'stsim') {
-        const r = await API.admin.simulateWhatsApp(d.phone.trim(), d.text.trim()); setErr(''); toast(r.created ? 'Request #' + r.created + ' created from WhatsApp' : (r.replies[0] || 'Message received')); await render();
+        const r = await API.admin.simulateWhatsApp(d.phone.trim(), d.text.trim(), !!d.group); setErr('');
+        toast(r.decision === 'ignore' ? 'Ignored as chatter' : r.decision === 'review' ? 'Sent to review' : r.created ? 'Request #' + r.created + ' created from WhatsApp' : (r.replies[0] || 'Message received')); await render();
       } else if (f.id === 'stguard') {
         await API.gate.addGuard({ name: d.name.trim(), email: d.email.trim(), password: d.password }); setErr(''); toast('Guard added'); await render();
       } else if (f.classList.contains('st-uflat')) {

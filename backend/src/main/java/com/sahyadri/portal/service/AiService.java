@@ -211,6 +211,58 @@ public class AiService {
         return r;
     }
 
+    // ---- message gate: is this WhatsApp message a request at all? ----
+
+    private static final List<String> REPORT = List.of("not working", "broken", "stopped working", "blocked", "leaking", "leak", "no water", "no power", "power cut", "no electricity", "overflow", "damaged", "stuck", "not clean", "foul smell", "complaint", "please fix", "please repair", "need repair", "needs repair", "out of order", "tripping", "sparking");
+    private static final List<String> ASKS = List.of("please", "kindly", "request", "complain", "someone", "need ", "needs ", "urgent", "not been", "since ");
+    private static final Pattern NEGATION = Pattern.compile("\\b(not|no|isn't|won't|can't|cannot|doesn't|didn't|never|without)\\b");
+    private static final Pattern QUESTION_END = Pattern.compile("\\?\\s*$");
+    private static final Pattern QUESTION_START = Pattern.compile("^(who|when|what|where|why|how|is there|is the|are the|does|do you|can we|can i|anyone|any one)\\b");
+
+    private static Map<String, Object> verdict(String kind, String decision, double confidence, String source) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("kind", kind);
+        out.put("decision", decision);
+        out.put("confidence", confidence);
+        out.put("source", source);
+        return out;
+    }
+
+    /** Result keys: kind, decision (create|review|ignore), confidence, source. */
+    public static Map<String, Object> classifyRules(String text) {
+        String t = (text == null ? "" : text).toLowerCase().strip();
+        int kw = 0;
+        for (List<String> words : KEYWORDS.values()) kw += hits(t, words);
+        int urgent = hits(t, URGENT);
+        int report = hits(t, REPORT) + (NEGATION.matcher(t).find() ? 1 : 0);
+        int ask = hits(t, ASKS);
+        int signal = kw + urgent + report;
+        boolean question = QUESTION_END.matcher(t).find() || QUESTION_START.matcher(t).find();
+        if (signal == 0) return t.length() >= 40 && ask > 0 ? verdict("unclear", "review", 0.4, "rules") : verdict("chatter", "ignore", 0.85, "rules");
+        if (urgent > 0) return verdict("request", "create", 0.9, "rules");
+        if (question) return verdict("question", "review", 0.5, "rules");
+        if (report == 0 && !(ask > 0 && kw > 0)) return verdict("unclear", "review", 0.4, "rules");
+        return verdict("request", "create", Math.min(0.95, 0.6 + (kw + report) * 0.1), "rules");
+    }
+
+    /** Model verdict, or null (no key, failure, or an answer outside the allowed kinds). */
+    public Map<String, Object> classifyLlm(String text) {
+        String out = callClaude("You read one message from a residents WhatsApp group of a housing society. Decide if it reports a fault or asks the society for a service (request), asks a general question (question), or is chat, greetings, announcements, opinions or thanks (chatter). Reply with JSON only: {\"kind\": \"request\"|\"question\"|\"chatter\", \"confidence\": 0 to 1}. The text has personal details removed.", redact(text), 60);
+        JsonNode j = parseJson(out);
+        if (j == null) return null;
+        String kind = j.path("kind").asText("");
+        if (!List.of("request", "question", "chatter").contains(kind)) return null;
+        double c = Math.max(0, Math.min(1, j.path("confidence").asDouble(0)));
+        String decision = c < 0.7 ? "review" : "request".equals(kind) ? "create" : "ignore";
+        return verdict(kind, decision, Math.round(c * 100) / 100.0, "llm");
+    }
+
+    public Map<String, Object> classifyMessage(String text) {
+        if (apiKey.isEmpty()) return classifyRules(text);
+        Map<String, Object> v = classifyLlm(text);
+        return v != null ? v : classifyRules(text);
+    }
+
     public Map<String, Object> draftNotice(String rough) {
         Map<String, Object> base = draftNoticeRules(rough);
         String out = callClaude("You write short, polite notices for a housing society notice board. Reply with JSON only: {\"title\": max 80 chars, \"body\": plain text, under 120 words, starts with \"Dear residents,\", ends with \"Managing Committee\"}. Do not invent dates, names or numbers that are not in the input.", redact(rough), 400);

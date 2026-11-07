@@ -33,6 +33,23 @@ public class AiRepository {
                 + "FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 30");
     }
 
+    public Map<String, Object> reviewMessage(long id) {
+        return db.one("SELECT * FROM whatsapp_messages WHERE id=? AND direction='in' AND status='review'", id);
+    }
+
+    public void setMessageResult(long id, String status, long requestId) {
+        db.update("UPDATE whatsapp_messages SET status=?, request_id=? WHERE id=?", status, requestId, id);
+    }
+
+    public long messageCountByStatus(String status) {
+        return db.count("SELECT COUNT(*) FROM whatsapp_messages WHERE status=?", status);
+    }
+
+    public List<Map<String, Object>> reviewQueue() {
+        return db.list("SELECT m.id,m.phone,m.body,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id "
+                + "WHERE m.direction='in' AND m.status='review' ORDER BY m.id DESC LIMIT 50");
+    }
+
     public long messageCount(String direction) {
         return db.count("SELECT COUNT(*) FROM whatsapp_messages WHERE direction=?", direction);
     }

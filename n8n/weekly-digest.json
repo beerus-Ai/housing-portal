@@ -1,0 +1,256 @@
+{
+  "id": "shweeklycommitteed",
+  "name": "Sahyadri: weekly committee digest",
+  "nodes": [
+    {
+      "id": "n10",
+      "name": "Every Monday 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n11",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "portal_url",
+              "type": "string",
+              "value": "https://YOUR-PORTAL-URL"
+            },
+            {
+              "id": "c2",
+              "name": "webhook_secret",
+              "type": "string",
+              "value": "PASTE-SECRET-FROM-SETTINGS-AI-AND-WHATSAPP"
+            },
+            {
+              "id": "c3",
+              "name": "admin_email",
+              "type": "string",
+              "value": "admin@society.test"
+            },
+            {
+              "id": "c4",
+              "name": "admin_password",
+              "type": "string",
+              "value": "PASTE-ADMIN-PASSWORD"
+            },
+            {
+              "id": "c5",
+              "name": "whatsapp_phone_id",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-PHONE-NUMBER-ID"
+            },
+            {
+              "id": "c6",
+              "name": "whatsapp_token",
+              "type": "string",
+              "value": "PASTE-WHATSAPP-ACCESS-TOKEN"
+            },
+            {
+              "id": "c7",
+              "name": "committee_whatsapp",
+              "type": "string",
+              "value": "91XXXXXXXXXX"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Portal login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $(\"Config\").item.json.portal_url }}/api/login",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $(\"Config\").item.json.admin_email, password: $(\"Config\").item.json.admin_password }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "n13",
+      "name": "Pick session cookie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const sc = $input.first().json.headers['set-cookie'];\nconst arr = Array.isArray(sc) ? sc : [sc];\nreturn [{ json: { cookie: arr.filter(Boolean).map(c => c.split(';')[0]).join('; ') } }];"
+      }
+    },
+    {
+      "id": "n14",
+      "name": "Get digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $(\"Config\").item.json.portal_url }}/api/admin/digest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n15",
+      "name": "WhatsApp the committee",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v20.0/{{ $(\"Config\").item.json.whatsapp_phone_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $(\"Config\").item.json.whatsapp_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $(\"Config\").item.json.committee_whatsapp, type: 'text', text: { body: $json.text } }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n16",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "## Weekly digest\nLogs in as the committee admin, asks the portal for the week's digest (written by AI when ANTHROPIC_API_KEY is set, otherwise a plain summary) and sends it to the committee on WhatsApp.\nEdit **Config**, then activate. Swap the last node for Email or Slack if you prefer.",
+        "height": 180,
+        "width": 520
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday 9am": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Portal login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Portal login": {
+      "main": [
+        [
+          {
+            "node": "Pick session cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick session cookie": {
+      "main": [
+        [
+          {
+            "node": "Get digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get digest": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp the committee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

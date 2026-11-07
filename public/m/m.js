@@ -183,6 +183,7 @@
         <button class="link-btn" style="text-align:center;min-height:44px" data-act="gpclose">Close</button></div>` : '';
       const meCard = me ? `<div class="m-card gp-card"><h3>My gate QR</h3><div class="gp-qr">${HP.qrSvg(me.qr || 'HSP:' + me.token, 240)}</div>
         <p class="muted sm" style="margin:0;text-align:center">Show this at the gate to walk in. The same code is what is written on an NFC tag, so a tag can be tapped instead.</p>
+        <div id="gpnfc" class="col" style="gap:8px"></div>
         ${c === 'rotate' ? `<div class="callout col" style="gap:8px"><b class="sm">Reset your QR? The old QR and any NFC tag stop working.</b><div class="two"><button class="btn btn-primary" data-act="gprotyes">Yes, reset</button><button class="btn btn-secondary" data-act="gpno">Keep it</button></div></div>`
           : `<button class="btn btn-secondary btn-lg" data-act="gprotask">${ic('arrows-clockwise')}Reset my QR</button>`}</div>` : '';
       screen(`${head('Gate pass', 'menu')}${qrCard}
@@ -194,16 +195,19 @@
         <h3>Passes for Flat ${esc(S.me.flat)}</h3>${passes.map(p => `<button class="list-row m-card" style="grid-template-columns:40px minmax(0,1fr) auto;align-items:center" data-act="gpopen" data-id="${p.id}"><span class="tile">${ic('qr-code')}</span>
           <span class="col" style="gap:2px"><span class="list-title" style="font-size:15px">${esc(p.visitor_name)}</span><span class="muted xs">${esc(stamp(p.valid_from))} to ${esc(stamp(p.valid_until))}</span></span>${gpTag(p.status)}</button>`).join('') || '<p class="muted">No passes yet.</p>'}
         ${meCard}`);
+      if (me) nfcSlot($('#gpnfc'), 'write', me.qr || 'HSP:' + me.token);
     },
 
     // ---------- gate: guard / committee verify
     async gate() {
       if (isAdmin()) return gateOverview();
-      const canScan = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
+      const canScan = !!MLK || !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.BarcodeDetector);
       screen(`<h1 class="am-h1">Gate</h1>
         <form id="gateform" class="col" style="gap:12px"><input class="input gate-code" id="gcode" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" aria-label="6-digit code"><button class="btn btn-primary btn-lg gate-go">${ic('shield-check')}Verify</button></form>
         ${canScan ? `<button class="btn btn-secondary btn-lg" data-act="gscan">${ic('scan')}Scan QR</button><div id="gcam"></div>` : '<p class="muted sm" style="margin:0">QR scanning is not supported on this device. Type the 6-digit code instead.</p>'}
+        <div id="gnfc" class="col" style="gap:8px"></div>
         <div id="gres" aria-live="assertive"></div>`);
+      nfcSlot($('#gnfc'), 'read');
       if (S.gRes) showRes(S.gRes, true);
       const i = $('#gcode'); if (i && !S.gRes) i.focus();
     },
@@ -577,6 +581,46 @@
     }, 5000);
   }
 
+  // ---------- native helpers (Capacitor app only; plain browsers fall back)
+  const CAP = window.Capacitor, NATIVE = !!(CAP && CAP.isNativePlatform && CAP.isNativePlatform());
+  const MLK = NATIVE && CAP.Plugins && CAP.Plugins.BarcodeScanner;
+  const NFC = NATIVE && CAP.Plugins && CAP.Plugins.SahyadriNfc;
+  let nfcBusy = false, nfcWriteText = null;
+  const NFC_ERR = { disabled: 'NFC is switched off. Turn it on in phone settings.', unsupported: 'This phone has no NFC.', write_failed: 'Could not write. Hold the tag steady, or it may be read-only, too small or an unsupported type.', read_failed: 'Could not read that tag. Hold it steady and try again.', cancelled: '' };
+  // draws the NFC button for 'read' (guard) or 'write' (resident) into box; shows a hint when NFC is unsupported
+  async function nfcSlot(box, mode, text) {
+    if (!box) return;
+    const hint = t => { box.innerHTML = `<p class="muted sm" style="margin:0">${t}</p>`; };
+    if (!NFC) return hint('NFC tap is available in the Android app.');
+    let a; try { a = await NFC.isAvailable(); } catch { return hint('NFC is not available.'); }
+    if (!a.supported) return hint('This phone has no NFC.');
+    nfcWriteText = text || null;
+    box.innerHTML = mode === 'read'
+      ? `<button class="btn btn-secondary btn-lg" data-act="nfcread">${ic('contactless-payment')}Tap to read</button>`
+      : `<button class="btn btn-secondary btn-lg" data-act="nfcwrite">${ic('contactless-payment')}Write to NFC tag</button>`;
+    if (!a.enabled) box.insertAdjacentHTML('beforeend', '<p class="muted xs" style="margin:0">NFC is switched off. Turn it on in phone settings.</p>');
+  }
+  async function nfcRun(btn, fn) {
+    if (nfcBusy) { try { await NFC.cancel(); } catch { /* ignore */ } return; }
+    nfcBusy = true; const old = btn.innerHTML; btn.innerHTML = `${ic('x-circle')}Hold tag to phone. Tap to cancel`;
+    try { await fn(); } catch (x) { const m = NFC_ERR[x && (x.message || x.code)]; if (m === undefined) toast('NFC failed. Try again.', 'error'); else if (m) toast(m, 'error'); }
+    finally { nfcBusy = false; if (btn.isConnected) btn.innerHTML = old; }
+  }
+  async function nativeScan() {
+    try {
+      let p = await MLK.checkPermissions();
+      if (p.camera !== 'granted') p = await MLK.requestPermissions();
+      if (p.camera !== 'granted') return toast('Camera permission is needed to scan. Allow it in app settings, or type the code.', 'error');
+      const r = await MLK.scan({ formats: ['QrCode'] });
+      const v = r && r.barcodes && r.barcodes[0] && r.barcodes[0].rawValue;
+      if (v) doVerify({ token: v });
+    } catch (x) {
+      if (/cancel/i.test(String(x && x.message))) return;
+      if (navigator.mediaDevices && window.BarcodeDetector) return startScan();
+      toast('Scanner not available. Type the code instead.', 'error');
+    }
+  }
+
   // ---------- gate helpers
   const gpTag = st => `<span class="tag ${st === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc({ active: 'Active', used: 'Used', cancelled: 'Cancelled', expired: 'Expired' }[st] || st)}</span>`;
   const REASONS = { expired: 'This pass has expired.', used: 'This pass was already used.', cancelled: 'This pass was cancelled by the resident.', not_found: 'Code not recognised.', unknown: 'Code not recognised.', invalid: 'Code not recognised.', not_yet_valid: 'This pass is not valid yet.', inactive: 'This resident is not active.' };
@@ -626,7 +670,9 @@
   // ---------- events
   const flipSw = (el, on) => { el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.am-st').textContent = on ? 'On' : 'Off'; };
   const ACT = {
-    gscan: () => startScan(),
+    gscan: () => (MLK ? nativeScan() : startScan()),
+    nfcread: el => nfcRun(el, async () => { const r = await NFC.read(); const t = (r && r.text || '').trim(); if (!t) return toast('That tag is empty.', 'error'); await doVerify({ token: t }); }),
+    nfcwrite: el => nfcRun(el, async () => { if (!nfcWriteText) return; await NFC.write({ text: nfcWriteText }); toast('Written to NFC tag'); }),
     catgo: el => { if (isAdmin()) return go('requests'); S.cat = el.dataset.c; go('raise'); },
     vtype: el => { S.veh.type = el.dataset.t; document.querySelectorAll('[data-act=vtype]').forEach(b => b.classList.toggle('on', b === el)); },
     vrmask: el => { S.veh.confirm = Number(el.dataset.id); drawVehicles(); },

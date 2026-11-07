@@ -101,8 +101,10 @@ window.API = (() => {
       updateWorker: (wid, body) => call('PUT', `/api/admin/workers/${id(wid)}`, body),
       removeWorker: wid => call('DELETE', `/api/admin/workers/${id(wid)}`),
       overview: () => call('GET', '/api/admin/overview'), // one call for the dashboard: { residents:{approved,pending,suspended,owners,tenants,family,flats}, requests:{open,unassigned,in_progress,closed_30d}, emergencies:{active,resolved_30d}, gate:{admitted_today,denied_today,active_passes,guards}, estate:{vehicles,parking_total,parking_assigned,workers_active,workers_inactive,vendors}, leases:{ending_60d,tenants_without_lease}, notices:{last_30d} }
-      ai: () => call('GET', '/api/admin/ai'), // { mode: 'rules'|'llm', sla_hours, whatsapp_live, webhook_path, webhook_secret, counts: { whatsapp_requests, messages_in, messages_out, triaged }, messages: [{ id, direction: 'in'|'out', phone, body, status, request_id, created_at, resident, flat }] }
-      simulateWhatsApp: (phone, text) => call('POST', '/api/admin/whatsapp/simulate', { phone, text }), // { created: requestId|null, replies: [string] }
+      ai: () => call('GET', '/api/admin/ai'), // { mode: 'rules'|'llm', sla_hours, whatsapp_live, webhook_path, webhook_secret, counts: { whatsapp_requests, messages_in, messages_out, triaged, messages_review, messages_ignored }, review: [{ id, phone, body, created_at, resident, flat }], messages: [{ id, direction: 'in'|'out', phone, body, status, request_id, created_at, resident, flat }] }
+      simulateWhatsApp: (phone, text, group) => call('POST', '/api/admin/whatsapp/simulate', group ? { phone, text, group: true } : { phone, text }), // { created: requestId|null, replies: [string], decision: 'create'|'review'|'ignore'|'none' }
+      createRequestFromMessage: id => call('POST', `/api/admin/whatsapp/messages/${encodeURIComponent(id)}/create-request`), // { created: requestId }
+      dismissMessage: id => call('POST', `/api/admin/whatsapp/messages/${encodeURIComponent(id)}/dismiss`), // { ok: true }
       draftNotice: text => call('POST', '/api/admin/ai/draft-notice', { text }), // { title, body, source: 'rules'|'llm' }
       digest: () => call('GET', '/api/admin/digest'), // { text, source, stats }
       settings: () => call('GET', '/api/admin/settings'), // same shape as settings.public plus any extra admin-only keys

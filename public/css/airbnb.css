@@ -18,12 +18,15 @@
 .am-or { display: flex; align-items: center; gap: 14px; color: color-mix(in srgb, var(--color-text) 55%, transparent); font-size: 14px; }
 .am-or::before, .am-or::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--color-text) 14%, transparent); }
 .am-switch { text-align: center; margin: 0; font-size: 16px; }
+.am-app { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; padding: 12px 16px; border: 1.5px solid var(--line, #d9dee3); border-radius: 14px; font-weight: 800; font-size: 16px; color: inherit; text-decoration: none; }
+.am-app span { font-weight: 500; opacity: .65; font-size: 14px; }
+.am-app:hover { background: rgba(0,0,0,.04); }
 .am-card .btn-lg { border-radius: 16px; }
 .am-card .input { border-radius: 14px; background: #fff; }
 .am-card .type-tiles { margin-bottom: 4px; }
 
 /* ---- dashboards ---- */
-.ds { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; padding-bottom: 40px; }
+.ds { width: 100%; max-width: min(100%, 2200px); margin: 0 auto; display: flex; flex-direction: column; gap: 28px; padding-bottom: 40px; }
 .ds h1, .ds h2 { font-weight: 600; letter-spacing: -.01em; }
 .ds-hello { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .ds-hello h1 { font-size: clamp(30px, 3.4vw, 42px); } .ds-hello p { margin: 4px 0 0; }
@@ -86,6 +89,14 @@
 
 /* committee: attention stats */
 .ds-attn { gap: 16px; }
+/* The main attention cards share the row: they grow with the space the menu leaves (side, top or hidden) and scroll only when too narrow. */
+.ds-row.ds-attn > .ds-stat { flex: 1 1 190px; width: auto; min-width: 190px; max-width: 360px; }
+/* Slightly smaller attention cards */
+.ds-attn .ds-stat { min-height: 164px; padding: 16px 18px; }
+.ds-attn .ds-stat-i { width: 36px; height: 36px; } .ds-attn .ds-stat-i i { font-size: 22px; }
+.ds-attn .ds-stat-n { font-size: 44px; margin-top: 10px; }
+.ds-attn .ds-stat-l { font-size: 16px; } .ds-attn .ds-stat-s { font-size: 13px; }
+.ds-attn .ds-ringbox { width: 76px; height: 76px; } .ds-attn .ds-ringbox > span { width: 56px; height: 56px; } .ds-attn .ds-ringbox b { font-size: 17px; }
 .ds-stat { all: unset; box-sizing: border-box; cursor: pointer; width: 250px; min-height: 210px; border-radius: var(--ab-r); padding: 22px; display: flex; flex-direction: column; gap: 4px; color: #fff; box-shadow: var(--ab-shadow); transition: transform .22s var(--ease), box-shadow .22s var(--ease); }
 .ds-stat:hover { transform: translateY(-4px); box-shadow: var(--ab-shadow-h); } .ds-stat:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
 .ds-stat-i { width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, .22); display: grid; place-items: center; margin-bottom: auto; }
@@ -106,7 +117,7 @@
 .ds-act { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); } .ds-act:last-child { border: 0; }
 
 /* ---- settings hub ---- */
-.st { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; padding-bottom: 40px; } .st h1 { font-weight: 600; }
+.st { width: 100%; max-width: min(100%, 1800px); margin: 0 auto; display: flex; flex-direction: column; gap: 22px; padding-bottom: 40px; } .st h1 { font-weight: 600; }
 .st-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 28px; align-items: start; }
 .st-nav { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
 .st-tab { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; font-weight: 600; font-size: 17px; transition: background .15s; }
