@@ -433,7 +433,7 @@
   const ACT = {
     catfilter: el => { S.catFilter = el.dataset.c; S.srcFilter = ''; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
-    srcfilter: el => { S.srcFilter = el.dataset.src; S.catFilter = ''; S.filter = ''; S.selId = null; go('requests'); }, // a "Via WhatsApp/Telegram" card lists requests from that channel
+    srcfilter: el => { try { localStorage.setItem('hp.seen.' + el.dataset.src, el.dataset.count || '0'); } catch {} S.srcFilter = el.dataset.src; S.catFilter = ''; S.filter = ''; S.selId = null; go('requests'); }, // a "Via WhatsApp/Telegram" card lists requests from that channel
     clearsrc: () => { S.srcFilter = ''; render(); },
     lease: el => { S.leaseId = Number(el.dataset.id); render(); },
     navpos: () => { S.nav.pos = S.nav.pos === 'top' ? 'side' : 'top'; saveNav(); applyNav(); },

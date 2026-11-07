@@ -24,7 +24,12 @@
   const catCard = (k, l, i, open, raised) => `<button type="button" class="cat-photo ds-catcard" data-act="catfilter" data-c="${k}" aria-label="Show open ${esc(l)} requests">${W.catPic(k)}<span class="cat-ic">${ic(i)}</span><span class="cat-strip"><b>${esc(l)}</b><span>${open} open · ${raised} in 30 days</span></span></button>`;
   const stat = (cls, icon, n, label, sub, pg) => `<button type="button" class="ds-stat ${cls}" data-act="nav" data-page="${pg}"><span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
   // Channel card: lists the requests that arrived on that channel (setup stays in Settings, not here).
-  const chanCard = (cls, icon, n, label, sub, src) => `<button type="button" class="ds-stat ${cls}" data-act="srcfilter" data-src="${src}"><span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
+  // Glows when the channel's count is higher than what the committee last viewed (unseen requests).
+  const chanCard = (cls, icon, n, label, sub, src) => {
+    let seen = 0; try { seen = +(localStorage.getItem('hp.seen.' + src) || 0); } catch {}
+    const glow = (Number(n) || 0) > seen;
+    return `<button type="button" class="ds-stat ${cls}${glow ? ' ds-glow' : ''}" data-act="srcfilter" data-src="${src}" data-count="${esc(n)}">${glow ? '<span class="ds-dot" aria-hidden="true"></span>' : ''}<span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
+  };
 
   // ---------- search (requests, notices, people)
   function results(q) {
@@ -113,12 +118,15 @@
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
       if (actx.state === 'suspended') actx.resume();
-      const t0 = actx.currentTime, notes = urgent ? [880, 1174, 880] : [660, 988];
+      const t0 = actx.currentTime;
+      // Emergency: a harsh, loud, repeating two-tone alarm. Normal: a soft, gentle two-note.
+      const notes = urgent ? [988, 740, 988, 740, 988, 740] : [587, 784];
       notes.forEach((f, i) => {
-        const o = actx.createOscillator(), g = actx.createGain(), t = t0 + i * 0.16;
-        o.type = 'sine'; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.16, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.17);
+        const o = actx.createOscillator(), g = actx.createGain(), t = t0 + i * (urgent ? 0.17 : 0.15);
+        o.type = urgent ? 'square' : 'sine'; o.frequency.value = f;
+        const peak = urgent ? 0.32 : 0.09, tail = urgent ? 0.15 : 0.32;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + tail + 0.02);
       });
     } catch {}
   }
@@ -137,8 +145,8 @@
     document.body.appendChild(el);
     requestAnimationFrame(() => el.classList.add('on'));
     const dest = document.querySelector(destSel);
-    if (dest) { dest.classList.add('rq-flash'); setTimeout(() => dest.classList.remove('rq-flash'), 3200); }
-    setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, 3000);
+    if (dest) { dest.classList.add('rq-flash'); setTimeout(() => dest.classList.remove('rq-flash'), 5200); }
+    setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, 5000);
   }
   // The dashboard re-renders on every data change (the live pulse). On each render, announce any request
   // whose id is newer than the last one we announced (D.announcedId persists across renders).
@@ -185,7 +193,7 @@
     const act = audit.slice(0, 8).map(x => `<div class="ds-act"><span class="muted sm">${esc(stamp(x.created_at))}</span><span><b>${esc(x.action.replace('_', ' '))}</b> · ${esc(x.entity)} ${esc(x.entity_id)} <span class="muted">by ${esc(x.actor || 'system')}</span></span></div>`).join('');
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">${esc(todayLabel())}</p></div><div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${a.open.length} open requests</span></div></header>
-      ${search('Search requests, notices and residents')}${chips(chipList)}
+      ${search('Search requests, notices and residents')}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
       ${glance(ov)}
       ${section('Requests this week', chart)}

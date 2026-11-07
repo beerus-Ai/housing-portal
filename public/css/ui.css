@@ -107,9 +107,15 @@ html, body, #root, #app { width: 100%; }
 .rq-pop-k { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
 .rq-pop-t { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw; }
 .rq-pop-m { font-size: 13px; opacity: .92; }
-.rq-flash { animation: rqflash 1s var(--ease) 0s 3; }
+.rq-flash { animation: rqflash 1s var(--ease) 0s 5; }
 @keyframes rqflash { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px var(--color-accent-600); } }
-@media (prefers-reduced-motion: reduce) { .rq-pop { transition: none; } .rq-flash { animation: none; } }
+
+/* Unseen-requests glow on a dashboard card + its corner dot */
+.ds-stat.ds-glow { position: relative; animation: dsglow 1.8s ease-in-out infinite; }
+@keyframes dsglow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-600) 60%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent-600) 0%, transparent), 0 0 18px 2px color-mix(in srgb, var(--color-accent-600) 55%, transparent); } }
+.ds-dot { position: absolute; top: 12px; right: 12px; width: 11px; height: 11px; border-radius: 50%; background: #d6006c; box-shadow: 0 0 0 3px color-mix(in srgb, #d6006c 30%, transparent); animation: dsdot 1.2s ease-in-out infinite; }
+@keyframes dsdot { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .rq-pop { transition: none; } .rq-flash, .ds-stat.ds-glow, .ds-dot { animation: none; } }
 .side-logo { background: var(--color-accent-900); color: var(--color-bg); width: 48px; height: 48px; border-radius: 20px; flex: none; }
 .side-brand .brand-name { font-size: 24px; }
 .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }

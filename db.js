@@ -137,5 +137,19 @@ function seedDemoAccounts(db) {
     if (owner) { req.run(owner.id, 'plumbing', 'Kitchen tap leaking', 'The kitchen tap has been dripping since yesterday.', 'app', 'open'); req.run(owner.id, 'electrical', 'Corridor light not working', 'The 3rd floor corridor light is out.', 'app', 'open'); }
     if (t) req.run(t.id, 'housekeeping', 'Garbage not collected', 'Garbage on B wing was not collected today.', 'app', 'open');
   }
+  // Demo vehicles, parking slots and workers so the estate pages have data to test.
+  if (db.prepare('SELECT COUNT(*) AS n FROM vehicles').get().n === 0) {
+    const o1 = db.prepare("SELECT id FROM users WHERE email='owner1@sahyadri.test'").get();
+    const veh = db.prepare('INSERT OR IGNORE INTO vehicles(flat,user_id,plate,plate_key,type,make,color) VALUES(?,?,?,?,?,?,?)');
+    for (const [flat, plate, type, make, color] of [['B-101', 'MH12 AB 1234', 'car', 'Honda City', 'White'], ['B-102', 'MH12 CD 5678', 'car', 'Maruti Swift', 'Red'], ['B-101', 'MH12 EF 9012', 'bike', 'Honda Activa', 'Black']])
+      veh.run(flat, flat === 'B-101' && o1 ? o1.id : null, plate, plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase(), type, make, color);
+    const slot = db.prepare('INSERT OR IGNORE INTO parking_slots(code,level,kind,flat) VALUES(?,?,?,?)');
+    for (const [code, level, kind, flat] of [['P-01', 'Basement 1', 'car', 'B-101'], ['P-02', 'Basement 1', 'car', 'B-102'], ['P-03', 'Basement 1', 'car', null], ['P-04', 'Ground', 'bike', 'B-101'], ['P-05', 'Ground', 'bike', null]])
+      slot.run(code, level, kind, flat);
+    const wk = db.prepare('INSERT OR IGNORE INTO workers(name,role,phone,shift,status) VALUES(?,?,?,?,?)');
+    wk.run('Ramesh Kumar', 'housekeeping', '+91 98200 33001', 'Morning', 'active');
+    wk.run('Suresh Patil', 'gardener', '+91 98200 33002', 'Day', 'active');
+    wk.run('Anil More', 'security', '+91 98200 33003', 'Night', 'active');
+  }
 }
 module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };
