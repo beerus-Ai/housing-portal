@@ -884,7 +884,10 @@ function createApp(opts = {}) {
   const processMsg = async ({ u, from, body, inId, channel, send, reply, mark }) => {
     const chLabel = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
     const low = body.toLowerCase();
-    if (/^(sos|emergency|fire|help me)\b/.test(low)) return { replies: [reply(u, 'For an emergency please use the Emergency button in the app or call the gate directly. ' + chLabel + ' is not monitored around the clock.')], created: null };
+    if (/\b(sos|emergency|fire|ambulance|gas leak|help me|accident|intruder|break[- ]?in)\b/.test(low)) {
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'Possible EMERGENCY from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
+      return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted.')], created: null };
+    }
     if (/^status\b/.test(low)) {
       const mine = q("SELECT id,title,status FROM requests WHERE user_id=? OR user_id IN (SELECT id FROM users WHERE flat=? AND flat IS NOT NULL) ORDER BY id DESC LIMIT 3", u.id, u.flat || '');
       return { replies: [reply(u, mine.length ? mine.map(r => '#' + r.id + ' ' + r.title + ': ' + r.status.replace('_', ' ')).join('\n') : 'You have no requests yet. Just describe the problem and we will log it.')], created: null };
@@ -939,6 +942,8 @@ function createApp(opts = {}) {
   // ---- Telegram intake: same AI gate and request pipeline as WhatsApp, over the Telegram Bot API (no business verification, and bots can read group messages).
   const tgSecret = () => {
     if (process.env.TELEGRAM_WEBHOOK_SECRET) return process.env.TELEGRAM_WEBHOOK_SECRET;
+    // Derive a stable secret from SESSION_SECRET so the webhook survives DB wipes / redeploys (no re-register needed).
+    if (process.env.SESSION_SECRET) return crypto.createHash('sha256').update('telegram-webhook:' + process.env.SESSION_SECRET).digest('hex').slice(0, 32);
     let v = getSetting('telegram_secret');
     if (!v) { v = crypto.randomBytes(18).toString('hex'); run('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)', 'telegram_secret', v); }
     return v;
