@@ -171,17 +171,23 @@
           : d.status === 'closed' && !d.rating && !isAdmin() ? '<p class="callout" style="margin:0">Resolved. The flat owner rates the work to close it.</p>'
           : d.rating ? `<p class="row" style="gap:6px;margin:0">${ic('star', '')}You rated this <strong>${d.rating} of 5</strong>${d.rating_comment ? ': ' + esc(d.rating_comment) : ''}.</p>` : '';
         const sv = d.ai && d.ai.vendor_id ? vendors.find(v => v.id === d.ai.vendor_id) : null;
-        const aiBlock = isAdmin() && d.ai ? `<div class="callout col" style="gap:var(--space-2)"><h6 style="margin:0">${ic('sparkle')} AI suggestion${d.source === 'whatsapp' ? ' · came in on WhatsApp' : ''}</h6>
+        const chanLabel = d.source === 'whatsapp' ? ' · came in on WhatsApp' : d.source === 'telegram' ? ' · came in on Telegram' : '';
+        const aiBlock = isAdmin() && d.ai ? `<div class="callout col" style="gap:var(--space-2)"><h6 style="margin:0">${ic('sparkle')} AI suggestion${chanLabel}</h6>
           <span>${esc(catLabel(d.ai.category))} · <strong>${esc(d.ai.priority)}</strong> priority${d.escalated_at ? ' · escalated' : ''}</span>${d.ai.summary ? `<span class="muted sm">${esc(d.ai.summary)}</span>` : ''}
-          ${sv && d.status !== 'closed' && d.vendor_id !== sv.id ? `<div class="row"><span class="sm">Suggested vendor: <strong>${esc(sv.name)}</strong></span><button class="btn btn-secondary" data-act="useai" data-id="${d.id}" data-v="${sv.id}">Assign ${esc(sv.name)}</button></div>` : ''}
           <span class="muted xs">Suggestion only. ${esc(d.ai.source === 'llm' ? 'Written by an AI model with personal details removed.' : 'Based on keyword rules.')} The committee decides.</span></div>` : '';
+        // One-click suggested action the committee approves or dismisses.
+        const actLabel = d.ai && d.ai.action === 'register_vehicle' ? 'Register the vehicle described in this request for Flat ' + esc(d.flat)
+          : d.ai && d.ai.action === 'assign_vendor' && sv ? 'Assign <strong>' + esc(sv.name) + '</strong> to this request' : '';
+        const actionBlock = isAdmin() && d.ai && d.ai.action && d.status !== 'closed' && actLabel ? `<div class="soft-card col" style="gap:var(--space-2);border:1px solid var(--color-accent-400)"><h6 style="margin:0">${ic('magic-wand')} Suggested action</h6>
+          <p style="margin:0">${actLabel}</p><div class="row"><button class="btn btn-primary" data-act="aiaction" data-id="${d.id}">${ic('check')}Approve</button><button class="btn btn-ghost" data-act="aidismiss" data-id="${d.id}">Dismiss</button></div>
+          <span class="muted xs">Nothing happens until you approve.</span></div>` : '';
         const adminBlock = isAdmin() && d.status !== 'closed' ? `<div class="soft-card col"><h6 style="margin:0">Committee</h6><div class="row"><div class="field grow"><label for="vs">Assign vendor</label><select class="input" id="vs">${vendorOptions(vendors, d.vendor_id)}</select></div>
             <button class="btn btn-secondary" data-act="assign" data-id="${d.id}" style="align-self:flex-end">Assign</button></div>
             <div class="row">${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
         detail = `<span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · Flat ${esc(d.flat)}</span><h1 style="max-width:none">${esc(d.title)}</h1>${stepper(d, d.history)}
           <div class="lead" style="gap:var(--space-6)"><div class="col"><div class="row" style="gap:var(--space-6);font-size:14px"><div class="col" style="gap:2px"><span class="muted xs">Assigned to</span><span>${esc(d.vendor_name || 'Not yet assigned')}</span></div>
           <div class="col" style="gap:2px"><span class="muted xs">Raised by</span><span>${esc(d.resident_name)}</span></div><div class="col" style="gap:2px"><span class="muted xs">Raised</span><span>${esc(stamp(d.created_at))}</span></div></div>
-          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${aiBlock}${adminBlock}
+          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${aiBlock}${actionBlock}${adminBlock}
           <div class="col" style="gap:var(--space-2)"><h6 style="margin:0">History</h6>${d.history.map(h => `<div class="hist"><span class="muted">${esc(stamp(h.created_at))}</span><span><strong style="font-weight:600">${esc(h.action.replace('_', ' '))}</strong> ${esc(h.detail || '')} — ${esc(h.actor || 'system')}</span></div>`).join('')}</div></div>
           <figure style="margin:0">${d.has_photo ? `<img class="photo" style="height:240px;border-radius:14px" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : `<div style="height:240px;border-radius:14px;overflow:hidden">${photoSlot('No photo attached', 'camera')}</div>`}<figcaption class="muted sm">Photo attached by resident</figcaption></figure></div>`;
         S.selId = d.id;
@@ -454,6 +460,8 @@
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     useai: async el => { await API.requests.assign(el.dataset.id, Number(el.dataset.v)); toast('Assigned'); render(); },
+    aiaction: async el => { try { const r = await API.requests.aiAction(el.dataset.id); toast(r.plate ? 'Registered ' + r.plate : r.vendor ? 'Assigned ' + r.vendor : 'Done'); } catch (e) { toast(e.message, 'error'); } render(); },
+    aidismiss: async el => { try { await API.requests.aiDismiss(el.dataset.id); toast('Suggestion dismissed'); } catch (e) { toast(e.message, 'error'); } render(); },
     draftnotice: async el => {
       const rough = (($('#nb') || {}).value || ($('#nt') || {}).value || '').trim();
       if (rough.length < 5) return toast('Type a few words in Details first', 'error');

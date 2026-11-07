@@ -105,7 +105,7 @@ function createApp(opts = {}) {
   const applyTriage = (id, text) => {
     const vendors = q('SELECT id,trade FROM vendors');
     const t = AI.triageRules(text, vendors);
-    run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', t.category, t.priority, t.summary, t.vendor_id, t.source, t.confidence, id);
+    run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=?, ai_action=? WHERE id=?', t.category, t.priority, t.summary, t.vendor_id, t.source, t.confidence, t.action, id);
     if (AI.aiMode() === 'llm') {
       AI.triageLlm(text, vendors, t).then(b => {
         if (b) run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', b.category, b.priority, b.summary, b.vendor_id, b.source, b.confidence, id);
@@ -498,8 +498,8 @@ function createApp(opts = {}) {
   const canRate = (u, r) => u.role !== 'admin' && r.status === 'closed' && !r.rating &&
     ((r.user_id === u.id && u.resident_type !== 'family') || (u.resident_type === 'owner' && r.flat === u.flat));
   const shape = (r, u) => {
-    const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ...rest } = r;
-    const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence } } : {};
+    const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ai_action, ...rest } = r;
+    const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence, action: ai_action } } : {};
     return { ...rest, ...ai, has_photo: !!photo, can_rate: !!u && canRate(u, r) };
   };
 
@@ -565,6 +565,42 @@ function createApp(opts = {}) {
     run("UPDATE requests SET vendor_id=?, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, updated_at=datetime('now') WHERE id=?", v.id, r.id);
     log(req.user.id, 'request', r.id, 'assigned', v.name);
     notifyReq(r, `Your request "${r.title}" was assigned to ${v.name}`);
+    res.json({ ok: true });
+  });
+  // AI suggested action: the committee approves it with one click (assign the matching vendor, or register a vehicle from the message).
+  app.post('/api/requests/:id/ai-action', auth, admin, (req, res) => {
+    const r = one('SELECT * FROM requests WHERE id=?', req.params.id);
+    if (!r) return res.status(404).json({ error: 'Request not found' });
+    if (r.ai_action === 'register_vehicle') {
+      const u = one('SELECT id,flat FROM users WHERE id=?', r.user_id);
+      if (!u || !u.flat) return res.status(409).json({ error: 'The requester has no flat on record' });
+      const pv = AI.parseVehicle((r.title || '') + '. ' + (r.description || ''));
+      const plate = pv.plate || ('TEMP-' + r.id);
+      const key = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      let vr; try { vr = run('INSERT INTO vehicles(flat,user_id,plate,plate_key,type,make) VALUES(?,?,?,?,?,?)', u.flat, u.id, plate, key, pv.type || 'car', pv.make || null); }
+      catch { return res.status(409).json({ error: 'A vehicle with that number is already registered' }); }
+      run("UPDATE requests SET ai_action=NULL, status='closed', updated_at=datetime('now') WHERE id=?", r.id);
+      log(req.user.id, 'request', r.id, 'ai_action', 'registered ' + (pv.type || 'car') + ' ' + plate + ' for flat ' + u.flat);
+      log(req.user.id, 'vehicle', Number(vr.lastInsertRowid), 'created', plate + ' from request #' + r.id);
+      notifyReq(r, 'Your ' + (pv.type || 'vehicle') + ' ' + plate + ' has been registered for flat ' + u.flat + '.');
+      return res.json({ ok: true, action: 'register_vehicle', plate });
+    }
+    if (r.ai_action === 'assign_vendor') {
+      const v = r.ai_vendor_id ? one('SELECT * FROM vendors WHERE id=?', r.ai_vendor_id) : null;
+      if (!v) return res.status(409).json({ error: 'No suggested vendor to assign' });
+      if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
+      run("UPDATE requests SET vendor_id=?, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, ai_action=NULL, updated_at=datetime('now') WHERE id=?", v.id, r.id);
+      log(req.user.id, 'request', r.id, 'assigned', v.name + ' (AI action)');
+      notifyReq(r, `Your request "${r.title}" was assigned to ${v.name}`);
+      return res.json({ ok: true, action: 'assign_vendor', vendor: v.name });
+    }
+    res.status(400).json({ error: 'No suggested action for this request' });
+  });
+  app.post('/api/requests/:id/ai-action/dismiss', auth, admin, (req, res) => {
+    const r = one('SELECT id FROM requests WHERE id=?', req.params.id);
+    if (!r) return res.status(404).json({ error: 'Request not found' });
+    run('UPDATE requests SET ai_action=NULL WHERE id=?', r.id);
+    log(req.user.id, 'request', r.id, 'ai_action_dismissed', '');
     res.json({ ok: true });
   });
   app.post('/api/requests/:id/status', auth, admin, (req, res) => {

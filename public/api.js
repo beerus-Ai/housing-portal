@@ -19,6 +19,8 @@ window.API = (() => {
     },
     requests: {
       list: params => call('GET', '/api/requests' + qs(params)), // admin filters: { status, category, source: 'whatsapp'|'telegram'|'app' }
+      aiAction: id => call('POST', `/api/requests/${encodeURIComponent(id)}/ai-action`), // approve the suggested action -> { ok, action, plate?|vendor? }
+      aiDismiss: id => call('POST', `/api/requests/${encodeURIComponent(id)}/ai-action/dismiss`), // { ok }
       get: rid => call('GET', `/api/requests/${id(rid)}`),
       create: formData => call('POST', '/api/requests', formData), // multipart: category, title, description, photo
       photoUrl: rid => `/api/requests/${id(rid)}/photo`,
