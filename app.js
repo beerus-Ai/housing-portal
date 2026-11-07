@@ -978,8 +978,10 @@ function createApp(opts = {}) {
   // ---- Telegram intake: same AI gate and request pipeline as WhatsApp, over the Telegram Bot API (no business verification, and bots can read group messages).
   const tgSecret = () => {
     if (process.env.TELEGRAM_WEBHOOK_SECRET) return process.env.TELEGRAM_WEBHOOK_SECRET;
-    // Derive a stable secret from SESSION_SECRET so the webhook survives DB wipes / redeploys (no re-register needed).
-    if (process.env.SESSION_SECRET) return crypto.createHash('sha256').update('telegram-webhook:' + process.env.SESSION_SECRET).digest('hex').slice(0, 32);
+    // Derive the webhook secret from a value that cannot change across redeploys: the bot token (fixed) or
+    // SESSION_SECRET, never the wiped DB. This keeps the webhook valid after every deploy without re-registering.
+    const base = process.env.TELEGRAM_BOT_TOKEN || process.env.SESSION_SECRET;
+    if (base) return crypto.createHash('sha256').update('telegram-webhook:' + base).digest('hex').slice(0, 32);
     let v = getSetting('telegram_secret');
     if (!v) { v = crypto.randomBytes(18).toString('hex'); run('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)', 'telegram_secret', v); }
     return v;
