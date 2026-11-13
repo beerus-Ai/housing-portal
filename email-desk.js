@@ -38,20 +38,37 @@ module.exports = function emailDesk({ q, one, run, log }) {
       const r = one(`SELECT r.*, u.name AS requester, u.flat, v.name AS vendor, av.name AS ai_vendor FROM requests r JOIN users u ON u.id=r.user_id
         LEFT JOIN vendors v ON v.id=r.vendor_id LEFT JOIN vendors av ON av.id=r.ai_vendor_id WHERE r.id=?`, id);
       if (!r) return null;
+      // Stage-driven: the NEXT step is always first and highlighted (open -> assign someone, assigned -> approve start,
+      // in progress -> approve completion). Everything else (reassign, reply, skip ahead) stays available below it.
+      const P = `/api/requests/${r.id}`;
+      const vendors = r.status === 'closed' ? [] : q('SELECT id,name,trade FROM vendors ORDER BY (id=?) DESC, (trade=?) DESC, name', r.ai_vendor_id || 0, r.category).filter(v => v.id !== r.vendor_id);
+      const assign = (v, next) => ({ do: 'assign-' + v.id, text: (r.vendor_id ? 'Reassign to ' : 'Assign ') + v.name + ' (' + v.trade + ')' + (v.id === r.ai_vendor_id ? ' - AI suggestion' : ''), method: 'POST', path: P + '/assign', body: { vendor_id: v.id }, primary: next, stage: true });
+      const start = { do: 'start', text: 'Approve: start the work (in progress)', method: 'POST', path: P + '/status', body: { status: 'in_progress' }, stage: true };
+      const close = { do: 'close', text: 'Approve: work is done (resolve)', method: 'POST', path: P + '/status', body: { status: 'closed' }, stage: true };
       const acts = [];
-      if (r.ai_action === 'assign_vendor' && r.ai_vendor) acts.push({ do: 'ai', text: 'Approve AI suggestion: assign ' + r.ai_vendor, method: 'POST', path: `/api/requests/${r.id}/ai-action` });
-      if (r.ai_action === 'register_vehicle') acts.push({ do: 'ai', text: 'Approve AI suggestion: register the vehicle', method: 'POST', path: `/api/requests/${r.id}/ai-action` });
-      if (r.ai_action) acts.push({ do: 'ai-dismiss', text: 'Dismiss AI suggestion', method: 'POST', path: `/api/requests/${r.id}/ai-action/dismiss`, quiet: true });
-      if (r.status !== 'closed') {
-        for (const v of q('SELECT id,name,trade FROM vendors ORDER BY (trade=?) DESC, name', r.category))
-          if (v.id !== r.vendor_id) acts.push({ do: 'assign-' + v.id, text: 'Assign ' + v.name + ' (' + v.trade + ')', method: 'POST', path: `/api/requests/${r.id}/assign`, body: { vendor_id: v.id }, primary: v.id === r.ai_vendor_id });
-        if (r.vendor_id && r.status !== 'in_progress') acts.push({ do: 'start', text: 'Mark in progress', method: 'POST', path: `/api/requests/${r.id}/status`, body: { status: 'in_progress' } });
-        if (r.vendor_id) acts.push({ do: 'close', text: 'Mark resolved (close)', method: 'POST', path: `/api/requests/${r.id}/status`, body: { status: 'closed' } });
-      }
-      acts.push({ do: 'reply', text: 'Reply to the resident', method: 'POST', path: `/api/requests/${r.id}/comments`, field: 'body' });
+      let next = '';
+      if (r.status === 'open') {
+        next = 'Assign someone to this request';
+        if (r.ai_action === 'assign_vendor' && r.ai_vendor) acts.push({ do: 'ai', text: 'Assign ' + r.ai_vendor + ' (AI suggestion)', method: 'POST', path: P + '/ai-action', primary: true, stage: true });
+        vendors.forEach((v, i) => { if (!(r.ai_action === 'assign_vendor' && v.id === r.ai_vendor_id)) acts.push(assign(v, !acts.length && i === 0)); });
+        if (!vendors.length && !acts.length) next = 'Add a vendor in the dashboard (Vendors), then assign';
+      } else if (r.status === 'assigned') {
+        next = 'Approve the next stage: start the work';
+        acts.push({ ...start, primary: true }, { ...close, text: 'Skip ahead: mark resolved now' });
+        vendors.forEach(v => acts.push(assign(v, false)));
+      } else if (r.status === 'in_progress') {
+        next = 'Approve the next stage: confirm the work is done';
+        acts.push({ ...close, primary: true });
+        vendors.forEach(v => acts.push(assign(v, false)));
+      } else next = r.rating ? 'Finished and rated' : 'Resolved - waiting for the resident to rate it';
+      if (r.ai_action === 'register_vehicle') acts.unshift({ do: 'ai', text: 'Approve AI suggestion: register the vehicle', method: 'POST', path: P + '/ai-action', primary: true, stage: true });
+      if (r.ai_action) acts.push({ do: 'ai-dismiss', text: 'Dismiss AI suggestion', method: 'POST', path: P + '/ai-action/dismiss', quiet: true });
+      acts.push({ do: 'reply', text: 'Reply to the resident', method: 'POST', path: P + '/comments', field: 'body' });
+      const at = { open: 0, assigned: 1, in_progress: 2, closed: 3 }[r.status] || 0;
       return {
         title: `Request #${r.id}: ${r.title}`,
-        rows: [['Flat', r.flat], ['From', r.requester], ['Category', r.category], ['AI priority', r.ai_priority], ['Status', label(r.status)], ['Assigned to', r.vendor || 'Nobody yet'], ['Came in via', r.source || 'app'], ['Details', r.description]],
+        stage: { steps: ['Open', 'Assigned', 'In progress', 'Resolved'], at, next },
+        rows: [['Flat', r.flat], ['From', r.requester], ['Category', r.category], ['AI priority', r.ai_priority], ['Assigned to', r.vendor || 'Nobody yet'], ['Came in via', r.source || 'app'], ['Details', r.description]],
         acts, open: '/',
       };
     },
@@ -91,28 +108,38 @@ module.exports = function emailDesk({ q, one, run, log }) {
   };
 
   // ---- outgoing email (built here, delivered by the n8n workflow)
-  const emailHtml = (it, t) => {
+  // Stage tracker (Open > Assigned > In progress > Resolved) with the current stage filled, plus the next step.
+  const stageHtml = s => !s ? '' : `<table style="border-collapse:separate;border-spacing:4px 0;width:100%;margin:0 0 6px"><tr>${s.steps.map((n, i) =>
+    `<td style="text-align:center;font-size:12px;font-weight:600;padding:8px 4px;border-radius:6px;${i < s.at ? 'background:#cbeeff;color:#006786' : i === s.at ? 'background:#0088b0;color:#fff' : 'background:#f3f2f2;color:#5d5a59'}">${esc(n)}</td>`).join('')}</tr></table>
+<div style="font-size:15px;font-weight:700;margin:10px 0 14px">Next step: ${esc(s.next)}</div>`;
+  const emailHtml = (it, t, done) => {
     const link = a => `${base()}/desk/${t}?do=${encodeURIComponent(a.do)}`;
     const btn = a => `<a href="${esc(link(a))}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 14px;border-radius:8px;text-decoration:none;font-weight:600;${a.primary ? 'background:#0088b0;color:#fff' : 'background:#e9f8ff;color:#006786'}">${esc(a.text)}</a>`;
     const rows = it.rows.filter(r => r[1]).map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#5d5a59;vertical-align:top">${esc(k)}</td><td style="padding:4px 0">${esc(String(v).slice(0, 600))}</td></tr>`).join('');
+    const shown = it.acts.filter(a => !a.quiet), main = shown.filter(a => a.primary), other = shown.filter(a => !a.primary);
     return `<div style="font-family:Arial,sans-serif;color:#201e1d;max-width:620px">
 <div style="background:${it.urgent ? '#b3261e' : '#0a303e'};color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;font-size:18px;font-weight:700">${esc(it.title)}</div>
 <div style="background:#fff;border:1px solid #d7d3d3;border-top:0;padding:16px 20px;border-radius:0 0 12px 12px">
-<table style="font-size:14px;border-collapse:collapse;margin-bottom:16px">${rows}</table>
-${it.acts.length ? '<div style="font-size:13px;color:#5d5a59;margin-bottom:8px">Act straight from this email (each button asks you to confirm):</div>' + it.acts.filter(a => !a.quiet).map(btn).join('') : ''}
-<div style="margin-top:12px;font-size:13px"><a href="${esc(base() + it.open)}" style="color:#006786">Open in the dashboard</a> · links expire in ${TOKEN_DAYS} days</div>
+${done ? `<div style="background:#e9f8ff;border:1px solid #99e0ff;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:14px">Done: ${esc(done)}</div>` : ''}
+${stageHtml(it.stage)}
+${main.map(btn).join('')}
+${other.length ? `<div style="font-size:13px;color:#5d5a59;margin:8px 0">${main.length ? 'Or:' : 'Choose an action:'}</div>` + other.map(btn).join('') : ''}
+<table style="font-size:14px;border-collapse:collapse;margin-top:14px">${rows}</table>
+<div style="margin-top:12px;font-size:13px;color:#5d5a59">Each button asks you to confirm. <a href="${esc(base() + it.open)}" style="color:#006786">Open in the dashboard</a> · links expire in ${TOKEN_DAYS} days</div>
 </div></div>`;
   };
-  const alert = (kind, id) => {
+  // opts.done: the stage change that triggered this follow-up email (shown at the top and in the subject).
+  const alert = (kind, id, opts = {}) => {
     const url = process.env.ADMIN_EMAIL_WEBHOOK_URL;
     if (!url) return false;
     // Emergencies always go out; everything else only when no committee member has the dashboard open.
-    if (kind !== 'emergency' && Date.now() - adminSeen < PRESENCE_MS) return false;
+    if (kind !== 'emergency' && !opts.force && Date.now() - adminSeen < PRESENCE_MS) return false;
     const it = items[kind] && items[kind](id);
     if (!it) return false;
     const t = token(kind, id);
-    const text = it.title + '\n\n' + it.rows.filter(r => r[1]).map(([k, v]) => k + ': ' + v).join('\n') + '\n\nAct on it: ' + base() + '/desk/' + t;
-    fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, id, subject: (it.urgent ? '[URGENT] ' : '') + 'Sahyadri Heights: ' + it.title, html: emailHtml(it, t), text }), signal: AbortSignal.timeout(15e3) })
+    const subject = (it.urgent ? '[URGENT] ' : '') + 'Sahyadri Heights: ' + it.title + (it.stage ? ' - next: ' + it.stage.next : '');
+    const text = (opts.done ? 'Done: ' + opts.done + '\n' : '') + it.title + (it.stage ? '\nNext step: ' + it.stage.next : '') + '\n\n' + it.rows.filter(r => r[1]).map(([k, v]) => k + ': ' + v).join('\n') + '\n\nAct on it: ' + base() + '/desk/' + t;
+    fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind, id, subject, html: emailHtml(it, t, opts.done), text }), signal: AbortSignal.timeout(15e3) })
       .then(r => log(null, kind === 'review' ? 'whatsapp' : kind, id, r.ok ? 'emailed_committee' : 'email_failed', 'HTTP ' + r.status))
       .catch(e => log(null, kind === 'review' ? 'whatsapp' : kind, id, 'email_failed', String(e.message || e).slice(0, 120)));
     return true;
@@ -127,7 +154,7 @@ button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:12px 16px
 button.primary{background:#0088b0;color:#fff}textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px;border:1px solid #d7d3d3;border-radius:8px;margin-bottom:8px}
 .ok{background:#e9f8ff;border-color:#99e0ff}.err{background:#fff;border-color:#b3261e;color:#b3261e}.urgent h1{color:#b3261e}a{color:#006786}</style></head>
 <body><main>${body}</main></body></html>`;
-  const itemCard = it => `<div class="card${it.urgent ? ' urgent' : ''}"><h1>${esc(it.title)}</h1><table>${it.rows.filter(r => r[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
+  const itemCard = it => `<div class="card${it.urgent ? ' urgent' : ''}"><h1>${esc(it.title)}</h1>${stageHtml(it.stage)}<table>${it.rows.filter(r => r[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></div>`;
   const actForm = (t, a, chosen) => `<form method="post" action="/desk/${esc(t)}"><input type="hidden" name="do" value="${esc(a.do)}">${a.field ? `<textarea name="text" rows="3" maxlength="1000" required placeholder="Write your reply"></textarea>` : ''}<button class="${chosen || a.primary ? 'primary' : ''}">${esc(chosen ? 'Confirm: ' + a.text : a.text)}</button></form>`;
 
   const mount = (app, express) => {
@@ -163,7 +190,13 @@ button.primary{background:#0088b0;color:#fff}textarea{width:100%;box-sizing:bord
       if (status >= 200 && status < 300) {
         log(adm.id, tk.k === 'review' ? 'whatsapp' : tk.k, tk.i, 'email_action', a.text);
         const after = items[tk.k](tk.i);
-        return res.type('html').send(page('Done', `<div class="card ok"><h1>Done: ${esc(a.text)}</h1></div>${after ? itemCard(after) : ''}` + back));
+        const nextActs = after ? after.acts.filter(x => !x.quiet) : [];
+        // A stage change on a request sends a fresh email with the next step, so the job can be driven from the inbox.
+        if (a.stage && tk.k === 'request' && after && after.acts.some(x => x.stage)) alert('request', tk.i, { done: a.text, force: true });
+        return res.type('html').send(page('Done', `<div class="card ok"><h1>Done: ${esc(a.text)}</h1>${a.stage && tk.k === 'request' && after && after.acts.some(x => x.stage) ? '<p>We also emailed you the next step.</p>' : ''}</div>` +
+          (after ? itemCard(after) : '') +
+          (nextActs.length ? `<div class="card"><p>${after.stage ? 'Next step: <b>' + esc(after.stage.next) + '</b>' : 'What next?'}</p>${nextActs.map(x => actForm(req.params.t, x)).join('')}</div>` : '') +
+          `<p><a href="${esc(it.open)}">Open in the dashboard</a></p>`));
       }
       res.status(status || 502).type('html').send(page('Not done', `<div class="card err"><h1>Not done</h1><p>${esc(out.error || 'The action failed')}</p></div>` + back));
     });

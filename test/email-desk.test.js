@@ -77,7 +77,7 @@ test('a new complaint is emailed with action buttons, and an email button assign
     assert.doesNotMatch(mail.html, /<script/i);
 
     // GET only shows a confirm page; it must never change anything (mail scanners prefetch links).
-    const assignDo = (mail.html.match(/\?do=(assign-\d+)/) || [])[1];
+    const assignDo = (mail.html.match(/\?do=(ai|assign-\d+)"/) || [])[1]; // the AI-suggested vendor comes first
     const link = linkFor(mail, assignDo);
     assert.ok(link, 'assign link present');
     const page = await fetch(link);
@@ -94,11 +94,28 @@ test('a new complaint is emailed with action buttons, and an email button assign
     assert.ok(after.history.some(h => h.action === 'assigned'));
     assert.ok(after.history.some(h => h.action === 'email_action'));
 
-    // Then start and close from the same email link, and reply to the resident.
-    assert.equal((await desk(link, { do: 'start' })).status, 200);
-    assert.equal((await desk(link, { do: 'reply', text: 'Plumber arrives at 4pm' })).status, 200);
-    assert.equal((await desk(link, { do: 'close' })).status, 200);
+    // The first email led with "next step: assign"; the done page now offers the next stage, and a follow-up email
+    // arrives whose main button is "Approve: start the work".
+    assert.match(mail.html, /Next step: Assign someone/);
+    assert.match(done.html, /Next step: <b>Approve the next stage: start the work/);
+    await wait(150);
+    const follow = mails.filter(m => m.kind === 'request' && m.id === id).at(-1);
+    assert.notEqual(follow, mail);
+    assert.match(follow.subject, /next: Approve the next stage: start the work/);
+    assert.match(follow.html, /Done: Assign AquaFix/);
+    const startLink = linkFor(follow, 'start');
+    assert.ok(startLink);
+    assert.equal((await desk(startLink, { do: 'start' })).status, 200);
+    assert.equal((await admin('GET', `/api/requests/${id}`)).body.status, 'in_progress');
+    await wait(150);
+    const follow2 = mails.filter(m => m.kind === 'request' && m.id === id).at(-1);
+    assert.match(follow2.subject, /next: Approve the next stage: confirm the work is done/);
+    assert.equal((await desk(linkFor(follow2, 'close'), { do: 'reply', text: 'Plumber arrives at 4pm' })).status, 200);
+    const before = mails.length;
+    assert.equal((await desk(linkFor(follow2, 'close'), { do: 'close' })).status, 200);
     assert.equal((await admin('GET', `/api/requests/${id}`)).body.status, 'closed');
+    await wait(150);
+    assert.equal(mails.length, before, 'no follow-up once resolved (nothing left to approve)');
     // A closed request offers no more status actions.
     assert.equal((await desk(link, { do: 'close' })).status, 409);
   } finally { close(); }
