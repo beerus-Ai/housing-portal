@@ -28,6 +28,16 @@ function redact(text) {
 
 const hit = (text, words) => words.filter(w => text.includes(w));
 
+// Pull vehicle details out of free text so a "register my car" request can be acted on with one approval.
+const MAKES = ['Honda', 'Maruti', 'Suzuki', 'Hyundai', 'Toyota', 'Tata', 'Mahindra', 'Kia', 'Ford', 'Volkswagen', 'Skoda', 'Renault', 'Nissan', 'BMW', 'Audi', 'Mercedes', 'Bajaj', 'TVS', 'Hero', 'Yamaha', 'Royal Enfield', 'Activa', 'Swift', 'City', 'Nexon', 'Creta', 'Scorpio', 'Innova'];
+function parseVehicle(text) {
+  const s = String(text || ''), low = s.toLowerCase();
+  const plateM = s.match(/\b([A-Z]{2}[\s-]?\d{1,2}[\s-]?[A-Z]{1,3}[\s-]?\d{3,4})\b/i);
+  const type = /\b(bike|scooter|scooty|motorcycle|motorbike|two[\s-]?wheeler|activa)\b/.test(low) ? 'bike' : 'car';
+  const make = MAKES.find(m => low.includes(m.toLowerCase())) || null;
+  return { plate: plateM ? plateM[1].toUpperCase().replace(/\s+/g, ' ').trim() : null, type, make };
+}
+
 function triageRules(text, vendors = []) {
   const t = String(text || '').toLowerCase();
   let best = 'other', bestN = 0;
@@ -40,7 +50,10 @@ function triageRules(text, vendors = []) {
   const vendor = vendors.find(v => String(v.trade || '').toLowerCase() === best) || null;
   const first = String(text || '').trim().split(/(?<=[.!?])\s|\n/)[0].slice(0, 110);
   const confidence = bestN === 0 ? 0.3 : Math.min(0.95, 0.55 + bestN * 0.15);
-  return { category: best, priority, summary: first, vendor_id: vendor ? vendor.id : null, confidence: Number(confidence.toFixed(2)), source: 'rules' };
+  // Suggested action the committee approves with one click: register a vehicle, or assign the matching vendor.
+  const vehicleIntent = /\b(car|vehicle|bike|scooter|scooty|motorcycle|motorbike|two[\s-]?wheeler)\b/.test(t) && /\b(register|registration|add|park|parking|allot|sticker)\b/.test(t);
+  const action = vehicleIntent ? 'register_vehicle' : (vendor ? 'assign_vendor' : null);
+  return { category: best, priority, summary: first, vendor_id: vendor ? vendor.id : null, confidence: Number(confidence.toFixed(2)), source: 'rules', action };
 }
 
 async function callClaude(system, user, maxTokens = 400) {
@@ -84,6 +97,9 @@ function classifyRules(text) {
   const signal = kw + urgent + report;
   const question = /\?\s*$/.test(t) || /^(who|when|what|where|why|how|is there|is the|are the|does|do you|can we|can i|anyone|any one)\b/.test(t);
   const out = (kind, decision, confidence) => ({ kind, decision, confidence, source: 'rules' });
+  // Service requests that are not faults (e.g. "I want to register my car", "please issue a parking sticker").
+  const serviceReq = /\b(register|registration|add|park|parking|allot|issue|book|apply|want|would like|sticker|new pass|gate pass)\b/.test(t) && /\b(car|vehicle|bike|scooter|scooty|motorcycle|parking|sticker|pass|visitor|slot|guest)\b/.test(t);
+  if (serviceReq) return out('request', 'create', 0.8);
   if (signal === 0) return t.length >= 40 && ask ? out('unclear', 'review', 0.4) : out('chatter', 'ignore', 0.85);
   if (urgent) return out('request', 'create', 0.9);
   if (question) return out('question', 'review', 0.5);
@@ -101,7 +117,27 @@ async function classifyLlm(text) {
   const decision = c < 0.7 ? 'review' : j.kind === 'request' ? 'create' : 'ignore';
   return { kind: j.kind, decision, confidence: Number(c.toFixed(2)), source: 'llm' };
 }
-async function classifyMessage(text) { return (await classifyLlm(text)) || classifyRules(text); }
+// Delegate the request/chatter decision to an n8n workflow that uses its own free LLM (no API key here).
+// Returns null when CLASSIFY_WEBHOOK_URL is unset or on any error, so the model/rule gate still runs.
+async function classifyN8n(text) {
+  const url = process.env.CLASSIFY_WEBHOOK_URL;
+  if (!url) return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const res = await fetch(url, { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: redact(text) }) });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const item = Array.isArray(raw) ? raw[0] : raw; // n8n may wrap the result in an array
+    const j = item && (item.kind ? item : parseJson(item.text || item.output || item.response || ''));
+    if (!j || !['request', 'question', 'chatter'].includes(j.kind)) return null;
+    const c = Math.max(0, Math.min(1, Number(j.confidence) || 0));
+    const decision = c < 0.7 ? 'review' : j.kind === 'request' ? 'create' : 'ignore';
+    return { kind: j.kind, decision, confidence: Number(c.toFixed(2)), source: 'n8n' };
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+// Gate order: free n8n LLM first, then an in-app model if a key is set, then the rule-based fallback.
+async function classifyMessage(text) { return (await classifyN8n(text)) || (await classifyLlm(text)) || classifyRules(text); }
 
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 function draftNoticeRules(rough) {
@@ -142,4 +178,4 @@ async function digest(stats) {
   return { text: out || base, source: out ? 'llm' : 'rules' };
 }
 
-module.exports = { redact, triageRules, triageLlm, classifyRules, classifyLlm, classifyMessage, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => (process.env.ANTHROPIC_API_KEY ? 'llm' : 'rules') };
+module.exports = { redact, triageRules, triageLlm, parseVehicle, classifyRules, classifyLlm, classifyN8n, classifyMessage, draftNotice, draftNoticeRules, digest, digestRules, CATEGORIES, PRIORITIES, aiMode: () => ((process.env.CLASSIFY_WEBHOOK_URL || process.env.ANTHROPIC_API_KEY) ? 'llm' : 'rules') };

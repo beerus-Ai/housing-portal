@@ -20,10 +20,14 @@ No automatic retention schedule is implemented yet. Proposed: resident data kept
 ## 5. What is sent to an LLM (AI triage, notice drafter, digest)
 Never names, phone numbers, email addresses or flat numbers. Text is run through a redaction step before any model call (`redact` in `ai.js`, covered by an automated test). Only the problem description and a list of vendor trades are sent. Photos are not sent. With no API key the portal uses a local rule-based classifier and sends nothing anywhere. The model's output is a suggestion; a committee member confirms assignments and sends notices. Redaction is pattern-based and can miss unusual formats, so residents should avoid typing personal details into the description and the committee should review suggestions.
 
-WhatsApp: messages pass through the WhatsApp provider under its terms; the portal stores inbound and outbound messages in `whatsapp_messages` for the committee's use. The society should decide how long to keep them.
+WhatsApp and Telegram: messages pass through the provider under its terms; the portal stores inbound and outbound messages in `whatsapp_messages` (with a `channel` column) for the committee's use, and stores a linked resident's Telegram id in `users.telegram_id`. The society should decide how long to keep them.
+
+n8n LLM gate: when `CLASSIFY_WEBHOOK_URL` is set, the redacted message text (no names, phones, emails or flat numbers) goes to the society's n8n workflow and from there to the model on n8n's credits.
+
+Committee email desk: when nobody is on the dashboard, request, registration and emergency details (including the resident's name, flat, and for registrations their email and phone) are sent to the society's n8n workflow and emailed from and to the committee's own Gmail account. This is committee-internal use, not a model call. Email links are signed and expire after 7 days; anyone holding a link can act on that one item, so the committee inbox must be protected like the dashboard login.
 
 ## 6. Security measures
-Hashed passwords, role checks on every route, HTTPS in production, no secrets in the repository, strict CSP, audit trail, login throttling, webhook secret check.
+Hashed passwords, role checks on every route, HTTPS in production, no secrets in the repository, strict CSP, audit trail, login throttling, webhook secret check, signed and expiring email action links, secret n8n webhook paths.
 
 ## 7. Development rule
 No real resident data in prompts to Claude, fixtures or tests. Synthetic data only (see `CLAUDE.md`).

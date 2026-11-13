@@ -18,7 +18,9 @@ window.API = (() => {
       changePassword: (current, next) => call('POST', '/api/me/password', { current, next }),
     },
     requests: {
-      list: params => call('GET', '/api/requests' + qs(params)), // { status, category }
+      list: params => call('GET', '/api/requests' + qs(params)), // admin filters: { status, category, source: 'whatsapp'|'telegram'|'app' }
+      aiAction: id => call('POST', `/api/requests/${encodeURIComponent(id)}/ai-action`), // approve the suggested action -> { ok, action, plate?|vendor? }
+      aiDismiss: id => call('POST', `/api/requests/${encodeURIComponent(id)}/ai-action/dismiss`), // { ok }
       get: rid => call('GET', `/api/requests/${id(rid)}`),
       create: formData => call('POST', '/api/requests', formData), // multipart: category, title, description, photo
       photoUrl: rid => `/api/requests/${id(rid)}/photo`,
@@ -101,8 +103,10 @@ window.API = (() => {
       updateWorker: (wid, body) => call('PUT', `/api/admin/workers/${id(wid)}`, body),
       removeWorker: wid => call('DELETE', `/api/admin/workers/${id(wid)}`),
       overview: () => call('GET', '/api/admin/overview'), // one call for the dashboard: { residents:{approved,pending,suspended,owners,tenants,family,flats}, requests:{open,unassigned,in_progress,closed_30d}, emergencies:{active,resolved_30d}, gate:{admitted_today,denied_today,active_passes,guards}, estate:{vehicles,parking_total,parking_assigned,workers_active,workers_inactive,vendors}, leases:{ending_60d,tenants_without_lease}, notices:{last_30d} }
-      ai: () => call('GET', '/api/admin/ai'), // { mode: 'rules'|'llm', sla_hours, whatsapp_live, webhook_path, webhook_secret, counts: { whatsapp_requests, messages_in, messages_out, triaged, messages_review, messages_ignored }, review: [{ id, phone, body, created_at, resident, flat }], messages: [{ id, direction: 'in'|'out', phone, body, status, request_id, created_at, resident, flat }] }
+      ai: () => call('GET', '/api/admin/ai'), // { mode: 'rules'|'llm', sla_hours, whatsapp_live, webhook_path, webhook_secret, telegram_live, telegram_webhook_path, telegram_webhook_secret, counts: { whatsapp_requests, telegram_requests, messages_in, messages_out, triaged, messages_review, messages_ignored }, review: [{ id, phone, body, created_at, resident, flat }], messages: [{ id, direction: 'in'|'out', channel: 'whatsapp'|'telegram', phone, body, status, request_id, created_at, resident, flat }] }
       simulateWhatsApp: (phone, text, group) => call('POST', '/api/admin/whatsapp/simulate', group ? { phone, text, group: true } : { phone, text }), // { created: requestId|null, replies: [string], decision: 'create'|'review'|'ignore'|'none' }
+      simulateTelegram: (fromId, text, group) => call('POST', '/api/admin/telegram/simulate', group ? { from_id: fromId, text, group: true } : { from_id: fromId, text }), // { created: requestId|null, replies: [string], decision: 'create'|'review'|'ignore'|'none' }
+      setTelegramWebhook: baseUrl => call('POST', '/api/admin/telegram/set-webhook', baseUrl ? { base_url: baseUrl } : {}), // { ok: bool, url, result } — needs TELEGRAM_BOT_TOKEN
       createRequestFromMessage: id => call('POST', `/api/admin/whatsapp/messages/${encodeURIComponent(id)}/create-request`), // { created: requestId }
       dismissMessage: id => call('POST', `/api/admin/whatsapp/messages/${encodeURIComponent(id)}/dismiss`), // { ok: true }
       draftNotice: text => call('POST', '/api/admin/ai/draft-notice', { text }), // { title, body, source: 'rules'|'llm' }

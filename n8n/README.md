@@ -2,7 +2,7 @@
 
 These belong to the Sahyadri Heights housing project (Jira HSP-31). They are saved in the team n8n cloud account (voltedge-demo31.app.n8n.cloud, Personal project) as "Sahyadri: ...", inactive until the Config nodes are filled. That account also hosts unrelated VoltEdge workflows; do not edit those.
 
-Three importable workflows that put the portal inside your automation stack. They were test-imported into a clean n8n 2.29 install; they have **not** been run against live WhatsApp.
+Importable workflows that put the portal inside your automation stack. Two are live and published: the **AI message classifier** and the **admin email desk**. The WhatsApp, phone, digest and SLA workflows were test-imported into a clean n8n 2.29 install and have **not** been run against live providers.
 
 | File | What it does |
 |---|---|
@@ -10,6 +10,8 @@ Three importable workflows that put the portal inside your automation stack. The
 | `phone-call-intake.json` | A caller describes the problem; a voice provider (Twilio style, form data with From and SpeechResult) posts the transcript, which goes through the same intake as WhatsApp. No audio is stored. |
 | `weekly-digest.json` | Every Monday 09:00: log in as the committee admin, fetch `/api/admin/digest`, send it to the committee on WhatsApp. |
 | `sla-escalation-alert.json` | Every 15 minutes: run `/api/admin/escalations/run`; if anything was escalated, alert the committee on WhatsApp. |
+| `message-classifier.json` | **Live.** Webhook -> LLM chain (gpt-4o-mini on n8n's free Gateway credits) -> `{kind, confidence}`. The portal calls it through `CLASSIFY_WEBHOOK_URL` to tell real requests from chatter. |
+| `admin-email-desk.json` | **Live.** Webhook (secret path) -> Gmail profile -> Gmail send. The portal posts each new item and each next stage through `ADMIN_EMAIL_WEBHOOK_URL`; see below. |
 
 ## Import
 1. Open n8n (http://localhost:5678 locally), **Workflows > Import from file**, pick each JSON.
@@ -18,3 +20,16 @@ Three importable workflows that put the portal inside your automation stack. The
 4. Activate the workflows.
 
 Credentials stay in your n8n instance. Replace the final HTTP node in the digest/alert workflows with Email or Slack if you prefer.
+
+## Sahyadri: admin email desk (`admin-email-desk.json`)
+Emails the committee every new complaint, message to check, registration and emergency when nobody has the dashboard open
+(emergencies always). The portal builds the email with signed action buttons (assign vendor, start, close, reply,
+approve/dismiss AI suggestion, approve/reject resident, create/dismiss review message, resolve emergency). Each button
+opens a confirm page at `/desk/<token>` on the portal, which runs the same API route as the dashboard (audited).
+Request emails are stage-driven: they show Open > Assigned > In progress > Resolved, lead with the next step
+(assign someone, then "Approve: start the work", then "Approve: work is done"), and every stage change made from
+email sends a follow-up email with the next step until the request is resolved.
+
+Setup: import, connect the Gmail credential on both Gmail nodes, change the webhook path `sahyadri-admin-email-CHANGE-ME`
+to a random secret path, publish, then set `ADMIN_EMAIL_WEBHOOK_URL=https://<n8n-host>/webhook/<that path>` on the portal.
+Optional portal env: `PUBLIC_URL` (link base; Render's RENDER_EXTERNAL_URL is used otherwise), `EMAIL_ACTION_SECRET` (link signing key).

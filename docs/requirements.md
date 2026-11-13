@@ -1,6 +1,6 @@
 # Requirements: Sahyadri Heights Housing Society Portal
 
-Source: BPA "Using AI" Session 3 brief (slides 4-9, 13). MoSCoW labels follow slide 8; where the build went beyond slide 8 the item is labelled and marked **(extra)**. Items for the AI-native workflows are **(in progress)**: they are being built and are not yet verified.
+Source: BPA "Using AI" Session 3 brief (slides 4-9, 13). MoSCoW labels follow slide 8; where the build went beyond slide 8 the item is labelled and marked **(extra)**. Items for the AI-native workflows marked **(in progress)** are built but not fully verified with real providers; items without the mark are built, tested and live (updated 2026-11-14).
 
 ## 1. Business need and scope
 A residential society of several hundred flats is run on WhatsApp groups, paper registers and phone calls. Three problems: residents cannot track complaints, the committee cannot see what is pending, and resident and vendor records are scattered. Goal: one portal to know who lives there, resolve their requests and communicate reliably, with less manual effort and clearer accountability.
@@ -17,7 +17,8 @@ Five core requirements (slide 6): onboarding, work requests, communication, visi
 | Family member | Added by the owner, shares the flat | Raise and see flat requests; never rates (owner rates for them); fewer permissions by default |
 | Committee (admin) | Elected office-bearers | Approve residents, assign vendors, move requests forward, post notices, see the dashboard and audit trail, edit access rules and feature flags |
 | Guard | Gate staff account created by the committee | Verify visitor QR/6-digit passes and resident tokens, see the gate log; nothing else |
-| WhatsApp-only resident (in progress) | Resident who does not open the portal and writes to the society's WhatsApp number | Report a problem in a message and get status replies on WhatsApp |
+| Messaging-only resident | Resident who does not open the portal and writes to the society's Telegram bot (live) or WhatsApp number (in progress) | Report a problem in a message and get status replies in the same chat |
+| Committee member away from the dashboard | Committee member who works from their email inbox | Get each new item by email and assign, approve the next stage, reply or approve residents from the email |
 
 ## 3. Functional requirements
 Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `docs/testing/test-cases.md`.
@@ -57,6 +58,10 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-WR-09 | AI only suggests: a committee member confirms the vendor assignment; the confirmation is audited **(in progress)** | M (for AI features) |
 | FR-WR-10 | SLA timer of 48 hours; overdue open requests are escalated automatically to the committee (notification, audited) **(in progress)** | C |
 | FR-WR-11 | Status replies are sent back to the requester on WhatsApp for WhatsApp-originated requests **(in progress)** | S |
+| FR-WR-13 | Telegram intake: a resident links their Telegram by sharing their contact (matched to the registered phone), then messages become requests through the same gate; status replies and emergency guidance in the chat | S (extra) |
+| FR-WR-14 | Free LLM gate: the request-or-chatter decision can run on an n8n workflow using n8n's free model credits (`CLASSIFY_WEBHOOK_URL`); rules are used when it is unavailable | S (extra) |
+| FR-WR-15 | AI suggested action on a request (assign the matching vendor, or register a vehicle from the message) that the committee approves or dismisses with one click; audited | S (extra) |
+| FR-WR-16 | Committee email desk: when no committee member has the dashboard open, each new request is emailed with the stage tracker and the next step as the main button (assign, then approve start, then approve done); every stage change made from email sends the next step; each button opens a confirm page and runs the same action as the dashboard (audit and resident notification included). Links are signed and expire after 7 days; opening a link never changes anything | S (extra) |
 | FR-WR-12 | Message gate for public WhatsApp groups: a classifier (rules by default, Claude when a key is set, personal details stripped) decides request / question / chatter. Chatter is ignored without a reply; unsure messages go to a committee **Needs review** queue (create request or dismiss); unknown senders in a group get no reply; confirmations go privately to the sender | M |
 
 ### Epic 4: Notifications
@@ -68,6 +73,8 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-NO-04 | AI notice drafter: committee gives bullet points, model proposes a headline and body; the committee edits and sends; nothing is posted automatically **(in progress)** | C |
 | FR-NO-05 | Weekly AI digest of pending requests for the committee **(in progress)** | C |
 | FR-NO-06 | Emergency alerts raised by residents and resolved by the committee; society contacts directory | C (extra) |
+| FR-NO-07 | Emergency words in a Telegram or WhatsApp message (fire, help please, accident...) create a real emergency on the dashboard and alert the committee; emergencies are always emailed, even when the dashboard is open | S (extra) |
+| FR-NO-08 | New registrations, household additions and messages waiting for review are emailed to the committee with Approve / Reject (or Create request / Dismiss) buttons when no committee member has the dashboard open | S (extra) |
 
 ### Epic 5: Admin dashboard
 | ID | Requirement | MoSCoW |
@@ -81,12 +88,13 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 ### Epic 6: Non-functional
 See section 5 (NFR-01 to NFR-12).
 
-## 4. AI-native workflows (in progress)
+## 4. AI-native workflows
 ```
-WhatsApp message -> webhook (/api/whatsapp/webhook) -> request created
+Telegram or WhatsApp message -> webhook -> AI gate (request / unsure / chatter) -> request created
    -> AI triage (ai.js: PII stripped, LLM or rule-based fallback)
-   -> suggestion shown to committee -> committee confirms vendor
-   -> status replies to WhatsApp -> resolved -> rating
+   -> suggestion shown to committee (dashboard, or email when nobody is on the dashboard)
+   -> committee assigns, approves start, approves done (each from the dashboard or an email button)
+   -> status replies in the resident's chat -> resolved -> rating
 SLA timer (48h) -> auto escalation to committee
 Weekly digest -> committee;  Notice drafter -> committee edits and sends
 ```
@@ -105,13 +113,16 @@ Principle: AI suggests, a human committee member confirms assignments and sends 
 | NFR-08 | Portability | Node and SQLite for the MVP; Java, React and PostgreSQL side by side (ADR 0001) |
 | NFR-09 | AI safety | Names, phones, emails and flat numbers are never sent to an LLM; AI output is a suggestion, never an action; rule-based fallback when the model is unavailable; every AI suggestion and human confirmation is audited |
 | NFR-10 | Auditability | Every state change writes `audit` |
-| NFR-11 | Rate limiting | Login throttling; the WhatsApp webhook must verify the provider signature and be rate limited **(in progress)** |
+| NFR-11 | Rate limiting | Login throttling; webhooks check a shared secret (WhatsApp, Telegram); the WhatsApp provider signature check and webhook rate limiting are **(in progress)** |
+| NFR-13 | Email actions | Email buttons carry an HMAC-signed, 7-day token for one item; a GET only shows a confirm page (safe for mail scanners); the action runs the existing API route as the committee admin over loopback with an in-process key, so the same validation, audit and notifications apply; the n8n webhook path is a secret |
+| NFR-14 | Hosting | The Render free plan wipes the SQLite database on sleep and redeploy; test accounts and the Telegram tester are re-seeded from environment variables at start. A paid disk or hosted database is needed for real data |
 | NFR-12 | Performance | No load target set or measured |
 
 ## 6. Assumptions
 - The partner society gives written permission before any testing with residents.
-- Residents have a WhatsApp-capable phone; their registered phone number is the identity for WhatsApp intake.
-- A WhatsApp Business provider account and an LLM API key are available for the AI features.
+- Residents have a Telegram or WhatsApp-capable phone; their registered phone number is the identity for message intake.
+- WhatsApp Business could not be connected (Meta restricts new business portfolios), so Telegram is the live channel. No paid LLM key is needed: the free n8n model credits or the rules are used.
+- The committee has a Gmail account connected to n8n for the email desk.
 - The committee, not the software, owns every decision that costs money or goes to all residents.
 
 ## 7. Out of scope

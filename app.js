@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { openDb, PERMISSIONS, ACCESS_ROLES } = require('./db');
 const AI = require('./ai');
+const emailDesk = require('./email-desk');
 
 const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping', 'other'];
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
@@ -77,6 +78,8 @@ function createApp(opts = {}) {
   const log = (actor, entity, id, action, detail) =>
     run('INSERT INTO audit(actor_id,entity,entity_id,action,detail) VALUES(?,?,?,?,?)', actor, entity, id, action, detail || null);
   const notify = (uid, msg) => run('INSERT INTO notifications(user_id,message) VALUES(?,?)', uid, msg);
+  // Email desk: emails the committee new items (with action buttons) when nobody has the dashboard open. See email-desk.js.
+  const desk = emailDesk({ q, one, run, log });
 
   // ---- WhatsApp and AI workflows (see ai.js). Everything works with no keys: messages are logged and rules answer.
   const SLA_HOURS = Number(process.env.SLA_HOURS) || 48;
@@ -105,7 +108,7 @@ function createApp(opts = {}) {
   const applyTriage = (id, text) => {
     const vendors = q('SELECT id,trade FROM vendors');
     const t = AI.triageRules(text, vendors);
-    run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', t.category, t.priority, t.summary, t.vendor_id, t.source, t.confidence, id);
+    run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=?, ai_action=? WHERE id=?', t.category, t.priority, t.summary, t.vendor_id, t.source, t.confidence, t.action, id);
     if (AI.aiMode() === 'llm') {
       AI.triageLlm(text, vendors, t).then(b => {
         if (b) run('UPDATE requests SET ai_category=?, ai_priority=?, ai_summary=?, ai_vendor_id=?, ai_source=?, ai_confidence=? WHERE id=?', b.category, b.priority, b.summary, b.vendor_id, b.source, b.confidence, id);
@@ -130,6 +133,8 @@ function createApp(opts = {}) {
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
   const auth = (req, res, next) => {
+    const du = desk.replayUser(req);
+    if (du) { req.user = du; return next(); }
     const u = req.session.uid && one('SELECT * FROM users WHERE id=?', req.session.uid);
     if (!u || u.status !== 'approved' || req.session.pf !== pwFp(u)) return res.status(401).json({ error: 'Not signed in' });
     // Guards get a strict allow-list so no resident/committee route can ever leak data to them.
@@ -181,6 +186,7 @@ function createApp(opts = {}) {
       name, email, phone, flat, rtype, bcrypt.hashSync(pw, 10));
     log(r.lastInsertRowid, 'user', r.lastInsertRowid, 'registered', `${rtype} flat ${flat}`);
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New registration awaiting approval: ${name} (flat ${flat})`);
+    desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ message: 'Registered. An admin will review your account.' });
   });
 
@@ -433,6 +439,7 @@ function createApp(opts = {}) {
     const label = type.charAt(0).toUpperCase() + type.slice(1);
     const msg = `EMERGENCY (${label}) from flat ${req.user.flat || 'n/a'}${note ? ': ' + note : ''}`;
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, msg);
+    desk.alert('emergency', id);
     res.status(201).json({ id });
   });
   app.get('/api/emergencies', auth, feat('emergency'), (req, res) => {
@@ -498,8 +505,8 @@ function createApp(opts = {}) {
   const canRate = (u, r) => u.role !== 'admin' && r.status === 'closed' && !r.rating &&
     ((r.user_id === u.id && u.resident_type !== 'family') || (u.resident_type === 'owner' && r.flat === u.flat));
   const shape = (r, u) => {
-    const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ...rest } = r;
-    const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence } } : {};
+    const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ai_action, ...rest } = r;
+    const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence, action: ai_action } } : {};
     return { ...rest, ...ai, has_photo: !!photo, can_rate: !!u && canRate(u, r) };
   };
 
@@ -517,6 +524,7 @@ function createApp(opts = {}) {
       log(req.user.id, 'request', r.lastInsertRowid, 'created', `${category}: ${title}`);
       const tri = applyTriage(Number(r.lastInsertRowid), title + '. ' + description);
       for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New ${category} request from flat ${req.user.flat}: ${title}${tri.priority === 'urgent' ? ' (AI: urgent)' : ''}`);
+      desk.alert('request', Number(r.lastInsertRowid));
       res.status(201).json({ id: Number(r.lastInsertRowid) });
     });
 
@@ -525,6 +533,7 @@ function createApp(opts = {}) {
     if (req.user.role !== 'admin') { where.push('(r.user_id=? OR u.flat=?)'); p.push(req.user.id, req.user.flat || ''); }
     if (STATUSES.includes(req.query.status)) { where.push('r.status=?'); p.push(req.query.status); }
     if (CATEGORIES.includes(req.query.category)) { where.push('r.category=?'); p.push(req.query.category); }
+    if (['whatsapp', 'telegram', 'app'].includes(req.query.source)) { where.push('r.source=?'); p.push(req.query.source); }
     res.json(q(`${REQ_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY r.id DESC`, ...p).map(r => shape(r, req.user)));
   });
   app.get('/api/requests/:id', auth, (req, res) => {
@@ -564,6 +573,42 @@ function createApp(opts = {}) {
     run("UPDATE requests SET vendor_id=?, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, updated_at=datetime('now') WHERE id=?", v.id, r.id);
     log(req.user.id, 'request', r.id, 'assigned', v.name);
     notifyReq(r, `Your request "${r.title}" was assigned to ${v.name}`);
+    res.json({ ok: true });
+  });
+  // AI suggested action: the committee approves it with one click (assign the matching vendor, or register a vehicle from the message).
+  app.post('/api/requests/:id/ai-action', auth, admin, (req, res) => {
+    const r = one('SELECT * FROM requests WHERE id=?', req.params.id);
+    if (!r) return res.status(404).json({ error: 'Request not found' });
+    if (r.ai_action === 'register_vehicle') {
+      const u = one('SELECT id,flat FROM users WHERE id=?', r.user_id);
+      if (!u || !u.flat) return res.status(409).json({ error: 'The requester has no flat on record' });
+      const pv = AI.parseVehicle((r.title || '') + '. ' + (r.description || ''));
+      const plate = pv.plate || ('TEMP-' + r.id);
+      const key = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      let vr; try { vr = run('INSERT INTO vehicles(flat,user_id,plate,plate_key,type,make) VALUES(?,?,?,?,?,?)', u.flat, u.id, plate, key, pv.type || 'car', pv.make || null); }
+      catch { return res.status(409).json({ error: 'A vehicle with that number is already registered' }); }
+      run("UPDATE requests SET ai_action=NULL, status='closed', updated_at=datetime('now') WHERE id=?", r.id);
+      log(req.user.id, 'request', r.id, 'ai_action', 'registered ' + (pv.type || 'car') + ' ' + plate + ' for flat ' + u.flat);
+      log(req.user.id, 'vehicle', Number(vr.lastInsertRowid), 'created', plate + ' from request #' + r.id);
+      notifyReq(r, 'Your ' + (pv.type || 'vehicle') + ' ' + plate + ' has been registered for flat ' + u.flat + '.');
+      return res.json({ ok: true, action: 'register_vehicle', plate });
+    }
+    if (r.ai_action === 'assign_vendor') {
+      const v = r.ai_vendor_id ? one('SELECT * FROM vendors WHERE id=?', r.ai_vendor_id) : null;
+      if (!v) return res.status(409).json({ error: 'No suggested vendor to assign' });
+      if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
+      run("UPDATE requests SET vendor_id=?, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, ai_action=NULL, updated_at=datetime('now') WHERE id=?", v.id, r.id);
+      log(req.user.id, 'request', r.id, 'assigned', v.name + ' (AI action)');
+      notifyReq(r, `Your request "${r.title}" was assigned to ${v.name}`);
+      return res.json({ ok: true, action: 'assign_vendor', vendor: v.name });
+    }
+    res.status(400).json({ error: 'No suggested action for this request' });
+  });
+  app.post('/api/requests/:id/ai-action/dismiss', auth, admin, (req, res) => {
+    const r = one('SELECT id FROM requests WHERE id=?', req.params.id);
+    if (!r) return res.status(404).json({ error: 'Request not found' });
+    run('UPDATE requests SET ai_action=NULL WHERE id=?', r.id);
+    log(req.user.id, 'request', r.id, 'ai_action_dismissed', '');
     res.json({ ok: true });
   });
   app.post('/api/requests/:id/status', auth, admin, (req, res) => {
@@ -613,6 +658,7 @@ function createApp(opts = {}) {
       name, email, phone, req.user.flat, rtype, bcrypt.hashSync(pw, 10));
     log(req.user.id, 'user', r.lastInsertRowid, 'household_added', `${rtype} flat ${req.user.flat}`);
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `${req.user.name} added ${name} (${rtype}) to flat ${req.user.flat}: awaiting approval`);
+    desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
@@ -642,6 +688,7 @@ function createApp(opts = {}) {
     const u = req.user;
     if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
+      desk.seen();
       return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
     }
     const r = one(`SELECT COUNT(*) AS n, COALESCE(MAX(r.updated_at),'') AS m, COALESCE(SUM(r.rating IS NOT NULL),0) AS rated FROM requests r JOIN users x ON x.id=r.user_id WHERE r.user_id=? OR x.flat=?`, u.id, u.flat || '');
@@ -864,18 +911,50 @@ function createApp(opts = {}) {
   };
   const sameSecret = given => { const a = Buffer.from(String(given || '')), b = Buffer.from(waSecret()); return a.length === b.length && crypto.timingSafeEqual(a, b); };
   // Creates the request for a resident's message and sends the private confirmation (used by the intake and by committee approval).
-  const createFromMessage = (u, from, body, msgId) => {
+  // ch.channel ('whatsapp'|'telegram') sets requests.source and the label; ch.send delivers the reply on that channel (defaults to WhatsApp).
+  const createFromMessage = (u, from, body, msgId, ch = {}) => {
+    const channel = ch.channel || 'whatsapp', send = ch.send || waOut, chLabel = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
     const tri = AI.triageRules(body, q('SELECT id,trade FROM vendors'));
     const title = body.split(/(?<=[.!?])\s|\n/)[0].slice(0, 120);
-    const r = run("INSERT INTO requests(user_id,category,title,description,source) VALUES(?,?,?,?,'whatsapp')", u.id, tri.category, title, body.slice(0, 2000));
+    const r = run("INSERT INTO requests(user_id,category,title,description,source) VALUES(?,?,?,?,?)", u.id, tri.category, title, body.slice(0, 2000), channel);
     const id = Number(r.lastInsertRowid);
-    log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via WhatsApp)');
+    log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via ' + chLabel + ')');
     applyTriage(id, body);
     if (msgId) run("UPDATE whatsapp_messages SET status='received', request_id=? WHERE id=?", id, msgId);
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via WhatsApp: ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via ' + chLabel + ': ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    desk.alert('request', id);
     const text = 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.';
-    waOut(from, text, u.id, id);
+    send(from, text, u.id, id);
     return { id, text };
+  };
+  // Shared pipeline once the sender is a known approved resident (same for every channel): SOS/status shortcuts, permission check, then the AI gate.
+  const processMsg = async ({ u, from, body, inId, channel, send, reply, mark }) => {
+    const chLabel = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+    const low = body.toLowerCase();
+    if (/\b(sos|emergency|fire|ambulance|gas leak|accident|intruder|break[- ]?in|robbery|burglar|assault|attack|fight|fighting|danger|trapped|injured|unconscious|threat|violence)\b|\b(help\s*(me|us|please)|please\s*help|need\s*help|someone\s*help)\b/.test(low)) {
+      const etype = /\bfire\b/.test(low) ? 'fire' : /\b(theft|intruder|break|robbery|burglar)/.test(low) ? 'theft' : /\b(ambulance|injur|medical|unconscious|accident)/.test(low) ? 'medical' : /\b(fight|violen|assault|attack|threat)/.test(low) ? 'violence' : /\b(lift|elevator|trapped)\b/.test(low) ? 'lift' : 'other';
+      // Flag it as a real emergency on the committee dashboard (unless this resident already has one open), not just a notification.
+      if (!one("SELECT id FROM emergencies WHERE user_id=? AND status='active' LIMIT 1", u.id)) desk.alert('emergency', Number(run("INSERT INTO emergencies(user_id,type,note,status) VALUES(?,?,?,'active')", u.id, etype, body.slice(0, 300)).lastInsertRowid));
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'EMERGENCY (' + etype + ') from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
+      mark('received');
+      return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted and it is flagged as an emergency in the portal.')], created: null };
+    }
+    if (/^status\b/.test(low)) {
+      const mine = q("SELECT id,title,status FROM requests WHERE user_id=? OR user_id IN (SELECT id FROM users WHERE flat=? AND flat IS NOT NULL) ORDER BY id DESC LIMIT 3", u.id, u.flat || '');
+      return { replies: [reply(u, mine.length ? mine.map(r => '#' + r.id + ' ' + r.title + ': ' + r.status.replace('_', ' ')).join('\n') : 'You have no requests yet. Just describe the problem and we will log it.')], created: null };
+    }
+    if (!allowedKeys(u).includes('request.create')) return { replies: [reply(u, 'Your account cannot raise requests. Please contact the committee.')], created: null };
+    // Gate: only real requests become tickets. Chatter is ignored silently; unsure messages wait for the committee. Neither sends a reply.
+    const v = await AI.classifyMessage(body);
+    if (v.decision === 'ignore') { mark('ignored'); return { replies: [], created: null, decision: 'ignore', kind: v.kind }; }
+    if (v.decision === 'review') {
+      mark('review');
+      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, chLabel + ' message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
+      if (inId) desk.alert('review', inId);
+      return { replies: [], created: null, decision: 'review', kind: v.kind };
+    }
+    const made = createFromMessage(u, from, body, inId, { channel, send });
+    return { replies: [made.text], created: made.id, decision: 'create', kind: v.kind };
   };
   // opts.group: the message came from a group. Groups are public, so unknown senders get no reply and confirmations go privately to the sender.
   const handleWhatsApp = async (from, text, opts = {}) => {
@@ -891,23 +970,7 @@ function createApp(opts = {}) {
       return { replies: [reply(null, 'Hello from ' + getSetting('society_name') + '. This number is not registered yet. Please register in the portal with this phone number, or ask the committee to add it.')], created: null };
     }
     run('UPDATE whatsapp_messages SET user_id=? WHERE id=?', u.id, inId);
-    const low = body.toLowerCase();
-    if (/^(sos|emergency|fire|help me)\b/.test(low)) return { replies: [reply(u, 'For an emergency please use the Emergency button in the app or call the gate directly. WhatsApp is not monitored around the clock.')], created: null };
-    if (/^status\b/.test(low)) {
-      const mine = q("SELECT id,title,status FROM requests WHERE user_id=? OR user_id IN (SELECT id FROM users WHERE flat=? AND flat IS NOT NULL) ORDER BY id DESC LIMIT 3", u.id, u.flat || '');
-      return { replies: [reply(u, mine.length ? mine.map(r => '#' + r.id + ' ' + r.title + ': ' + r.status.replace('_', ' ')).join('\n') : 'You have no requests yet. Just describe the problem and we will log it.')], created: null };
-    }
-    if (!allowedKeys(u).includes('request.create')) return { replies: [reply(u, 'Your account cannot raise requests. Please contact the committee.')], created: null };
-    // Gate: only real requests become tickets. Chatter is ignored silently; unsure messages wait for the committee. Neither sends a reply.
-    const v = await AI.classifyMessage(body);
-    if (v.decision === 'ignore') { mark('ignored'); return { replies: [], created: null, decision: 'ignore', kind: v.kind }; }
-    if (v.decision === 'review') {
-      mark('review');
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'WhatsApp message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
-      return { replies: [], created: null, decision: 'review', kind: v.kind };
-    }
-    const made = createFromMessage(u, from, body, inId);
-    return { replies: [made.text], created: made.id, decision: 'create', kind: v.kind };
+    return processMsg({ u, from, body, inId, channel: 'whatsapp', send: waOut, reply, mark });
   };
   // Meta Cloud API verification handshake
   app.get('/api/whatsapp/webhook', (req, res) => {
@@ -928,13 +991,102 @@ function createApp(opts = {}) {
     }
     res.json({ ok: true, received: msgs.length, created, review, ignored });
   });
+  // ---- Telegram intake: same AI gate and request pipeline as WhatsApp, over the Telegram Bot API (no business verification, and bots can read group messages).
+  const tgSecret = () => {
+    if (process.env.TELEGRAM_WEBHOOK_SECRET) return process.env.TELEGRAM_WEBHOOK_SECRET;
+    // Derive the webhook secret from a value that cannot change across redeploys: the bot token (fixed) or
+    // SESSION_SECRET, never the wiped DB. This keeps the webhook valid after every deploy without re-registering.
+    const base = process.env.TELEGRAM_BOT_TOKEN || process.env.SESSION_SECRET;
+    if (base) return crypto.createHash('sha256').update('telegram-webhook:' + base).digest('hex').slice(0, 32);
+    let v = getSetting('telegram_secret');
+    if (!v) { v = crypto.randomBytes(18).toString('hex'); run('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)', 'telegram_secret', v); }
+    return v;
+  };
+  const sameTgSecret = given => { const a = Buffer.from(String(given || '')), b = Buffer.from(tgSecret()); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+  // Logs the outbound message and, when a bot token is set, delivers it to the chat through the Telegram Bot API.
+  const tgSend = (chatId, body, userId, requestId, extra) => {
+    const r = run("INSERT INTO whatsapp_messages(direction,channel,phone,body,user_id,request_id,status) VALUES('out','telegram',?,?,?,?,?)", String(chatId), String(body).slice(0, 1000), userId || null, requestId || null, 'logged');
+    const id = Number(r.lastInsertRowid);
+    const tok = process.env.TELEGRAM_BOT_TOKEN;
+    if (tok && chatId) {
+      fetch('https://api.telegram.org/bot' + tok + '/sendMessage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ chat_id: chatId, text: String(body).slice(0, 4000) }, extra || {})) })
+        .then(x => run('UPDATE whatsapp_messages SET status=? WHERE id=?', x.ok ? 'sent' : 'failed', id)).catch(() => run('UPDATE whatsapp_messages SET status=? WHERE id=?', 'failed', id));
+    }
+    return id;
+  };
+  // A one-tap keyboard that asks the resident to share their own phone number (used to link an unlinked Telegram account).
+  const tgContactKb = { reply_markup: { keyboard: [[{ text: '📱 Share my phone number', request_contact: true }]], one_time_keyboard: true, resize_keyboard: true } };
+  // A registered resident links their Telegram once (by sharing their contact), then messages the bot like WhatsApp. Matching is by the linked Telegram id; replies go to the chat the message came from.
+  const handleTelegram = async (chatId, fromId, text, opts = {}) => {
+    const body = String(text || '').trim().slice(0, 1000), addr = String(fromId || '');
+    if (!addr || !body) return { replies: [], created: null };
+    const send = (a, t, uid, rid, extra) => tgSend(chatId, t, uid, rid, extra);
+    const reply = (u, t, rid) => { send(addr, t, u && u.id, rid); return t; };
+    const inId = Number(run("INSERT INTO whatsapp_messages(direction,channel,phone,body,status) VALUES('in','telegram',?,?,?)", addr, body, 'received').lastInsertRowid);
+    const mark = st => run('UPDATE whatsapp_messages SET status=? WHERE id=?', st, inId);
+    const u = one("SELECT * FROM users WHERE role='resident' AND status='approved' AND telegram_id=?", addr);
+    // /start is onboarding, not a request: greet a linked resident, or prompt an unlinked one to share their number.
+    if (body === '/start') {
+      mark('ignored');
+      if (u) send(addr, 'Hi ' + u.name + ', your Telegram is linked to flat ' + (u.flat || '') + '. Just describe any problem and we will log it as a request.', u.id, null);
+      else if (!opts.group) send(chatId, 'Welcome to ' + getSetting('society_name') + '. Link your flat by sharing your phone number with the button below.', null, null, tgContactKb);
+      return { replies: [], created: null, decision: 'start' };
+    }
+    if (!u) {
+      if (opts.group) { mark('ignored'); return { replies: [], created: null, decision: 'ignore' }; }
+      const t = 'Hello from ' + getSetting('society_name') + '. This Telegram account is not linked to a flat yet. Tap the button to share your phone number, or ask the committee to link it.';
+      send(chatId, t, null, null, tgContactKb);
+      return { replies: [t], created: null };
+    }
+    run('UPDATE whatsapp_messages SET user_id=? WHERE id=?', u.id, inId);
+    return processMsg({ u, from: addr, body, inId, channel: 'telegram', send, reply, mark });
+  };
+  // Telegram posts updates here. The secret is checked via the header Telegram echoes (set with the webhook) or ?secret=.
+  app.post('/api/telegram/webhook', async (req, res) => {
+    if (!sameTgSecret(req.get('x-telegram-bot-api-secret-token') || req.query.secret)) return res.status(401).json({ error: 'Bad webhook secret' });
+    const up = req.body || {}, m = up.message || up.edited_message || {}, chat = m.chat || {}, fromU = m.from || {};
+    const group = chat.type === 'group' || chat.type === 'supergroup';
+    let created = 0, review = 0, ignored = 0, linked = false;
+    if (m.contact && !group && String(m.contact.user_id || '') === String(fromU.id || '')) {
+      // The resident shared their own number: link this Telegram id to the matching registered phone.
+      const key = phoneKey(m.contact.phone_number);
+      const u = q("SELECT * FROM users WHERE role='resident' AND status='approved' AND phone IS NOT NULL").find(x => phoneKey(x.phone) === key);
+      if (u) { run('UPDATE users SET telegram_id=? WHERE id=?', String(fromU.id), u.id); linked = true; tgSend(chat.id, 'Thanks ' + u.name + ', your Telegram is now linked to flat ' + (u.flat || '') + '. Message us anytime to raise a request.', u.id, null, { reply_markup: { remove_keyboard: true } }); }
+      else tgSend(chat.id, 'That number is not registered in the portal yet. Please register first, then share your contact again.', null, null);
+    } else if (typeof m.text === 'string' && m.text.trim()) {
+      const o = await handleTelegram(chat.id, fromU.id, m.text, { group });
+      if (o.created) created++; else if (o.decision === 'review') review++; else if (o.decision === 'ignore') ignored++;
+    }
+    res.json({ ok: true, linked, created, review, ignored });
+  });
+  // Points the Telegram bot's webhook at this server (committee action; needs TELEGRAM_BOT_TOKEN).
+  app.post('/api/admin/telegram/set-webhook', auth, admin, async (req, res) => {
+    const tok = process.env.TELEGRAM_BOT_TOKEN;
+    if (!tok) return res.status(400).json({ error: 'Set TELEGRAM_BOT_TOKEN in the environment first' });
+    const base = (str(req.body.base_url, 300) || (req.protocol + '://' + req.get('host'))).replace(/\/+$/, '');
+    const url = base + '/api/telegram/webhook';
+    try {
+      const r = await fetch('https://api.telegram.org/bot' + tok + '/setWebhook', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, secret_token: tgSecret(), allowed_updates: ['message', 'edited_message'] }) });
+      const j = await r.json().catch(() => ({}));
+      res.status(r.ok && j.ok ? 200 : 502).json({ ok: !!j.ok, url, result: j });
+    } catch { res.status(502).json({ error: 'Could not reach Telegram' }); }
+  });
+  // Exercise the Telegram gate without the Bot API (committee simulator, parallels the WhatsApp one).
+  app.post('/api/admin/telegram/simulate', auth, admin, async (req, res) => {
+    const fromId = str(req.body.from_id, 40), text = str(req.body.text, 1000);
+    if (!fromId || !text) return res.status(400).json({ error: 'Sender id and message are required' });
+    const out = await handleTelegram(req.body.chat_id || fromId, fromId, text, { group: req.body.group === true });
+    log(req.user.id, 'telegram', out.created, 'simulated', text.slice(0, 80));
+    res.json({ created: out.created, replies: out.replies, decision: out.decision || (out.created ? 'create' : 'none') });
+  });
   app.get('/api/admin/ai', auth, admin, (req, res) => {
     const n = (sql, ...p) => one(sql, ...p).n;
     res.json({
       mode: AI.aiMode(), sla_hours: SLA_HOURS, whatsapp_live: !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID),
       webhook_path: '/api/whatsapp/webhook', webhook_secret: waSecret(),
-      counts: { whatsapp_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp'"), messages_in: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in'"), messages_out: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='out'"), triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), messages_review: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='review'"), messages_ignored: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='ignored'") },
-      messages: q('SELECT m.id,m.direction,m.phone,m.body,m.status,m.request_id,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 30'),
+      telegram_live: !!process.env.TELEGRAM_BOT_TOKEN, telegram_webhook_path: '/api/telegram/webhook', telegram_webhook_secret: tgSecret(),
+      counts: { whatsapp_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp'"), telegram_requests: n("SELECT COUNT(*) AS n FROM requests WHERE source='telegram'"), messages_in: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in'"), messages_out: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='out'"), triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), messages_review: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='review'"), messages_ignored: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE status='ignored'") },
+      messages: q('SELECT m.id,m.direction,m.channel,m.phone,m.body,m.status,m.request_id,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 30'),
       review: q("SELECT m.id,m.phone,m.body,m.created_at,u.name AS resident,u.flat FROM whatsapp_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.direction='in' AND m.status='review' ORDER BY m.id DESC LIMIT 50"),
     });
   });
@@ -1025,7 +1177,7 @@ function createApp(opts = {}) {
         tenants_without_lease: n(`SELECT COUNT(*) AS n FROM users u WHERE u.role='resident' AND u.status='approved' AND u.resident_type='tenant' AND NOT EXISTS (SELECT 1 FROM leases l WHERE l.user_id=u.id)`),
       },
       notices: { last_30d: n("SELECT COUNT(*) AS n FROM notices WHERE created_at >= datetime('now','-30 days')") },
-      ai: { mode: AI.aiMode(), sla_hours: SLA_HOURS, triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), urgent_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND ai_priority='urgent'"), escalated_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND escalated_at IS NOT NULL"), whatsapp_requests_30d: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp' AND created_at >= datetime('now','-30 days')"), whatsapp_messages_7d: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in' AND created_at >= datetime('now','-7 days')") },
+      ai: { mode: AI.aiMode(), sla_hours: SLA_HOURS, triaged: n('SELECT COUNT(*) AS n FROM requests WHERE ai_category IS NOT NULL'), urgent_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND ai_priority='urgent'"), escalated_open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND escalated_at IS NOT NULL"), whatsapp_requests_30d: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp' AND created_at >= datetime('now','-30 days')"), whatsapp_messages_7d: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction='in' AND created_at >= datetime('now','-7 days')"), telegram_requests_30d: n("SELECT COUNT(*) AS n FROM requests WHERE source='telegram' AND created_at >= datetime('now','-30 days')"), telegram_messages_7d: n("SELECT COUNT(*) AS n FROM whatsapp_messages WHERE channel='telegram' AND direction='in' AND created_at >= datetime('now','-7 days')") },
     });
   });
 
@@ -1204,6 +1356,7 @@ function createApp(opts = {}) {
   });
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
+  desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
   // eslint-disable-next-line no-unused-vars

@@ -1,0 +1,73 @@
+{
+  "name": "Sahyadri: AI message classifier",
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "Message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sahyadri-classify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "sahyadri-classify-in"
+    },
+    {
+      "id": "n2",
+      "name": "Classify with free LLM",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [240, 0],
+      "parameters": {
+        "promptType": "define",
+        "text": "=You read one message from a residents group of a housing society. Decide if it reports a fault or asks the society for a service (request), asks a general question (question), or is chat, greetings, announcements, opinions or thanks (chatter). Personal details have been removed. Reply with ONLY compact JSON, no prose: {\"kind\": \"request\" | \"question\" | \"chatter\", \"confidence\": a number from 0 to 1}.\n\nMessage: {{ $json.body.text }}",
+        "messages": { "messageValues": [] }
+      }
+    },
+    {
+      "id": "n3",
+      "name": "Free LLM (Gateway credits)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [240, 220],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": { "temperature": 0 }
+      },
+      "credentials": {
+        "openAiApi": { "name": "Gateway credits" }
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [500, 0],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Message": {
+      "main": [[{ "node": "Classify with free LLM", "type": "main", "index": 0 }]]
+    },
+    "Free LLM (Gateway credits)": {
+      "ai_languageModel": [[{ "node": "Classify with free LLM", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Classify with free LLM": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -12,10 +12,13 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - Two clients on one API: the **web app** (`/`, desktop-first and responsive) and the **mobile app** (`/m/`, installable PWA with a bottom tab bar). Phones opening `/` are sent to `/m/` (add `?web` to stay). Design source: Claude Design handoff `Housing Portal.dc.html` (tokens in `public/css/tokens.css`, base components in `public/css/ds.css`).
 - **AI module (in progress):** `ai.js` holds PII redaction, rule-based triage, optional LLM triage, notice drafter and weekly digest. AI only suggests; a committee member confirms assignments and sends notices. Never send names, phones, emails or flat numbers to a model.
 - **WhatsApp intake (in progress):** `/api/whatsapp/webhook` (secret-checked) turns a message from a registered phone into a request and sends status replies; `/api/admin/whatsapp/simulate` exercises it without a provider. Env: `ANTHROPIC_API_KEY` (optional, enables LLM mode), `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_WEBHOOK_SECRET`, `SLA_HOURS` (default 48).
+- **Telegram intake:** `/api/telegram/webhook` (same pipeline as WhatsApp). Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`. Request-vs-chatter gate can use a free n8n LLM: `CLASSIFY_WEBHOOK_URL`.
+- **Email desk (`email-desk.js`):** new requests, review-queue messages, registrations and emergencies are POSTed to an n8n Gmail workflow (`ADMIN_EMAIL_WEBHOOK_URL`) when no admin has the dashboard open (emergencies always). Signed links open `/desk/<token>`; confirming replays the dashboard's own API route as the admin, so audit and notifications are the same. Env: `PUBLIC_URL` (else `RENDER_EXTERNAL_URL`), `EMAIL_ACTION_SECRET`. Node only so far.
+- **Free hosting:** the SQLite file is wiped on sleep/redeploy. `SEED_PASSWORD` seeds role accounts and vendors; `SEED_TELEGRAM_PHONE` / `SEED_TELEGRAM_ID` recreate the linked Telegram test resident (flat T-101).
 
 ## Run
 - `npm start` -> http://localhost:3000. The database starts empty except for the committee admin (`admin@society.test`; set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, required and 12+ characters in production). There is no demo data: register residents through the UI and enter only the minimum data when testing.
-- `npm test` -> Node API tests (`node:test`, 48 including `test/ai.test.js`). Every story ships with a test; testing leads sign off.
+- `npm test` -> Node API tests (`node:test`, 65 including `test/ai.test.js`, `test/telegram.test.js`, `test/email-desk.test.js`). Every story ships with a test; testing leads sign off.
 - Java: `cd backend && ./gradlew test` (JUnit, 79 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
 - React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 65), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android).
@@ -23,7 +26,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).
 
 ## Layout
-- `app.js` routes + rules, `db.js` schema + admin seed, `ai.js` AI module (in progress), `server.js` entry, `test/` Node tests.
+- `app.js` routes + rules, `db.js` schema + admin seed, `ai.js` AI module (in progress), `email-desk.js` committee email actions, `server.js` entry, `test/` Node tests, `n8n/` importable n8n workflows.
 - `public/index.html` + `web.js` web app; `public/m/` mobile app (`m.js`, `sw.js`, manifest); `public/common.js` shared helpers (api, escaping, tracker, status mapping); `public/api.js` API contract; `public/css/` styles.
 - `backend/` Java API; `frontend/` React app; `mobile/` Capacitor Android; `scripts/` SQLite to Postgres export.
 - `docs/`: `requirements.md`, `process-flows/` (BPMN for Signavio), `architecture/` (diagrams, ADR), `testing/`, `jira/` (backlog, sprints), `demo-script.md`, `contribution-matrix.md`, `privacy-and-consent.md`, `deploy.md`.

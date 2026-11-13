@@ -17,7 +17,8 @@ Key: L = lead, C = contributor, R = reviewed a pull request, blank = no contribu
 | Node API and web app | | | | | PR #__ |
 | Java backend and React app (migration) | | | | | PR #__ |
 | Android / PWA app | | | | | PR #__ |
-| AI-native workflows (WhatsApp, triage, SLA, digest, drafter) | | | | | PR #__ |
+| AI-native workflows (WhatsApp, triage, SLA, digest, drafter) | | | | | PR #16 |
+| Telegram intake, n8n LLM gate, committee email desk | | | | | PR #18, HSP-41..44 |
 | Deployment (Docker, CI, live URL) | | | | | PR #__ |
 | Test plan, cases, results | | | | | docs/testing/ |
 | Defect log and fixes | | | | | docs/testing/defect-log.md |

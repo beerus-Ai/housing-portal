@@ -23,6 +23,13 @@
   // Category photo card (4:3 photo, dark strip with the label and count); falls back to solid dark teal with the icon when the photo is missing.
   const catCard = (k, l, i, open, raised) => `<button type="button" class="cat-photo ds-catcard" data-act="catfilter" data-c="${k}" aria-label="Show open ${esc(l)} requests">${W.catPic(k)}<span class="cat-ic">${ic(i)}</span><span class="cat-strip"><b>${esc(l)}</b><span>${open} open · ${raised} in 30 days</span></span></button>`;
   const stat = (cls, icon, n, label, sub, pg) => `<button type="button" class="ds-stat ${cls}" data-act="nav" data-page="${pg}"><span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
+  // Channel card: lists the requests that arrived on that channel (setup stays in Settings, not here).
+  // Glows when the channel's count is higher than what the committee last viewed (unseen requests).
+  const chanCard = (cls, icon, n, label, sub, src) => {
+    let seen = 0; try { seen = +(localStorage.getItem('hp.seen.' + src) || 0); } catch {}
+    const glow = (Number(n) || 0) > seen;
+    return `<button type="button" class="ds-stat ${cls}${glow ? ' ds-glow' : ''}" data-act="srcfilter" data-src="${src}" data-count="${esc(n)}">${glow ? '<span class="ds-dot" aria-hidden="true"></span>' : ''}<span class="ds-stat-i">${ic(icon)}</span><span class="ds-stat-n">${esc(n)}</span><span class="ds-stat-l">${esc(label)}</span><span class="ds-stat-s">${esc(sub)}</span></button>`;
+  };
 
   // ---------- search (requests, notices, people)
   function results(q) {
@@ -105,6 +112,53 @@
     } catch { return ''; }
   }
 
+  // ---------- new-request alert: a short chime + a 3s pop-up, then the matching card flashes
+  let actx;
+  function chime(urgent) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      const t0 = actx.currentTime;
+      // Emergency: a harsh, loud, repeating two-tone alarm. Normal: a soft, gentle two-note.
+      const notes = urgent ? [988, 740, 988, 740, 988, 740] : [587, 784];
+      notes.forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain(), t = t0 + i * (urgent ? 0.17 : 0.15);
+        o.type = urgent ? 'square' : 'sine'; o.frequency.value = f;
+        const peak = urgent ? 0.32 : 0.09, tail = urgent ? 0.15 : 0.32;
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + tail + 0.02);
+      });
+    } catch {}
+  }
+  function requestPop(r) {
+    const urgent = r.category === 'security' || (r.ai && r.ai.priority === 'urgent');
+    const destLabel = urgent ? 'Emergencies' : catLabel(r.category);
+    const destSel = urgent ? '.ds-stat[data-page="emergencies"]' : `.ds-catcard[data-c="${r.category}"]`;
+    const channel = r.source === 'telegram' ? 'Telegram' : r.source === 'whatsapp' ? 'WhatsApp' : 'the app';
+    chime(urgent);
+    const el = document.createElement('div');
+    el.className = 'rq-pop' + (urgent ? ' rq-pop-urgent' : '');
+    el.setAttribute('role', 'alert');
+    el.innerHTML = `<div class="rq-pop-card"><span class="rq-pop-ic">${ic(urgent ? 'siren' : catIcon(r.category))}</span>
+      <div class="rq-pop-b"><span class="rq-pop-k">New request · via ${esc(channel)}</span><span class="rq-pop-t">${esc(r.title)}</span>
+      <span class="rq-pop-m">${esc(rid(r))} · Flat ${esc(r.flat || '-')} · <b>&rarr; ${esc(destLabel)}</b></span></div></div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('on'));
+    const dest = document.querySelector(destSel);
+    if (dest) { dest.classList.add('rq-flash'); setTimeout(() => dest.classList.remove('rq-flash'), 5200); }
+    setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 300); }, 5000);
+  }
+  // The dashboard re-renders on every data change (the live pulse). On each render, announce any request
+  // whose id is newer than the last one we announced (D.announcedId persists across renders).
+  function announceNew(reqs) {
+    const maxId = Math.max(0, ...reqs.map(r => r.id || 0));
+    if (D.announcedId == null) { D.announcedId = maxId; return; } // baseline on first load, don't pop existing
+    if (maxId > D.announcedId) {
+      reqs.filter(r => (r.id || 0) > D.announcedId).sort((a, b) => a.id - b.id).slice(-3).forEach(requestPop);
+      D.announcedId = maxId;
+    }
+  }
+
   // ---------- committee Dashboard
   PAGES.dashboard = async () => {
     const [s, reqs, vendors, audit] = await Promise.all([API.admin.stats(), API.requests.list(), API.vendors.list(), API.admin.audit()]);
@@ -117,13 +171,14 @@
       { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }, { l: 'Notices', icon: 'megaphone', go: 'notices', show: feat('notices') },
       { l: 'Vehicles', icon: 'car', go: 'vehicles', show: allowed('vehicles') }, { l: 'Parking', icon: 'garage', go: 'parking', show: allowed('parking') }, { l: 'Workers', icon: 'hard-hat', go: 'workers' },
       { l: 'Vendors', icon: 'toolbox', go: 'vendors' }, { l: 'Gate', icon: 'shield-check', go: 'gate', show: feat('gate') }, { l: 'Guards', icon: 'identification-card', go: 'guards' }, { l: 'Settings', icon: 'gear-six', go: 'settings' }];
-    const attn = [stat(s.pending_users ? 's-dark' : 's-tint', 'user-check', s.pending_users, 'Pending approvals', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
-    if (feat('emergency')) attn.push(stat(em.length ? 's-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + ' · ' + e.flat).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
-    attn.push(stat(unassigned.length ? 's-dark' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
-    attn.push(`<div class="ds-stat s-white s-ring"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
+    const attn = [stat(s.pending_users ? 's-dark ds-glow' : 's-tint', 'user-check', s.pending_users, 'Pending approvals', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
+    if (feat('emergency')) attn.push(stat(em.length ? 's-red ds-glow-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + (e.flat ? ' · ' + e.flat : '')).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
+    attn.push(stat(unassigned.length ? 's-dark ds-glow' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
+    attn.push(`<div class="ds-stat s-white s-ring${a.overdue ? ' ds-glow-red' : ''}"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
     if (ov && ov.ai) {
-      const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0);
-      attn.unshift(stat(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'AI sorted, nothing urgent' : 'AI triage is on'), 'ai'));
+      const ai = ov.ai, hot = (ai.urgent_open || 0) + (ai.escalated_open || 0), tg = ai.telegram_requests_30d || 0;
+      attn.unshift(chanCard(tg ? 's-dark' : 's-tint', 'telegram-logo', tg, 'Via Telegram', tg ? 'Tap to see them' : 'Free LLM gate is on', 'telegram'));
+      attn.unshift(chanCard(hot ? 's-dark' : 's-tint', 'chat-circle-text', ai.whatsapp_requests_30d, 'Via WhatsApp', hot ? `${ai.urgent_open} urgent · ${ai.escalated_open} escalated` : (ai.whatsapp_requests_30d ? 'Tap to see them' : 'AI triage is on'), 'whatsapp'));
     }
     const max = Math.max(1, ...a.weeks), total = a.weeks.reduce((x, y) => x + y, 0);
     const chart = `<div class="ds-chart"><div class="ds-chart-h"><div><div class="ds-big">${a.weeks[7]}</div><div class="muted sm">raised this week · ${total} in 8 weeks</div></div></div>
@@ -138,13 +193,11 @@
     const act = audit.slice(0, 8).map(x => `<div class="ds-act"><span class="muted sm">${esc(stamp(x.created_at))}</span><span><b>${esc(x.action.replace('_', ' '))}</b> · ${esc(x.entity)} ${esc(x.entity_id)} <span class="muted">by ${esc(x.actor || 'system')}</span></span></div>`).join('');
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">${esc(todayLabel())}</p></div><div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${a.open.length} open requests</span></div></header>
-      ${search('Search requests, notices and residents')}${chips(chipList)}
+      ${search('Search requests, notices and residents')}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
       ${glance(ov)}
-      ${section('Requests this week', chart)}
       ${section('Open requests', carousel(openCards.length ? openCards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">All clear</span><span class="ds-meta">No open requests.</span></span></div>'], 'Open requests'), 'requests')}
-      ${section('By category', carousel(catCards, 'Requests by category'))}
-      ${section('Vendor ratings', carousel(vc.length ? vc : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">No vendors yet</span></span></div>'], 'Vendor ratings'), 'vendors')}
       ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}</div>`);
+    announceNew(reqs);
   };
 })();

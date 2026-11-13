@@ -83,11 +83,16 @@ function openDb(file) {
   `);
   // AI workflow columns and the WhatsApp message log (additive; safe to re-run).
   const cols = db.prepare('PRAGMA table_info(requests)').all().map(c => c.name);
-  for (const [name, type] of [['source', "TEXT NOT NULL DEFAULT 'app'"], ['ai_category', 'TEXT'], ['ai_priority', 'TEXT'], ['ai_summary', 'TEXT'], ['ai_vendor_id', 'INTEGER'], ['ai_source', 'TEXT'], ['ai_confidence', 'REAL'], ['escalated_at', 'TEXT']])
+  for (const [name, type] of [['source', "TEXT NOT NULL DEFAULT 'app'"], ['ai_category', 'TEXT'], ['ai_priority', 'TEXT'], ['ai_summary', 'TEXT'], ['ai_vendor_id', 'INTEGER'], ['ai_source', 'TEXT'], ['ai_confidence', 'REAL'], ['escalated_at', 'TEXT'], ['ai_action', 'TEXT']])
     if (!cols.includes(name)) db.exec('ALTER TABLE requests ADD COLUMN ' + name + ' ' + type);
   db.exec(`CREATE TABLE IF NOT EXISTS whatsapp_messages(
     id INTEGER PRIMARY KEY, direction TEXT NOT NULL, phone TEXT NOT NULL, body TEXT NOT NULL, user_id INTEGER, request_id INTEGER,
     status TEXT NOT NULL DEFAULT 'logged', created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+  // Multi-channel intake (WhatsApp is the default; Telegram added): the message channel, and the resident's linked Telegram id (additive, safe to re-run).
+  if (!db.prepare('PRAGMA table_info(whatsapp_messages)').all().some(c => c.name === 'channel'))
+    db.exec("ALTER TABLE whatsapp_messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'whatsapp'");
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'telegram_id'))
+    db.exec('ALTER TABLE users ADD COLUMN telegram_id TEXT');
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
@@ -116,8 +121,45 @@ function seedDemoAccounts(db) {
   add.run('Tenant One', 'tenant1@sahyadri.test', 'B-102', 'tenant', hash, 'resident');
   add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
   add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
+  // Optional Telegram test resident (flat T-101). The free hosting plan wipes the database on sleep and redeploy,
+  // which unlinked the tester every time; recreating it at boot keeps the bot working. Phone and Telegram id
+  // come from the environment only (SEED_TELEGRAM_PHONE, optional SEED_TELEGRAM_ID), never the repo.
+  const tgPhone = (process.env.SEED_TELEGRAM_PHONE || '').trim();
+  if (tgPhone) {
+    db.prepare("INSERT OR IGNORE INTO users(name,email,phone,flat,resident_type,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,?,'resident','approved',datetime('now'))")
+      .run('Telegram Tester', 'tg.tester@sahyadri.test', tgPhone, 'T-101', 'owner', hash);
+    const tgId = (process.env.SEED_TELEGRAM_ID || '').trim();
+    if (/^\d+$/.test(tgId)) db.prepare("UPDATE users SET telegram_id=? WHERE email='tg.tester@sahyadri.test' AND telegram_id IS NULL").run(tgId);
+  }
   const t = db.prepare("SELECT id FROM users WHERE email='tenant1@sahyadri.test'").get();
   const y = new Date().getFullYear();
   if (t) db.prepare('INSERT OR IGNORE INTO leases(user_id,start_date,end_date,owner_name) VALUES(?,?,?,?)').run(t.id, `${y}-01-01`, `${y + 1}-12-31`, 'Owner One');
+  // Example vendors (trade matches a request category so AI vendor suggestion works).
+  const vend = db.prepare('INSERT OR IGNORE INTO vendors(name,trade,phone) VALUES(?,?,?)');
+  for (const row of [['AquaFix Plumbing', 'plumbing', '+91 98200 11001'], ['Voltas Electricals', 'electrical', '+91 98200 11002'], ['OtisCare Lifts', 'lift', '+91 98200 11003'], ['SparkleClean Services', 'housekeeping', '+91 98200 11004'], ['SecureGuard Systems', 'security', '+91 98200 11005'], ['FixItAll Handyman', 'other', '+91 98200 11006']]) vend.run(...row);
+  // Example "who to call" contacts.
+  const cont = db.prepare('INSERT OR IGNORE INTO contacts(name,role,phone,icon) VALUES(?,?,?,?)');
+  for (const row of [['Society Office', 'Manager', '+91 22 2555 0100', 'briefcase'], ['Main Gate Security', 'Guard desk', '+91 98200 22001', 'shield-check'], ['AquaFix Plumbing', 'Plumber on call', '+91 98200 11001', 'drop'], ['Voltas Electricals', 'Electrician on call', '+91 98200 11002', 'wrench'], ['OtisCare Lifts', 'Lift breakdown', '+91 98200 11003', 'elevator'], ['Emergency / Ambulance', 'Medical', '108', 'first-aid'], ['Fire Brigade', 'Fire', '101', 'fire']]) cont.run(...row);
+  // A few sample requests so the dashboard lists and charts are not empty (only when there are none).
+  if (db.prepare('SELECT COUNT(*) AS n FROM requests').get().n === 0) {
+    const owner = db.prepare("SELECT id FROM users WHERE email='owner1@sahyadri.test'").get();
+    const req = db.prepare("INSERT INTO requests(user_id,category,title,description,source,status) VALUES(?,?,?,?,?,?)");
+    if (owner) { req.run(owner.id, 'plumbing', 'Kitchen tap leaking', 'The kitchen tap has been dripping since yesterday.', 'app', 'open'); req.run(owner.id, 'electrical', 'Corridor light not working', 'The 3rd floor corridor light is out.', 'app', 'open'); }
+    if (t) req.run(t.id, 'housekeeping', 'Garbage not collected', 'Garbage on B wing was not collected today.', 'app', 'open');
+  }
+  // Demo vehicles, parking slots and workers so the estate pages have data to test.
+  if (db.prepare('SELECT COUNT(*) AS n FROM vehicles').get().n === 0) {
+    const o1 = db.prepare("SELECT id FROM users WHERE email='owner1@sahyadri.test'").get();
+    const veh = db.prepare('INSERT OR IGNORE INTO vehicles(flat,user_id,plate,plate_key,type,make,color) VALUES(?,?,?,?,?,?,?)');
+    for (const [flat, plate, type, make, color] of [['B-101', 'MH12 AB 1234', 'car', 'Honda City', 'White'], ['B-102', 'MH12 CD 5678', 'car', 'Maruti Swift', 'Red'], ['B-101', 'MH12 EF 9012', 'bike', 'Honda Activa', 'Black']])
+      veh.run(flat, flat === 'B-101' && o1 ? o1.id : null, plate, plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase(), type, make, color);
+    const slot = db.prepare('INSERT OR IGNORE INTO parking_slots(code,level,kind,flat) VALUES(?,?,?,?)');
+    for (const [code, level, kind, flat] of [['P-01', 'Basement 1', 'car', 'B-101'], ['P-02', 'Basement 1', 'car', 'B-102'], ['P-03', 'Basement 1', 'car', null], ['P-04', 'Ground', 'bike', 'B-101'], ['P-05', 'Ground', 'bike', null]])
+      slot.run(code, level, kind, flat);
+    const wk = db.prepare('INSERT OR IGNORE INTO workers(name,role,phone,shift,status) VALUES(?,?,?,?,?)');
+    wk.run('Ramesh Kumar', 'housekeeping', '+91 98200 33001', 'Morning', 'active');
+    wk.run('Suresh Patil', 'gardener', '+91 98200 33002', 'Day', 'active');
+    wk.run('Anil More', 'security', '+91 98200 33003', 'Night', 'active');
+  }
 }
 module.exports = { openDb, PERMISSIONS, ACCESS_ROLES };

@@ -27,6 +27,11 @@ The session cookie is `Secure` in the prod profile, so browsers only keep it ove
 | `BACKEND_URL` | frontend | nginx upstream, default `http://backend:8080` |
 | `WEB_PORT` | compose | host port, default 8081 |
 | Node app: `PORT`, `SESSION_SECRET`, `DB_FILE`, `NODE_ENV=production`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Node | see `CLAUDE.md` |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Node | Telegram intake; after a deploy, re-point the bot with `POST /api/admin/telegram/set-webhook` (signed in as the committee; no button yet) only if the URL changed |
+| `CLASSIFY_WEBHOOK_URL` | Node | n8n "AI message classifier" production URL (free LLM gate); unset = rules |
+| `ADMIN_EMAIL_WEBHOOK_URL` | Node | n8n "admin email desk" production URL (secret path); unset = no emails |
+| `PUBLIC_URL`, `EMAIL_ACTION_SECRET` | Node | base for email links (Render's `RENDER_EXTERNAL_URL` otherwise); signing key for email links (falls back to `ADMIN_PASSWORD`) |
+| `SEED_PASSWORD`, `SEED_TELEGRAM_PHONE`, `SEED_TELEGRAM_ID` | Node | demo only: role accounts, vendors and the linked Telegram tester are recreated at every start |
 
 ## First-run admin password
 The app starts empty except for one committee admin, created only when no admin exists. In production (`NODE_ENV=production` / Spring `prod`) `ADMIN_PASSWORD` is required and must be at least 12 characters, otherwise startup fails. Change it after first login. There is no demo data. Existing bcrypt hashes (`$2a$`/`$2b$`) from the Node app work in the Java backend.
@@ -65,6 +70,9 @@ Rollback: before any new data is written on Java, point the proxy back at the No
 4. Open the service > Environment, read the generated `ADMIN_PASSWORD`, sign in as `admin@society.test`, then change the password from Profile.
 5. Free plan caveat: data lives on the instance disk and is lost on redeploy or after long sleeps. For a durable demo use a paid plan, add the disk block in `render.yaml` and set `DB_FILE=/var/data/portal.db`, `UPLOAD_DIR=/var/data/uploads`.
 6. WhatsApp: set `WHATSAPP_WEBHOOK_SECRET`, then point the provider webhook at `https://<your-url>/api/whatsapp/webhook?secret=<that secret>`.
+7. Telegram: set `TELEGRAM_BOT_TOKEN`, deploy, then, signed in as the committee, call `POST /api/admin/telegram/set-webhook` once (there is no button for it yet).
+8. n8n: import `n8n/message-classifier.json` and `n8n/admin-email-desk.json`, connect the credentials, publish, and set `CLASSIFY_WEBHOOK_URL` and `ADMIN_EMAIL_WEBHOOK_URL` to their production URLs (see `n8n/README.md`).
+9. Auto-deploy is off on this service: after pushing, use Manual Deploy > Deploy latest commit.
 
 ### Current deployment
-Live: https://sahyadri-heights.onrender.com (Render free plan, blueprint `sahyadri-heights`, branch `feat/HSP-28-admin-overview`). The admin password is the generated `ADMIN_PASSWORD` under the service Environment tab. First request after sleep can take about 50 seconds.
+Live: https://sahyadri-heights.onrender.com (Render free plan, blueprint `sahyadri-heights`, branch `feat/HSP-28-admin-overview`, deployed by hand). The admin password is the generated `ADMIN_PASSWORD` under the service Environment tab. First request after sleep can take about 50 seconds, and the database resets on sleep and redeploy (demo accounts are re-seeded from `SEED_*`). n8n cloud (`voltedge-demo31`, trial ending about 2026-11-14) hosts the classifier and the email desk; an export for moving them to a new account is kept outside the repo.

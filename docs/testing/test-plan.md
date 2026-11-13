@@ -6,14 +6,15 @@ Tests ship with code: every Jira story has at least one automated test or a manu
 Risk-based emphasis: access control and privacy first (role checks, flat isolation, guard allow-list, PII stripping before any model call), then the request lifecycle, then convenience features.
 
 ## 2. Scope
-In scope: all requirements in `docs/requirements.md`, including the AI workflows (WhatsApp intake, triage, notice drafter, SLA escalation, weekly digest). Out of scope: load and penetration testing (not performed), real WhatsApp Cloud API delivery and real LLM quality (need provider accounts and keys), native NFC.
+In scope: all requirements in `docs/requirements.md`, including the AI workflows (Telegram and WhatsApp intake, message gate, triage, suggested actions, notice drafter, SLA escalation, weekly digest) and the committee email desk. Out of scope: load and penetration testing (not performed), real WhatsApp Cloud API delivery (Meta account blocked), measured LLM quality, native NFC.
 
 ## 3. Levels
 | Level | What | Tool | Count |
 | --- | --- | --- | --- |
-| API / integration (Node) | Express app against a temporary SQLite database, real HTTP | `node:test` (`npm test`) | 41 baseline plus 7 AI tests in `test/ai.test.js` = 48 |
-| API / integration (Java) | Spring Boot with MockMvc and one real-HTTP test, in-memory H2 | JUnit 5 (`cd backend && ./gradlew test`) | 79 |
-| Component / UI (React) | React Testing Library with mocked fetch | Vitest (`cd frontend && npm test`) | 65 |
+| API / integration (Node) | Express app against a temporary SQLite database, real HTTP; the email desk tests use a fake n8n webhook server | `node:test` (`npm test`) | 65 |
+| API / integration (Java) | Spring Boot with MockMvc and one real-HTTP test, in-memory H2 (also PostgreSQL 16 in CI) | JUnit 5 (`cd backend && ./gradlew test`) | 81 |
+| Component / UI (React) | React Testing Library with mocked fetch | Vitest (`cd frontend && npm test`) | 67 |
+| Live smoke | Real Telegram message, n8n executions, email received | Telegram, n8n execution list, Gmail | see `test-results.md` |
 | Manual UI | Role walk-throughs on the React app and phone | Browser, Android phone via adb | see `test-results.md` |
 | Acceptance | Residents at the partner society | `acceptance-plan.md` | not yet done |
 
@@ -45,7 +46,7 @@ Severity: Critical (data leak, cannot sign in, data loss), High (core flow broke
 Names are recorded in `docs/contribution-matrix.md`, not here.
 
 ## 7. Tooling
-`node:test` (built in), JUnit 5 with Spring Boot Test and MockMvc, Vitest with React Testing Library, ESLint for the React app, GitHub Actions workflow (`.github/workflows/ci.yml`, never yet executed), Chrome and adb for manual runs. Defects are tracked in `defect-log.md` and, for the course, as Jira bugs.
+`node:test` (built in), JUnit 5 with Spring Boot Test and MockMvc, Vitest with React Testing Library, ESLint for the React app, GitHub Actions workflow (`.github/workflows/ci.yml`, runs on every pull request), Chrome and adb for manual runs. Defects are tracked in `defect-log.md` and, for the course, as Jira bugs.
 
 ## 8. Test data
 Synthetic: `*.test` emails, invented flat numbers, made-up phone numbers. The app starts with only the committee admin; testers register residents through the UI. Real numbers or names must never be pasted into Claude or fixtures.
@@ -55,4 +56,5 @@ Synthetic: `*.test` emails, invented flat numbers, made-up phone numbers. The ap
 - Rule-based triage runs with no API key; LLM mode is optional and its output is validated against fixed category and priority lists.
 - Webhook tests cover secret check, unknown number, intake, status query, emergency guidance.
 - The simulator endpoint (`/api/admin/whatsapp/simulate`) lets testers exercise intake without a WhatsApp account.
-- Not testable offline: real model quality and real WhatsApp delivery. These need a human check with keys configured.
+- Email desk: a fake n8n server in the test captures every email; tests follow the links like a mail client (GET must not change state) and post the confirm forms.
+- Not testable offline: real model quality, real WhatsApp delivery, Gmail delivery. These are checked live (n8n execution list, the inbox).
