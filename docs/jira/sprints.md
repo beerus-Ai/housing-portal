@@ -20,6 +20,6 @@ Review note: none yet.
 ## Sprint 4: AI-native workflows, deployment and acceptance (planned)
 Goal: complaints can arrive on WhatsApp and be triaged by AI under human control; the portal is live; residents have tested it.
 Scope: WhatsApp intake, AI triage, human confirmation, notice drafter, SLA escalation, weekly digest; Docker, PostgreSQL, HTTPS and CI; accessibility pass; acceptance testing; privacy documents.
-Review note: none yet. The AI features are in development; the rule-based path and its tests exist in the repository, while LLM mode and real WhatsApp delivery are unverified.
+Review note (2026-11-14): Telegram replaced WhatsApp as the live channel (Meta blocked the new business portfolio); the request-or-chatter gate runs on a free n8n LLM; AI suggested actions and the committee email desk (assign and approve each stage from email) were added; the portal is live on Render. Verified with real Telegram messages and n8n executions. Open: WhatsApp delivery, Java/React ports of Telegram and the email desk, durable hosting, acceptance testing (HSP-41..45).
 
 Note: Sprint 3 and parts of Sprint 4 contain work that has already been coded. They are labelled planned because they have not been formally reviewed in a sprint review.

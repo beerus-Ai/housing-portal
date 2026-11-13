@@ -44,7 +44,15 @@ Automated file column names the test file that covers the case; Java equivalents
 | TC-AI-06 | SLA FR-WR-10 | Request older than 48h, open | Escalated once, committee and requester notified, audited | `test/ai.test.js` (SLA escalation) |
 | TC-AI-07 | Digest FR-NO-05 | Request weekly digest | Counts of open, unassigned, escalated, urgent, pending users | `test/ai.test.js` (drafter and digest) |
 | TC-AI-08 | WhatsApp NFR-11 | POST webhook with wrong or no secret | 401 | `test/ai.test.js` (webhook) |
-| TC-AI-09 | Human in the loop FR-WR-09 | Committee confirms AI-suggested vendor | Assignment only after click; audited | Manual (not yet recorded) |
+| TC-AI-09 | Human in the loop FR-WR-09/15 | Committee approves or dismisses the AI suggested action | Assignment or vehicle only after the click; audited; duplicate plate rejected | `test/ai-action.test.js` |
+| TC-AI-10 | LLM gate FR-WR-14 | Classifier URL set; returns request, chatter or fails | Request created, chatter ignored, failure falls back to rules | `test/classify-n8n.test.js` |
+| TC-TG-01 | Telegram FR-WR-13 | Bad or missing secret; /start; contact share from the registered phone | 401; onboarding reply; Telegram id linked | `test/telegram.test.js` |
+| TC-TG-02 | Telegram FR-WR-13 | Linked resident sends a real problem, chatter, and "status" | Request with source telegram; chatter ignored; status list | `test/telegram.test.js` |
+| TC-TG-03 | Hosting NFR-14 | Boot with `SEED_TELEGRAM_PHONE` / `SEED_TELEGRAM_ID` | Approved, linked T-101 tester exists; none without the variable | `test/seed-telegram.test.js` |
+| TC-EM-01 | Email desk FR-WR-16 | New request while no admin is on the dashboard | Email sent with stage tracker, "Next step: Assign someone", AI vendor first; opening the link changes nothing; confirming assigns and audits `email_action` | `test/email-desk.test.js` |
+| TC-EM-02 | Email desk FR-WR-16 | Approve start, reply, approve done from the follow-up emails | Follow-up email per stage with the next step; resolved with no further email; a used action returns 409 | `test/email-desk.test.js` |
+| TC-EM-03 | Email desk FR-NO-07/08 | Registration while away; registration while the dashboard is open; emergency while open | Approve by email works; no email while open; emergency always emailed and resolvable by email | `test/email-desk.test.js` |
+| TC-EM-04 | Email desk NFR-13 | Tampered token; forged loopback header from outside | 404 page; 401 | `test/email-desk.test.js` |
 | TC-UI-01 | Manual React | Raise request, vehicle, gate pass, worker, parking, notice, contact, household, emergency, lease, rating, gate verify | Forms submit and show result | Manual, see `test-results.md` (2026-11-04) |
 | TC-UI-02 | Manual phone | Request row, top bar, estate grid at phone width | No overlap or wrapping | Manual; Vitest `nav.test.tsx`, `phase3.test.tsx` |
 

@@ -13,6 +13,9 @@ Defects found and fixed during the build. Dates are not recorded for each item; 
 | DEF-07 | Dashboard | "Estate at a glance" grid got overridden and displayed wrongly | M | A later generic grid rule overrode the specific one | Rule specificity corrected; solid shortcut row (commit 6ad02c1 and follow-ups) | Fixed |
 | DEF-08 | Mobile UI | Shortcut row collapsed on phone | M | Flex row without minimum sizes | Fixed in commit 6ad02c1 | Fixed |
 | DEF-09 | Test runner | `node --test test/` failed on Node 24 (directory treated as a module) | M | Node 24 behaviour change | Glob pattern used in `npm test` | Fixed |
+| DEF-10 | Live site, Telegram | Bot replied "not registered" to the linked tester | H | Render free plan wipes the SQLite database on sleep and redeploy, deleting the resident and their Telegram link | Tester recreated at boot from `SEED_TELEGRAM_PHONE` / `SEED_TELEGRAM_ID` (commit 8329878); real fix is persistent storage | Fixed (workaround) |
+| DEF-11 | Live site, Telegram | Webhook stopped after each deploy | H | Webhook secret was derived from a value that changed per deploy | Secret derived from the bot token (commit d651c27) | Fixed |
+| DEF-12 | n8n classifier | Imported workflow failed with "Could not get parameter model.value" | M | Model stored as a plain string instead of a resource locator | Model saved as a resource locator (commit d789541); migration copy fixed too | Fixed |
 
 ## Open defects
 None logged as open at time of writing. Known gaps are listed as "not yet verified" in `test-results.md`; they are untested areas, not confirmed defects.

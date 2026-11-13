@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" id="defs_email_approvals" targetNamespace="http://sahyadri-heights.example/bpmn" exporter="generated" exporterVersion="1.0">
+  <collaboration id="collab_email_approvals">
+    <participant id="part_email_approvals" name="To-be: committee approves request stages by email" processRef="email_approvals"/>
+  </collaboration>
+  <process id="email_approvals" name="To-be: committee approves request stages by email" isExecutable="false">
+    <laneSet id="ls_email_approvals">
+      <lane id="l_portal" name="Portal (email desk)"><flowNodeRef>s1</flowNodeRef><flowNodeRef>t1</flowNodeRef><flowNodeRef>t4</flowNodeRef><flowNodeRef>g1</flowNodeRef><flowNodeRef>e1</flowNodeRef></lane>
+      <lane id="l_n8n" name="n8n workflow and Gmail"><flowNodeRef>t2</flowNodeRef></lane>
+      <lane id="l_com" name="Committee member (email inbox)"><flowNodeRef>t3</flowNodeRef></lane>
+    </laneSet>
+    <startEvent id="s1" name="New request, registration, message to check or emergency, and no admin on the dashboard"><outgoing>f_email_1</outgoing></startEvent>
+    <serviceTask id="t1" name="Build email: stage tracker, next step and signed 7-day buttons"><incoming>f_email_1</incoming><incoming>f_email_6</incoming><outgoing>f_email_2</outgoing></serviceTask>
+    <serviceTask id="t2" name="Send the email from the connected Gmail to the committee inbox"><incoming>f_email_2</incoming><outgoing>f_email_3</outgoing></serviceTask>
+    <userTask id="t3" name="Click the next-step button (assign, start, resolve) and confirm"><incoming>f_email_3</incoming><outgoing>f_email_4</outgoing></userTask>
+    <serviceTask id="t4" name="Run the same action as the dashboard; audit; notify the resident"><incoming>f_email_4</incoming><outgoing>f_email_5</outgoing></serviceTask>
+    <exclusiveGateway id="g1" name="Anything left to approve?"><incoming>f_email_5</incoming><outgoing>f_email_6</outgoing><outgoing>f_email_7</outgoing></exclusiveGateway>
+    <endEvent id="e1" name="Resolved, awaiting the resident rating"><incoming>f_email_7</incoming></endEvent>
+    <sequenceFlow id="f_email_1" sourceRef="s1" targetRef="t1"/>
+    <sequenceFlow id="f_email_2" sourceRef="t1" targetRef="t2"/>
+    <sequenceFlow id="f_email_3" sourceRef="t2" targetRef="t3"/>
+    <sequenceFlow id="f_email_4" sourceRef="t3" targetRef="t4"/>
+    <sequenceFlow id="f_email_5" sourceRef="t4" targetRef="g1"/>
+    <sequenceFlow id="f_email_6" sourceRef="g1" targetRef="t1" name="Yes: follow-up email with the next step"/>
+    <sequenceFlow id="f_email_7" sourceRef="g1" targetRef="e1" name="No"/>
+  </process>
+  <bpmndi:BPMNDiagram id="diag_email_approvals">
+    <bpmndi:BPMNPlane id="plane_email_approvals" bpmnElement="collab_email_approvals">
+      <bpmndi:BPMNShape id="sh_part" bpmnElement="part_email_approvals" isHorizontal="true"><omgdc:Bounds x="30" y="20" width="1380" height="570"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_portal" bpmnElement="l_portal" isHorizontal="true"><omgdc:Bounds x="60" y="20" width="1350" height="190"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_n8n" bpmnElement="l_n8n" isHorizontal="true"><omgdc:Bounds x="60" y="210" width="1350" height="190"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_l_com" bpmnElement="l_com" isHorizontal="true"><omgdc:Bounds x="60" y="400" width="1350" height="190"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_s1" bpmnElement="s1"><omgdc:Bounds x="100" y="97" width="36" height="36"/><bpmndi:BPMNLabel><omgdc:Bounds x="50" y="137" width="136" height="40"/></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t1" bpmnElement="t1"><omgdc:Bounds x="210" y="75" width="150" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t2" bpmnElement="t2"><omgdc:Bounds x="420" y="265" width="150" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t3" bpmnElement="t3"><omgdc:Bounds x="630" y="455" width="150" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_t4" bpmnElement="t4"><omgdc:Bounds x="840" y="75" width="150" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_g1" bpmnElement="g1" isMarkerVisible="true"><omgdc:Bounds x="1060" y="90" width="50" height="50"/><bpmndi:BPMNLabel><omgdc:Bounds x="1010" y="144" width="150" height="40"/></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sh_e1" bpmnElement="e1"><omgdc:Bounds x="1230" y="97" width="36" height="36"/><bpmndi:BPMNLabel><omgdc:Bounds x="1180" y="137" width="136" height="40"/></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="ed_f_email_1" bpmnElement="f_email_1"><omgdi:waypoint x="136" y="115"/><omgdi:waypoint x="210" y="115"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_2" bpmnElement="f_email_2"><omgdi:waypoint x="360" y="115"/><omgdi:waypoint x="390" y="115"/><omgdi:waypoint x="390" y="305"/><omgdi:waypoint x="420" y="305"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_3" bpmnElement="f_email_3"><omgdi:waypoint x="570" y="305"/><omgdi:waypoint x="600" y="305"/><omgdi:waypoint x="600" y="495"/><omgdi:waypoint x="630" y="495"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_4" bpmnElement="f_email_4"><omgdi:waypoint x="780" y="495"/><omgdi:waypoint x="810" y="495"/><omgdi:waypoint x="810" y="115"/><omgdi:waypoint x="840" y="115"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_5" bpmnElement="f_email_5"><omgdi:waypoint x="990" y="115"/><omgdi:waypoint x="1060" y="115"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_6" bpmnElement="f_email_6"><omgdi:waypoint x="1085" y="90"/><omgdi:waypoint x="1085" y="42"/><omgdi:waypoint x="285" y="42"/><omgdi:waypoint x="285" y="75"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="ed_f_email_7" bpmnElement="f_email_7"><omgdi:waypoint x="1110" y="115"/><omgdi:waypoint x="1230" y="115"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
