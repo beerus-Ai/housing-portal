@@ -1,0 +1,113 @@
+{
+  "name": "Sahyadri: admin email desk",
+  "nodes": [
+    {
+      "id": "a1",
+      "name": "Portal event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b7c1d2e3-0000-4000-8000-752b16cf6d48",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sahyadri-admin-email-CHANGE-ME",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "a2",
+      "name": "Committee inbox (Gmail profile)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9kuV7rM8qdNv3ER4",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "a3",
+      "name": "Email the committee",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "sendTo": "={{ $json.emailAddress }}",
+        "subject": "={{ $('Portal event').item.json.body.subject }}",
+        "emailType": "html",
+        "message": "={{ $('Portal event').item.json.body.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "9kuV7rM8qdNv3ER4",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "a4",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -260
+      ],
+      "parameters": {
+        "width": 640,
+        "height": 220,
+        "content": "## Sahyadri: admin email desk\nThe housing portal POSTs here (env ADMIN_EMAIL_WEBHOOK_URL) for every new complaint, message to check, registration and emergency when no committee member has the dashboard open (emergencies always).\nThe portal builds the email: details plus signed buttons (assign vendor, start, close, reply, approve AI suggestion, approve/reject resident, resolve emergency). Buttons open a confirm page on the portal, which runs the same action as the dashboard.\nSent from and to the connected Gmail account. Keep the webhook path secret."
+      }
+    }
+  ],
+  "connections": {
+    "Portal event": {
+      "main": [
+        [
+          {
+            "node": "Committee inbox (Gmail profile)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Committee inbox (Gmail profile)": {
+      "main": [
+        [
+          {
+            "node": "Email the committee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

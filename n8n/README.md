@@ -18,3 +18,13 @@ Three importable workflows that put the portal inside your automation stack. The
 4. Activate the workflows.
 
 Credentials stay in your n8n instance. Replace the final HTTP node in the digest/alert workflows with Email or Slack if you prefer.
+
+## Sahyadri: admin email desk (`admin-email-desk.json`)
+Emails the committee every new complaint, message to check, registration and emergency when nobody has the dashboard open
+(emergencies always). The portal builds the email with signed action buttons (assign vendor, start, close, reply,
+approve/dismiss AI suggestion, approve/reject resident, create/dismiss review message, resolve emergency). Each button
+opens a confirm page at `/desk/<token>` on the portal, which runs the same API route as the dashboard (audited).
+
+Setup: import, connect the Gmail credential on both Gmail nodes, change the webhook path `sahyadri-admin-email-CHANGE-ME`
+to a random secret path, publish, then set `ADMIN_EMAIL_WEBHOOK_URL=https://<n8n-host>/webhook/<that path>` on the portal.
+Optional portal env: `PUBLIC_URL` (link base; Render's RENDER_EXTERNAL_URL is used otherwise), `EMAIL_ACTION_SECRET` (link signing key).

@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { openDb, PERMISSIONS, ACCESS_ROLES } = require('./db');
 const AI = require('./ai');
+const emailDesk = require('./email-desk');
 
 const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping', 'other'];
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
@@ -77,6 +78,8 @@ function createApp(opts = {}) {
   const log = (actor, entity, id, action, detail) =>
     run('INSERT INTO audit(actor_id,entity,entity_id,action,detail) VALUES(?,?,?,?,?)', actor, entity, id, action, detail || null);
   const notify = (uid, msg) => run('INSERT INTO notifications(user_id,message) VALUES(?,?)', uid, msg);
+  // Email desk: emails the committee new items (with action buttons) when nobody has the dashboard open. See email-desk.js.
+  const desk = emailDesk({ q, one, run, log });
 
   // ---- WhatsApp and AI workflows (see ai.js). Everything works with no keys: messages are logged and rules answer.
   const SLA_HOURS = Number(process.env.SLA_HOURS) || 48;
@@ -130,6 +133,8 @@ function createApp(opts = {}) {
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
   const auth = (req, res, next) => {
+    const du = desk.replayUser(req);
+    if (du) { req.user = du; return next(); }
     const u = req.session.uid && one('SELECT * FROM users WHERE id=?', req.session.uid);
     if (!u || u.status !== 'approved' || req.session.pf !== pwFp(u)) return res.status(401).json({ error: 'Not signed in' });
     // Guards get a strict allow-list so no resident/committee route can ever leak data to them.
@@ -181,6 +186,7 @@ function createApp(opts = {}) {
       name, email, phone, flat, rtype, bcrypt.hashSync(pw, 10));
     log(r.lastInsertRowid, 'user', r.lastInsertRowid, 'registered', `${rtype} flat ${flat}`);
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New registration awaiting approval: ${name} (flat ${flat})`);
+    desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ message: 'Registered. An admin will review your account.' });
   });
 
@@ -433,6 +439,7 @@ function createApp(opts = {}) {
     const label = type.charAt(0).toUpperCase() + type.slice(1);
     const msg = `EMERGENCY (${label}) from flat ${req.user.flat || 'n/a'}${note ? ': ' + note : ''}`;
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, msg);
+    desk.alert('emergency', id);
     res.status(201).json({ id });
   });
   app.get('/api/emergencies', auth, feat('emergency'), (req, res) => {
@@ -517,6 +524,7 @@ function createApp(opts = {}) {
       log(req.user.id, 'request', r.lastInsertRowid, 'created', `${category}: ${title}`);
       const tri = applyTriage(Number(r.lastInsertRowid), title + '. ' + description);
       for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New ${category} request from flat ${req.user.flat}: ${title}${tri.priority === 'urgent' ? ' (AI: urgent)' : ''}`);
+      desk.alert('request', Number(r.lastInsertRowid));
       res.status(201).json({ id: Number(r.lastInsertRowid) });
     });
 
@@ -650,6 +658,7 @@ function createApp(opts = {}) {
       name, email, phone, req.user.flat, rtype, bcrypt.hashSync(pw, 10));
     log(req.user.id, 'user', r.lastInsertRowid, 'household_added', `${rtype} flat ${req.user.flat}`);
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `${req.user.name} added ${name} (${rtype}) to flat ${req.user.flat}: awaiting approval`);
+    desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
 
@@ -679,6 +688,7 @@ function createApp(opts = {}) {
     const u = req.user;
     if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
+      desk.seen();
       return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
     }
     const r = one(`SELECT COUNT(*) AS n, COALESCE(MAX(r.updated_at),'') AS m, COALESCE(SUM(r.rating IS NOT NULL),0) AS rated FROM requests r JOIN users x ON x.id=r.user_id WHERE r.user_id=? OR x.flat=?`, u.id, u.flat || '');
@@ -912,6 +922,7 @@ function createApp(opts = {}) {
     applyTriage(id, body);
     if (msgId) run("UPDATE whatsapp_messages SET status='received', request_id=? WHERE id=?", id, msgId);
     for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via ' + chLabel + ': ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    desk.alert('request', id);
     const text = 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.';
     send(from, text, u.id, id);
     return { id, text };
@@ -923,7 +934,7 @@ function createApp(opts = {}) {
     if (/\b(sos|emergency|fire|ambulance|gas leak|accident|intruder|break[- ]?in|robbery|burglar|assault|attack|fight|fighting|danger|trapped|injured|unconscious|threat|violence)\b|\b(help\s*(me|us|please)|please\s*help|need\s*help|someone\s*help)\b/.test(low)) {
       const etype = /\bfire\b/.test(low) ? 'fire' : /\b(theft|intruder|break|robbery|burglar)/.test(low) ? 'theft' : /\b(ambulance|injur|medical|unconscious|accident)/.test(low) ? 'medical' : /\b(fight|violen|assault|attack|threat)/.test(low) ? 'violence' : /\b(lift|elevator|trapped)\b/.test(low) ? 'lift' : 'other';
       // Flag it as a real emergency on the committee dashboard (unless this resident already has one open), not just a notification.
-      if (!one("SELECT id FROM emergencies WHERE user_id=? AND status='active' LIMIT 1", u.id)) run("INSERT INTO emergencies(user_id,type,note,status) VALUES(?,?,?,'active')", u.id, etype, body.slice(0, 300));
+      if (!one("SELECT id FROM emergencies WHERE user_id=? AND status='active' LIMIT 1", u.id)) desk.alert('emergency', Number(run("INSERT INTO emergencies(user_id,type,note,status) VALUES(?,?,?,'active')", u.id, etype, body.slice(0, 300)).lastInsertRowid));
       for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'EMERGENCY (' + etype + ') from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
       mark('received');
       return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted and it is flagged as an emergency in the portal.')], created: null };
@@ -939,6 +950,7 @@ function createApp(opts = {}) {
     if (v.decision === 'review') {
       mark('review');
       for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, chLabel + ' message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
+      if (inId) desk.alert('review', inId);
       return { replies: [], created: null, decision: 'review', kind: v.kind };
     }
     const made = createFromMessage(u, from, body, inId, { channel, send });
@@ -1344,6 +1356,7 @@ function createApp(opts = {}) {
   });
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
+  desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
   // eslint-disable-next-line no-unused-vars
