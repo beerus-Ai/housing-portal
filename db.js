@@ -121,6 +121,16 @@ function seedDemoAccounts(db) {
   add.run('Tenant One', 'tenant1@sahyadri.test', 'B-102', 'tenant', hash, 'resident');
   add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
   add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
+  // Optional Telegram test resident (flat T-101). The free hosting plan wipes the database on sleep and redeploy,
+  // which unlinked the tester every time; recreating it at boot keeps the bot working. Phone and Telegram id
+  // come from the environment only (SEED_TELEGRAM_PHONE, optional SEED_TELEGRAM_ID), never the repo.
+  const tgPhone = (process.env.SEED_TELEGRAM_PHONE || '').trim();
+  if (tgPhone) {
+    db.prepare("INSERT OR IGNORE INTO users(name,email,phone,flat,resident_type,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,?,'resident','approved',datetime('now'))")
+      .run('Telegram Tester', 'tg.tester@sahyadri.test', tgPhone, 'T-101', 'owner', hash);
+    const tgId = (process.env.SEED_TELEGRAM_ID || '').trim();
+    if (/^\d+$/.test(tgId)) db.prepare("UPDATE users SET telegram_id=? WHERE email='tg.tester@sahyadri.test' AND telegram_id IS NULL").run(tgId);
+  }
   const t = db.prepare("SELECT id FROM users WHERE email='tenant1@sahyadri.test'").get();
   const y = new Date().getFullYear();
   if (t) db.prepare('INSERT OR IGNORE INTO leases(user_id,start_date,end_date,owner_name) VALUES(?,?,?,?)').run(t.id, `${y}-01-01`, `${y + 1}-12-31`, 'Owner One');
