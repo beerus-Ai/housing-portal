@@ -5,6 +5,7 @@ window.API = (() => {
   const qs = p => { const e = Object.entries(p || {}).filter(([, v]) => v !== '' && v != null); return e.length ? '?' + new URLSearchParams(e) : ''; };
   const id = x => encodeURIComponent(x);
   return {
+    roles: HP.RAPI, // faculty-review roles (docs/roles-api.md): accounts, staff jobs and shifts, cost approval, reopen, reports, support, guides, IT tools; defined in common.js so /m/ can use it
     auth: {
       me: () => call('GET', '/api/me'),
       login: (email, password) => call('POST', '/api/login', { email, password }),

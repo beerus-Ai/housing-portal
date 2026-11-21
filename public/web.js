@@ -1,7 +1,7 @@
 // Web app (desktop-first, responsive). Phones are sent to the mobile app at /m/ unless ?web is in the URL.
 (() => {
   const { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, stamp, day, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, leaseInfo } = HP;
+    statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, rid, SOCIETY, leaseInfo, costTag, updatesList, positionLabel, RAPI } = HP;
   const EMERGENCY_TYPES = HP.EMERGENCY_TYPES || [], CONTACT_ICONS = HP.CONTACT_ICONS || [];
 
   if (matchMedia('(max-width: 640px)').matches && !new URLSearchParams(location.search).has('web')) { location.replace('/m/'); return; }
@@ -24,43 +24,55 @@
     document.querySelectorAll('.nav-grp').forEach(g => { g.classList.remove('open'); const h = g.querySelector('.nav-grp-h'); if (h) h.setAttribute('aria-expanded', String(S.nav.pos === 'top' ? false : !g.classList.contains('collapsed'))); });
   };
   const isAdmin = () => S.me.role === 'admin';
+  // Everyone (residents, committee, guards, staff) gets Help and the portal-problem form.
+  const HELP = [['help', 'Help', 'question'], ['support', 'Support', 'lifebuoy']];
   const NAV = {
     owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['household', 'Household', 'users-three'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
     tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code']],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
     family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code']],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['gate', 'Gate', 'shield-check'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
-      ['approvals', 'Approvals', 'user-check'], ['users', 'Residents', 'users'], ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six']],
-    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise']],
+      ['approvals', 'Approvals', 'user-check'], ['costs', 'Cost approvals', 'currency-inr'], ['reports', 'Reports', 'chart-line'], ['attendance', 'Staff attendance', 'clock-user'], ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'],
+      ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six'], ['health', 'System health', 'heartbeat'], ...HELP],
+    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    it: [['support', 'Support queue', 'lifebuoy'], ['health', 'System health', 'heartbeat'], ['help', 'Help guides', 'question'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
-  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six']];
+  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
-    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', ai: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin' };
+    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', ai: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin',
+    costs: 'admin', reports: 'admin', attendance: 'admin', accounts: 'admin', health: 'admin', help: 'help', support: 'help', profile: 'help' };
   const COLKEY = 'hp.navc';
   const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
   const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
   const isGuard = () => S.me.role === 'guard';
+  const isStaff = () => S.me.role === 'staff', isIT = () => S.me.role === 'it';
+  const isGov = () => HP.isGov(S.me);
+  // Guards, staff and IT have no flat and a short menu without section headings.
+  const flatNav = () => isGuard() || isStaff() || isIT();
   // Feature flags (GET /api/me features{}) and permissions (permissions[]) decide what a person sees. Missing data means allowed.
   const feat = f => !S.me || !S.me.features || S.me.features[f] !== false;
   const can = p => !S.me || S.me.role === 'admin' || !Array.isArray(S.me.permissions) || S.me.permissions.includes(p);
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
-    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin() };
+    vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
+    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
-  const navFor = () => (NAV[isAdmin() ? 'admin' : isGuard() ? 'guard' : S.me.resident_type] || NAV.owner).filter(([k]) => isGuard() || allowed(k));
-  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : 'home';
+  const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => flatNav() || allowed(k));
+  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'support' : 'home';
   const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
   // ---------- shell
   async function render() {
     if (!S.me) { stopScan(); return authView(); }
     if (S.page !== 'gate') stopScan();
-    let pending = 0, activeEm = 0, unassigned = 0;
+    let pending = 0, activeEm = 0, unassigned = 0, costPending = 0;
     if (isAdmin()) {
+      try { const ap = await RAPI.admin.approvals(); costPending = (Array.isArray(ap) ? ap : ap.pending || []).length; } catch (e) { costPending = 0; }
       pending = (await API.admin.users('pending')).length;
       try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; }
       try { const ov = await API.admin.overview(); unassigned = (ov.requests && ov.requests.unassigned) || 0; } catch (e) { unassigned = 0; }
@@ -68,11 +80,12 @@
     const navBtn = (k, label, icon, extra = '', cls = '') => `<button class="btn side-link ${cls} ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
     const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` }
       : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` }
+      : k === 'costs' && costPending ? { n: costPending, h: `<span class="tag tag-accent-2" aria-label="${costPending} costs waiting for approval">${costPending}</span>` }
       : k === 'requests' && unassigned ? { n: unassigned, h: `<span class="tag tag-accent-2" aria-label="${unassigned} unassigned requests">${unassigned}</span>` }
       : { n: 0, h: '' };
     const items = navFor(), col = loadCollapsed();
     let nav;
-    if (isGuard()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+    if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
     else nav = GROUPS.map(([g, gl, gi]) => {
       const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
       if (g === 'home') return its.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
@@ -80,7 +93,8 @@
       return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
         <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('')}</div></div>`;
     }).join('');
-    const who = isAdmin() || isGuard() ? `${S.me.name}` : `${S.me.name} · ${S.me.flat}`;
+    const sub = isAdmin() || flatNav() ? positionLabel(S.me) : 'Flat ' + (S.me.flat || '');
+    const who = `${S.me.name} · ${sub}`;
     root.innerHTML = `<div class="web side-shell">
       <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
       ${isAdmin() && activeEm ? `<button class="emg-banner" data-act="nav" data-page="emergencies" aria-label="${activeEm} active emergencies, view now">${ic('siren')}<span><strong>${activeEm} active emergenc${activeEm > 1 ? 'ies' : 'y'}</strong> — tap to view</span></button>` : ''}
@@ -91,15 +105,17 @@
         <div class="side-tools" role="group" aria-label="Menu layout">
           <button class="btn btn-ghost side-tool" data-act="navpos" title="Move menu to the top" aria-label="Move menu to the top">${ic('align-top-simple')}<span class="side-t side-tt">Menu to top</span></button>
           <button class="btn btn-ghost side-tool" data-act="navhide" title="Hide menu" aria-label="Hide menu" aria-expanded="true">${ic('caret-double-left')}<span class="side-t">Hide menu</span></button></div>
-        <div class="side-user"><span class="avatar" title="${esc(who)}">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(who)}</span>
+        <div class="side-user"><button type="button" class="side-me" data-act="nav" data-page="profile" title="Your profile: ${esc(who)}"><span class="avatar">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(S.me.name)}<span class="side-pos">${esc(sub)}</span></span></button>
           <button class="btn btn-secondary side-out" data-act="logout" title="Sign out">${ic('sign-out')}<span class="side-t">Sign out</span></button>
           <a class="side-t xs muted" href="/m/">Open the mobile app</a></div>
       </aside>
       <main id="page" class="page"></main></div>`;
     applyNav();
+    if (!PAGES[S.page] || !allowed(S.page)) S.page = home0();
     try { await PAGES[S.page](); } catch (e) { $('#page').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
-  const page = h => { $('#page').innerHTML = h; };
+  // Every page starts with the maintenance notice when IT has set one (GET /api/settings maintenance).
+  const page = h => { $('#page').innerHTML = HP.maintBanner(S.settings) + h; };
 
   // ---------- signed out
   // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
@@ -123,7 +139,7 @@
     const tiles = [['owner', 'key', 'Owner', 'Holds the sale deed'], ['tenant', 'house-line', 'Tenant', 'Rent agreement'], ['family', 'users', 'Family', 'Added by owner']]
       .map(([k, i, l, s]) => `<button type="button" class="type-tile ${S.regType === k ? 'on' : ''}" data-act="regtype" data-t="${k}">${ic(i)}<b>${l}</b><span>${s}</span></button>`).join('');
     const google = login && S.gid ? `<div id="gbtn" class="am-google" aria-label="Continue with Google"></div><div class="am-or" role="separator"><span>or</span></div>` : '';
-    root.innerHTML = `<div class="auth auth-min"><div class="am-card">
+    root.innerHTML = `${HP.maintBanner(S.settings)}<div class="auth auth-min"><div class="am-card">
       <div class="am-brand">${HP.logo(64)}<span class="am-name">${esc(SOCIETY.name)}</span></div>
       <h2>${login ? 'Welcome back' : 'Join your society'}</h2>
       ${login ? '' : `<p class="muted am-sub">The committee approves new residents before you can sign in.</p>`}
@@ -150,6 +166,9 @@
     <span class="col" style="gap:2px"><span class="muted xs">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title">${esc(n.title)}</span></span></article>`;
   const reqRow = r => `<button class="list-row ${S.selId === r.id ? 'on' : ''}" data-act="open" data-id="${r.id}"><span class="tile">${ic(catIcon(r.category))}</span>
     <span class="col" style="gap:4px"><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · ${esc(day(r.created_at))}${isAdmin() || S.me.resident_type !== 'tenant' ? ' · ' + esc(r.flat) : ''}</span><span class="list-title">${esc(r.title)}</span><span style="align-self:flex-start">${statusTag(r)}</span></span></button>`;
+  // Vendors and society staff in one picker. Values are 'v:<id>' or 's:<id>' (ACT.assign sends vendor_id or staff_id).
+  const assignOptions = (vs, staff, d) => `<option value="">Unassigned</option><optgroup label="Vendors">${vs.map(v => `<option value="v:${v.id}" ${!d.assignee_id && d.vendor_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.trade ? ' · ' + esc(v.trade) : ''}</option>`).join('')}</optgroup>`
+    + (staff.length ? `<optgroup label="Society staff">${staff.map(s => `<option value="s:${s.id}" ${d.assignee_id === s.id ? 'selected' : ''}>${esc(s.name)}${s.on_shift ? ' · on shift' : ''} · ${esc(s.open_jobs || 0)} open jobs</option>`).join('')}</optgroup>` : '');
   const vendorOptions = (vs, cur) => `<option value="">Unassigned</option>${vs.map(v => `<option value="${v.id}" ${cur === v.id ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}`;
 
   const emType = k => EMERGENCY_TYPES.find(t => t[0] === k) || [k, 'warning', 'Emergency'];
@@ -166,14 +185,14 @@
   // ---------- pages
   const PAGES = {
     async requests() {
-      const [all, vendors] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter, source: S.srcFilter } : {}), isAdmin() ? API.vendors.list() : []]);
+      const [all, vendors, staff] = await Promise.all([API.requests.list(isAdmin() ? { status: S.filter, category: S.catFilter, source: S.srcFilter } : {}), isAdmin() ? API.vendors.list() : [], isAdmin() ? RAPI.admin.staff().catch(() => []) : []]);
       const reqs = (S.catFilter ? all.filter(isOpen) : all).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
       const sel = reqs.find(r => r.id === S.selId) || reqs.find(isOpen) || reqs[0];
       const srcName = S.srcFilter === 'telegram' ? 'Telegram' : S.srcFilter === 'whatsapp' ? 'WhatsApp' : '';
       const heading = isAdmin() ? (srcName ? `${srcName} requests` : 'All requests') : S.me.resident_type === 'family' ? `Flat ${S.me.flat} requests` : 'My requests';
       let detail = '<p class="muted">Nothing here yet. Raise your first request.</p>';
       if (sel) {
-        const d = await API.requests.get(sel.id);
+        const [d, ups] = await Promise.all([API.requests.get(sel.id), RAPI.requests.updates(sel.id).catch(() => [])]);
         const next = { open: [], assigned: ['in_progress', 'closed'], in_progress: ['closed'], closed: [] }[d.status];
         const rateBlock = d.can_rate ? `<div class="col callout" style="gap:var(--space-2)"><h4>Resolved. How was the work?</h4><div class="row" style="gap:4px">${stars('rate')}</div><span class="sm" style="color:var(--color-accent-800)">Rating closes the request. The committee sees it against the vendor.</span></div>`
           : d.status === 'closed' && !d.rating && !isAdmin() ? '<p class="callout" style="margin:0">Resolved. The flat owner rates the work to close it.</p>'
@@ -189,13 +208,30 @@
         const actionBlock = isAdmin() && d.ai && d.ai.action && d.status !== 'closed' && actLabel ? `<div class="soft-card col" style="gap:var(--space-2);border:1px solid var(--color-accent-400)"><h6 style="margin:0">${ic('magic-wand')} Suggested action</h6>
           <p style="margin:0">${actLabel}</p><div class="row"><button class="btn btn-primary" data-act="aiaction" data-id="${d.id}">${ic('check')}Approve</button><button class="btn btn-ghost" data-act="aidismiss" data-id="${d.id}">Dismiss</button></div>
           <span class="muted xs">Nothing happens until you approve.</span></div>` : '';
-        const adminBlock = isAdmin() && d.status !== 'closed' ? `<div class="soft-card col"><h6 style="margin:0">Committee</h6><div class="row"><div class="field grow"><label for="vs">Assign vendor</label><select class="input" id="vs">${vendorOptions(vendors, d.vendor_id)}</select></div>
+        const adminBlock = isAdmin() && d.status !== 'closed' ? `<div class="soft-card col"><h6 style="margin:0">Committee</h6><div class="row"><div class="field grow"><label for="vs">Assign a vendor or staff member</label><select class="input" id="vs">${assignOptions(vendors, staff, d)}</select></div>
             <button class="btn btn-secondary" data-act="assign" data-id="${d.id}" style="align-self:flex-end">Assign</button></div>
+            ${d.work_done_at ? `<p class="callout" style="margin:0">${ic('check-circle')} ${esc(d.assignee_name || 'Staff')} marked the work done on ${esc(stamp(d.work_done_at))}. Check it, then mark it resolved.</p>` : ''}
             <div class="row">${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
-        detail = `<span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · Flat ${esc(d.flat)}</span><h1 style="max-width:none">${esc(d.title)}</h1>${stepper(d, d.history)}
-          <div class="lead" style="gap:var(--space-6)"><div class="col"><div class="row" style="gap:var(--space-6);font-size:14px"><div class="col" style="gap:2px"><span class="muted xs">Assigned to</span><span>${esc(d.vendor_name || 'Not yet assigned')}</span></div>
-          <div class="col" style="gap:2px"><span class="muted xs">Raised by</span><span>${esc(d.resident_name)}</span></div><div class="col" style="gap:2px"><span class="muted xs">Raised</span><span>${esc(stamp(d.created_at))}</span></div></div>
-          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${aiBlock}${actionBlock}${adminBlock}
+        // Cost: the estimate (committee or the assigned staff), and the head's decision when it is over the approval limit.
+        const pendingCost = d.cost_status === 'pending';
+        const costBlock = isAdmin() || d.est_cost != null ? `<div class="soft-card col" style="gap:var(--space-2)"><h6 style="margin:0">${ic('currency-inr')} Cost</h6>
+            ${d.est_cost != null ? `<span>${costTag(d)}</span>${d.cost_note ? `<span class="muted sm" style="white-space:pre-line">${esc(d.cost_note)}</span>` : ''}` : '<span class="muted sm">No cost estimate yet.</span>'}
+            ${isAdmin() && pendingCost ? (isGov() ? `<form class="costdec col" data-id="${d.id}" style="gap:var(--space-2)"><div class="field"><label for="cdn${d.id}">Note for the decision (optional)</label><input class="input" id="cdn${d.id}" name="note" maxlength="300"></div>
+              <div class="row"><button class="btn btn-primary" name="decision" value="approve">${ic('check')}Approve cost</button><button class="btn btn-secondary" name="decision" value="reject">${ic('x')}Reject cost</button></div></form>`
+              : '<span class="muted sm">Waiting for the head of committee to approve. Work cannot start or close until then.</span>') : ''}
+            ${isAdmin() && d.status !== 'closed' ? `<form class="estform row" data-id="${d.id}" style="align-items:flex-end"><div class="field"><label for="ea${d.id}">${d.est_cost != null ? 'Change estimate' : 'Add estimate'} (₹)</label><input class="input" id="ea${d.id}" name="amount" type="number" min="0" step="1" required inputmode="numeric" style="max-width:180px"></div>
+              <div class="field grow"><label for="en${d.id}">Note</label><input class="input" id="en${d.id}" name="note" maxlength="300" placeholder="What the money is for"></div><button class="btn btn-secondary">Save estimate</button></form>` : ''}</div>` : '';
+        const reopenBlock = d.can_reopen ? `<form class="reopenform soft-card col" data-id="${d.id}" style="gap:var(--space-2)"><h6 style="margin:0">${ic('arrow-counter-clockwise')} Not fixed?</h6>
+            <div class="field"><label for="ro${d.id}">What is still wrong</label><textarea class="input" id="ro${d.id}" name="reason" required maxlength="500" placeholder="e.g. The tap started dripping again"></textarea></div>
+            <div class="row"><button class="btn btn-secondary">${ic('arrow-counter-clockwise')}Reopen request</button><span class="muted sm">You can reopen within 7 days of it being resolved.</span></div></form>` : '';
+        const showUpdates = ups.length || d.assignee_id;
+        const updatesBlock = showUpdates ? `<div class="col" style="gap:var(--space-2)"><h6 style="margin:0">Job updates</h6>${updatesList(d.id, ups)}</div>` : '';
+        const assigned = d.assignee_name ? `${d.assignee_name} (society staff)` : d.vendor_name || 'Not yet assigned';
+        const jobState = d.assignee_id ? (d.work_done_at ? 'Work done ' + stamp(d.work_done_at) : d.accepted_at ? 'Taken up ' + stamp(d.accepted_at) : 'Not taken up yet') : '';
+        detail = `<span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · Flat ${esc(d.flat)}${d.reopen_count ? ` · reopened ${esc(d.reopen_count)}×` : ''}</span><h1 style="max-width:none">${esc(d.title)}</h1>${stepper(d, d.history)}
+          <div class="lead" style="gap:var(--space-6)"><div class="col"><div class="row" style="gap:var(--space-6);font-size:14px"><div class="col" style="gap:2px"><span class="muted xs">Assigned to</span><span>${esc(assigned)}</span>${jobState ? `<span class="muted xs">${esc(jobState)}</span>` : ''}</div>
+          <div class="col" style="gap:2px"><span class="muted xs">Raised by</span><span>${esc(d.resident_name)}</span></div><div class="col" style="gap:2px"><span class="muted xs">Raised</span><span>${esc(stamp(d.created_at))}</span></div>${d.est_cost != null ? `<div class="col" style="gap:2px"><span class="muted xs">Cost</span><span>${costTag(d)}</span></div>` : ''}</div>
+          <p style="font-size:17px;margin:0;white-space:pre-line">${esc(d.description)}</p>${rateBlock}${reopenBlock}${aiBlock}${actionBlock}${adminBlock}${costBlock}${updatesBlock}
           <div class="col" style="gap:var(--space-2)"><h6 style="margin:0">History</h6>${d.history.map(h => `<div class="hist"><span class="muted">${esc(stamp(h.created_at))}</span><span><strong style="font-weight:600">${esc(h.action.replace('_', ' '))}</strong> ${esc(h.detail || '')} — ${esc(h.actor || 'system')}</span></div>`).join('')}</div></div>
           <figure style="margin:0">${d.has_photo ? `<img class="photo" style="height:240px;border-radius:14px" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : `<div style="height:240px;border-radius:14px;overflow:hidden">${photoSlot('No photo attached', 'camera')}</div>`}<figcaption class="muted sm">Photo attached by resident</figcaption></figure></div>`;
         S.selId = d.id;
@@ -248,7 +284,7 @@
       const [, ci, cl] = S.emType ? emType(S.emType) : [0, 'siren', ''];
       const confirm = S.emType ? `<form id="emform" class="em-confirm col" role="alertdialog" aria-label="Confirm emergency alert"><div class="row" style="gap:12px;flex-wrap:nowrap"><span class="tile lg em-ic">${ic(ci)}</span><h3 style="margin:0">Send ${esc(cl)} alert for Flat ${esc(S.me.flat)}?</h3></div>
         <p class="em-warn" style="margin:0">${ic('warning')}The committee is alerted immediately. Only send this in a real emergency. Call the emergency services yourself if someone is in danger.</p>
-        <div class="field"><label for="emn">Add a note (optional)</label><textarea class="input" id="emn" name="note" maxlength="500" placeholder="Where you are, what is happening"></textarea></div>
+        <div class="field"><label for="emn">Add a note (optional)</label><textarea class="input" id="emn" name="note" maxlength="300" placeholder="Where you are, what is happening"></textarea></div>
         <div class="row"><button class="btn btn-danger">${ic('siren')}Send alert</button><button type="button" class="btn btn-secondary" data-act="emcancel">Cancel</button></div></form>` : '';
       page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Emergency</h2><p style="margin:0;font-size:18px">Tap what is happening. You will be asked to confirm before the committee is alerted.</p>
         <div class="em-grid">${tiles}</div>${confirm}
@@ -466,7 +502,12 @@
     rtype: el => { S.rtype = el.dataset.t; document.querySelectorAll('[data-act=rtype]').forEach(b => b.classList.toggle('on', b === el)); },
     cat: el => { S.cat = el.dataset.c; document.querySelectorAll('[data-act=cat]').forEach(b => { b.classList.toggle('on', b === el); b.setAttribute('aria-pressed', b === el); }); },
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thanks for rating. Request closed.'); render(); },
-    assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
+    assign: async el => {
+      const v = $('#vs').value; if (!v) return toast('Choose a vendor or a staff member', 'error');
+      if (v.startsWith('s:')) await RAPI.requests.assignStaff(el.dataset.id, Number(v.slice(2)));
+      else await API.requests.assign(el.dataset.id, Number(v.replace(/^v:/, '')));
+      toast('Assigned'); render();
+    },
     useai: async el => { await API.requests.assign(el.dataset.id, Number(el.dataset.v)); toast('Assigned'); render(); },
     aiaction: async el => { try { const r = await API.requests.aiAction(el.dataset.id); toast(r.plate ? 'Registered ' + r.plate : r.vendor ? 'Assigned ' + r.vendor : 'Done'); } catch (e) { toast(e.message, 'error'); } render(); },
     aidismiss: async el => { try { await API.requests.aiDismiss(el.dataset.id); toast('Suggestion dismissed'); } catch (e) { toast(e.message, 'error'); } render(); },
@@ -539,14 +580,19 @@
     else if (f.id === 'gpform') { try { const r = await API.gate.pass({ visitor_name: (d.visitor_name || '').trim(), purpose: (d.purpose || '').trim(), valid_from: new Date(d.valid_from).toISOString(), valid_until: new Date(d.valid_until).toISOString() }); S.gpSel = r.id; S.gpNew = r; S.gpCancel = null; toast('Gate pass created'); render(); } catch (x) { $('#gperr').textContent = x.message; } }
     else if (f.id === 'gvform') { const inp = $('#gcode'); const v = (inp.value || '').trim(); if (!v) { inp.focus(); return; } await gateVerify(/^[\d\s]+$/.test(v) ? { code: v.replace(/\s+/g, '') } : { token: v }); }
     else if (f.id === 'vform') { await API.vendors.create(d); toast('Vendor added'); render(); }
+    else if (f.classList.contains('estform')) { const r = await RAPI.requests.estimate(f.dataset.id, Number(d.amount), (d.note || '').trim()); toast(r && r.cost_status === 'pending' ? 'Estimate saved. Sent to the head of committee for approval.' : 'Estimate saved'); render(); }
+    else if (f.classList.contains('costdec')) { const dec = e.submitter && e.submitter.value === 'reject' ? 'reject' : 'approve'; await RAPI.requests.costDecision(f.dataset.id, dec, (d.note || '').trim()); toast(dec === 'approve' ? 'Cost approved' : 'Cost rejected'); render(); }
+    else if (f.classList.contains('reopenform')) { await RAPI.requests.reopen(f.dataset.id, (d.reason || '').trim()); toast('Request reopened. The committee has been told.'); render(); }
   }));
 
-  window.HPWeb = { catPic, S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, home0, reqRow, noticeRow, emType, emCard, vendorOptions };
+  window.HPWeb = { catPic, S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, isStaff, isIT, isGov, flatNav, home0, reqRow, noticeRow, emType, emCard, vendorOptions, noRedraw: null };
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
   const poller = HP.live(async () => {
     if (!S.me) return;
-    if (['settings', 'guards', 'users', 'vehicles', 'parking', 'workers'].includes(S.page)) return; // unsaved toggles and inline forms must not be wiped
+    S.settings = await API.settings.public().catch(() => S.settings); // picks up a new or cleared maintenance notice
+    if (['settings', 'guards', 'users', 'vehicles', 'parking', 'workers', 'support', 'shift', 'accounts', 'health', 'profile'].includes(S.page)) return; // unsaved toggles and inline forms must not be wiped
+    if (window.HPWeb.noRedraw && window.HPWeb.noRedraw()) return; // e.g. a job-update form is open on My jobs
     if (S.page === 'gate') return refreshGateLog(); // never redraw the gate page: it would wipe the typed code and the result card
     const pg = $('#page'), top = pg ? pg.scrollTop : 0;
     await render();

@@ -146,6 +146,77 @@ window.HP = (() => {
 
   async function fileToUpload(form) { const fd = new FormData(form); const f = fd.get('photo'); if (f && !f.size) fd.delete('photo'); return fd; }
 
+  // ---------- roles from the faculty review (docs/roles-api.md): staff, IT, committee positions. Shared by both apps.
+  const POSITION = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin' };
+  const ROLE_LABEL = { staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard', admin: 'Committee' };
+  const positionLabel = me => (!me ? '' : me.role === 'admin' ? (POSITION[me.position] || 'Admin') : ROLE_LABEL[me.role] || TYPE[me.resident_type] || 'Resident');
+  // Governance = head or sysadmin (an empty position is an older admin account). The API decides; the UI only hides buttons.
+  const isGov = me => !!me && me.role === 'admin' && (!me.position || me.position === 'head' || me.position === 'sysadmin');
+  const PROGRESS = [['started', 'Started', 'play-circle'], ['waiting_parts', 'Waiting for parts', 'hourglass'], ['done', 'Work done', 'check-circle']];
+  const progressLabel = k => (PROGRESS.find(p => p[0] === k) || [k, k])[1];
+  const progressIcon = k => (PROGRESS.find(p => p[0] === k) || [0, 0, 'note-pencil'])[2];
+  const rupees = n => (n == null || n === '' ? '' : '₹' + Number(n).toLocaleString('en-IN'));
+  function costTag(r) {
+    if (!r || r.est_cost == null) return '';
+    const m = { approved: ['tag-accent', 'Cost approved'], pending: ['tag-accent-2', 'Cost waiting for approval'], rejected: ['tag-neutral', 'Cost rejected'] }[r.cost_status] || ['tag-outline', 'Estimate'];
+    return `<span class="tag ${m[0]}">${esc(m[1])} · ${esc(rupees(r.est_cost))}</span>`;
+  }
+  const updatePhotoUrl = (rid, uid) => `/api/requests/${encodeURIComponent(rid)}/updates/${encodeURIComponent(uid)}/photo`;
+  // Job updates timeline (staff progress notes). Newest first.
+  function updatesList(rid, ups) {
+    if (!ups || !ups.length) return '<p class="muted" style="margin:0">No job updates yet.</p>';
+    return `<ol class="jt" aria-label="Job updates">${[...ups].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || b.id - a.id).map(u => `<li class="jt-i"><span class="jt-ic">${ic(progressIcon(u.progress))}</span>
+      <span class="col" style="gap:2px;min-width:0"><span><b>${esc(progressLabel(u.progress))}</b> <span class="muted sm">${esc(stamp(u.created_at))} · ${esc(u.author || '')}</span></span>${u.note ? `<span style="white-space:pre-line">${esc(u.note)}</span>` : ''}
+      ${u.has_photo ? `<a href="${updatePhotoUrl(rid, u.id)}" target="_blank" rel="noopener"><img class="jt-photo" src="${updatePhotoUrl(rid, u.id)}" alt="Photo from the job update" loading="lazy"></a>` : ''}</span></li>`).join('')}</ol>`;
+  }
+  const TICKET_KINDS = [['bug', 'Something is broken'], ['question', 'A question'], ['access', 'Sign-in or access'], ['other', 'Something else']];
+  const ticketTag = s => { const m = { open: ['tag-accent-2', 'Open'], in_progress: ['tag-accent', 'In progress'], resolved: ['tag-outline', 'Resolved'] }[s] || ['tag-neutral', s]; return `<span class="tag ${m[0]}">${esc(m[1])}</span>`; };
+  const whenText = s => { const d = /T/.test(String(s)) ? new Date(s) : dt(String(s)); return d && !isNaN(d) ? `${d.getDate()} ${MON[d.getMonth()]}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : String(s || ''); };
+  const maintBanner = st => (st && st.maintenance && st.maintenance.message ? `<div class="maint-banner" role="status">${ic('wrench')}<span><b>Maintenance:</b> ${esc(st.maintenance.message)}${st.maintenance.until ? ` <span class="maint-until">until ${esc(whenText(st.maintenance.until))}</span>` : ''}</span></div>` : '');
+  const q = p => { const e = Object.entries(p || {}).filter(([, v]) => v !== '' && v != null); return e.length ? '?' + new URLSearchParams(e) : ''; };
+  const enc = encodeURIComponent;
+  // Role API (docs/roles-api.md). Kept here so /m/ can use it without another script tag.
+  const RAPI = {
+    staff: {
+      jobs: () => api('GET', '/api/staff/jobs'),
+      accept: id => api('POST', `/api/staff/jobs/${enc(id)}/accept`),
+      update: (id, body) => api('POST', `/api/staff/jobs/${enc(id)}/update`, body), // FormData (progress, note, photo) or JSON
+      shift: () => api('GET', '/api/staff/shift'),
+      punchIn: () => api('POST', '/api/staff/punch-in'),
+      punchOut: body => api('POST', '/api/staff/punch-out', body),
+    },
+    requests: {
+      updates: id => api('GET', `/api/requests/${enc(id)}/updates`),
+      estimate: (id, amount, note) => api('POST', `/api/requests/${enc(id)}/estimate`, { amount, note }),
+      costDecision: (id, decision, note) => api('POST', `/api/requests/${enc(id)}/cost-decision`, { decision, note }),
+      reopen: (id, reason) => api('POST', `/api/requests/${enc(id)}/reopen`, { reason }),
+      assignStaff: (id, staffId) => api('POST', `/api/requests/${enc(id)}/assign`, { staff_id: staffId }),
+    },
+    admin: {
+      staff: () => api('GET', '/api/admin/staff'),
+      approvals: () => api('GET', '/api/admin/approvals'),
+      reports: month => api('GET', '/api/admin/reports/monthly' + q({ month })),
+      attendance: days => api('GET', '/api/admin/attendance' + q({ days })),
+      accounts: () => api('GET', '/api/admin/accounts'),
+      createAccount: body => api('POST', '/api/admin/accounts', body),
+      patchAccount: (id, body) => api('PATCH', `/api/admin/accounts/${enc(id)}`, body),
+      removeAccount: id => api('DELETE', `/api/admin/accounts/${enc(id)}`),
+    },
+    support: {
+      list: status => api('GET', '/api/support' + q({ status })),
+      get: id => api('GET', `/api/support/${enc(id)}`),
+      create: body => api('POST', '/api/support', body),
+      reply: (id, body, status) => api('POST', `/api/support/${enc(id)}/reply`, status ? { body, status } : { body }),
+    },
+    help: { guides: () => api('GET', '/api/help/guides') },
+    it: {
+      health: () => api('GET', '/api/it/health'),
+      backupUrl: '/api/it/backup',
+      maintenance: (message, until) => api('PUT', '/api/it/maintenance', until ? { message, until } : { message }),
+    },
+  };
+
   return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
-    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge };
+    STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge,
+    POSITION, positionLabel, isGov, PROGRESS, progressLabel, rupees, costTag, updatesList, updatePhotoUrl, TICKET_KINDS, ticketTag, maintBanner, whenText, RAPI };
 })();

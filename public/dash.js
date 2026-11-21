@@ -166,7 +166,7 @@
     const ov = await API.admin.overview().catch(() => null);
     const people = await API.admin.allUsers().catch(() => []);
     D.reqs = reqs; D.people = Array.isArray(people) ? people : []; D.notices = await API.notices.list().catch(() => []);
-    const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id);
+    const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id && !r.assignee_id); // staff-assigned work counts as assigned
     const chipList = [{ l: 'Approvals', icon: 'user-check', go: 'approvals', n: s.pending_users || '' }, { l: 'Requests', icon: 'list-checks', go: 'requests' },
       { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }, { l: 'Notices', icon: 'megaphone', go: 'notices', show: feat('notices') },
       { l: 'Vehicles', icon: 'car', go: 'vehicles', show: allowed('vehicles') }, { l: 'Parking', icon: 'garage', go: 'parking', show: allowed('parking') }, { l: 'Workers', icon: 'hard-hat', go: 'workers' },
@@ -187,7 +187,7 @@
     const openCards = a.open.slice(0, 12).map(r => `<article class="ds-card ds-work"><button type="button" class="ds-work-open" data-act="open" data-id="${r.id}">${art(catIcon(r.category), 'dark', r.has_photo ? r.id : 0, r.category)}
       <span class="ds-body"><span class="ds-meta">${rid(r)} · Flat ${esc(r.flat)} · <span class="${overdue(r) ? 'late' : ''}">${esc(ageLabel(r.created_at))}</span></span><span class="ds-title">${esc(r.title)}</span><span class="ds-foot">${statusTag(r)}</span></span></button>
       <div class="field ds-assign"><label class="sr" for="as${r.id}">Assign ${esc(r.title)}</label><select class="input" id="as${r.id}" data-change="assign" data-id="${r.id}">${W.vendorOptions(vendors, r.vendor_id)}</select>
-      ${r.vendor_id ? `<button type="button" class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</div></article>`);
+      ${r.assignee_name ? `<span class="muted sm">Staff: ${esc(r.assignee_name)}</span>` : ""}${r.vendor_id || r.assignee_id ? `<button type="button" class="btn btn-secondary" data-act="move" data-id="${r.id}" data-s="closed">Mark resolved</button>` : ''}</div></article>`);
     const vc = vendors.length ? s.vendor_ratings.map(v => `<div class="ds-card ds-person"><span class="ds-avatar">${esc(initials(v.name))}</span><span class="ds-body"><span class="ds-title">${esc(v.name)}</span>
       <span class="ds-meta">${v.avg ? ic('star') + ' ' + v.avg + ' / 5' : 'Not rated yet'}</span><span class="ds-meter"><i style="width:${v.avg ? v.avg / 5 * 100 : 0}%"></i></span></span></div>`) : [];
     const act = audit.slice(0, 8).map(x => `<div class="ds-act"><span class="muted sm">${esc(stamp(x.created_at))}</span><span><b>${esc(x.action.replace('_', ' '))}</b> · ${esc(x.entity)} ${esc(x.entity_id)} <span class="muted">by ${esc(x.actor || 'system')}</span></span></div>`).join('');

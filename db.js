@@ -93,6 +93,27 @@ function openDb(file) {
     db.exec("ALTER TABLE whatsapp_messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'whatsapp'");
   if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'telegram_id'))
     db.exec('ALTER TABLE users ADD COLUMN telegram_id TEXT');
+  // Roles from the faculty review (2026-11-21): committee position (member/head/sysadmin), staff assignment, cost approval,
+  // reopen, staff shifts and the IT support queue. Additive and safe to re-run.
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'position'))
+    db.exec('ALTER TABLE users ADD COLUMN position TEXT');
+  const rcols = db.prepare('PRAGMA table_info(requests)').all().map(c => c.name);
+  for (const [name, type] of [['assignee_id', 'INTEGER'], ['accepted_at', 'TEXT'], ['work_done_at', 'TEXT'], ['est_cost', 'REAL'], ['cost_status', 'TEXT'], ['cost_note', 'TEXT'], ['reopen_count', 'INTEGER NOT NULL DEFAULT 0'], ['closed_at', 'TEXT']])
+    if (!rcols.includes(name)) db.exec('ALTER TABLE requests ADD COLUMN ' + name + ' ' + type);
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_updates(
+    id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL REFERENCES requests(id), user_id INTEGER NOT NULL REFERENCES users(id),
+    progress TEXT NOT NULL, note TEXT, photo TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS staff_shifts(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), punch_in TEXT NOT NULL DEFAULT (datetime('now')),
+    punch_out TEXT, handover_to INTEGER, handover_note TEXT);
+  CREATE TABLE IF NOT EXISTS support_tickets(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), subject TEXT NOT NULL, body TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'question', status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS support_replies(
+    id INTEGER PRIMARY KEY, ticket_id INTEGER NOT NULL REFERENCES support_tickets(id), user_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
@@ -121,6 +142,12 @@ function seedDemoAccounts(db) {
   add.run('Tenant One', 'tenant1@sahyadri.test', 'B-102', 'tenant', hash, 'resident');
   add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
   add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
+  add.run('Staff One', 'staff1@sahyadri.test', null, null, hash, 'staff');
+  add.run('IT Support', 'it1@sahyadri.test', null, null, hash, 'it');
+  add.run('Committee Member', 'member1@sahyadri.test', null, null, hash, 'admin');
+  add.run('Committee Head', 'head1@sahyadri.test', null, null, hash, 'admin');
+  db.prepare("UPDATE users SET position='member' WHERE email='member1@sahyadri.test' AND position IS NULL").run();
+  db.prepare("UPDATE users SET position='head' WHERE email='head1@sahyadri.test' AND position IS NULL").run();
   // Optional Telegram test resident (flat T-101). The free hosting plan wipes the database on sleep and redeploy,
   // which unlinked the tester every time; recreating it at boot keeps the bot working. Phone and Telegram id
   // come from the environment only (SEED_TELEGRAM_PHONE, optional SEED_TELEGRAM_ID), never the repo.

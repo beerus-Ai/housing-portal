@@ -11,7 +11,11 @@
   const KINDS = ['Co-operative Housing Society', 'Apartment Owners Association', 'Residential Complex', 'Gated Community'];
   const ST = { ai: null, digest: '', settings: null, access: null, draft: null, orig: null, users: [], guards: [], pw: null, del: null, gdel: null, q: '', stf: '' };
   const clone = o => JSON.parse(JSON.stringify(o || {}));
-  const sec = () => (SECS.some(s => s[0] === S.setSec) ? S.setSec : 'general');
+  // A committee member (position 'member') can manage residents but not settings, access rules or guard accounts (the API returns 403 anyway).
+  const gov = () => HP.isGov(S.me);
+  const MEMBER_SECS = ['users', 'guards', 'estate', 'ai'];
+  const secs = () => (gov() ? SECS : SECS.filter(s => MEMBER_SECS.includes(s[0])));
+  const sec = () => (secs().some(s => s[0] === S.setSec) ? S.setSec : secs()[0][0]);
   const setErr = m => { const e = $('#sterr'); if (e) e.textContent = m || ''; };
   const run = fn => async (...a) => { setErr(''); try { await fn(...a); } catch (x) { setErr(x.message); toast(x.message, 'error'); } };
 
@@ -25,6 +29,7 @@
     return `<h2>General</h2><p class="muted">Shown on the sign-in page, the menu and in messages to residents.</p>
       <form id="stgeneral" class="col st-form">${field('stn', 'Society name', `<input class="input" id="stn" name="society_name" required maxlength="100" value="${esc(s.society_name)}">`)}
       ${field('stk', 'Type of society', `<select class="input" id="stk" name="society_kind">${kinds.map(k => `<option ${k === s.society_kind ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>`)}
+      ${field('stal', 'Cost approval limit (rupees)', `<input class="input" id="stal" name="approval_limit" type="number" min="0" step="1" inputmode="numeric" style="max-width:220px" value="${esc(s.approval_limit != null ? s.approval_limit : 10000)}">`, 'Cost estimates above this amount wait for the head of committee to approve.')}
       ${saveRow('Save')}</form>`;
   };
 
@@ -93,12 +98,12 @@
       <div class="field"><label class="sr" for="stsf">Status</label><select class="input" id="stsf"><option value="">Any status</option>${['approved', 'pending', 'suspended', 'rejected'].map(s => `<option value="${s}" ${ST.stf === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></div><span class="muted sm" id="stcount"></span></div>
     <ul class="st-users" id="stlist"></ul>`;
 
-  const guards = () => `<h2>Guards</h2><p class="muted">Guards sign in to the gate screen only.</p>
+  const guards = () => `<h2>Guards</h2><p class="muted">Guards sign in to the gate screen only.${gov() ? '' : ' Only the head of committee or the admin can add or remove guards.'}</p>
     <ul class="st-users">${ST.guards.map(g => `<li class="st-user"><div class="st-user-h"><span class="avatar light">${esc(initials(g.name))}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(g.name)}</b><span class="muted sm st-ell">${esc(g.email)}</span></span>
-      ${ST.gdel === g.id ? `<button type="button" class="btn btn-danger" data-act="stgdok" data-id="${g.id}">Remove ${esc(g.name)}?</button><button type="button" class="btn btn-secondary" data-act="stgdkeep">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="stgd" data-id="${g.id}" aria-label="Remove ${esc(g.name)}">${ic('trash')}Remove</button>`}</div></li>`).join('') || '<li class="muted">No guards yet.</li>'}</ul>
-    <form id="stguard" class="col st-form st-card"><h3>Add a guard</h3>${field('sgn', 'Name', '<input class="input" id="sgn" name="name" required maxlength="100">')}
+      ${!gov() ? '' : ST.gdel === g.id ? `<button type="button" class="btn btn-danger" data-act="stgdok" data-id="${g.id}">Remove ${esc(g.name)}?</button><button type="button" class="btn btn-secondary" data-act="stgdkeep">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="stgd" data-id="${g.id}" aria-label="Remove ${esc(g.name)}">${ic('trash')}Remove</button>`}</div></li>`).join('') || '<li class="muted">No guards yet.</li>'}</ul>
+    ${gov() ? `<form id="stguard" class="col st-form st-card"><h3>Add a guard</h3>${field('sgn', 'Name', '<input class="input" id="sgn" name="name" required maxlength="100">')}
       ${field('sge', 'Email', '<input class="input" id="sge" name="email" type="email" required autocomplete="off">')}${field('sgp', 'Temporary password (8+ characters)', '<input class="input" id="sgp" name="password" type="password" required minlength="8" autocomplete="new-password">')}
-      <div class="row"><button class="btn btn-primary">Add guard</button></div></form>`;
+      <div class="row"><button class="btn btn-primary">Add guard</button></div></form>` : ''}`;
 
   // ---------- page
   PAGES.settings = async () => {
@@ -113,7 +118,7 @@
     } catch (x) { loadErr = x.message; }
     const body = loadErr ? '' : { general, access, users, guards, estate, features, signin, ai: aiPanel }[s]();
     page(`<div class="st"><header class="st-head"><h1>Settings</h1></header><div class="st-grid">
-      <nav class="st-nav" aria-label="Settings sections">${SECS.map(([k, l, i]) => `<button type="button" class="st-tab ${k === s ? 'on' : ''}" data-act="stsec" data-s="${k}" ${k === s ? 'aria-current="page"' : ''}>${ic(i)}<span>${l}</span></button>`).join('')}</nav>
+      <nav class="st-nav" aria-label="Settings sections">${secs().map(([k, l, i]) => `<button type="button" class="st-tab ${k === s ? 'on' : ''}" data-act="stsec" data-s="${k}" ${k === s ? 'aria-current="page"' : ''}>${ic(i)}<span>${l}</span></button>`).join('')}</nav>
       <section class="st-panel" aria-live="polite"><p class="err" id="sterr" role="alert">${esc(loadErr)}</p>${body}</section></div></div>`);
     if (!loadErr && s === 'access') paintDirty();
     if (!loadErr && s === 'users') drawUsers();
@@ -158,7 +163,10 @@
     const d = Object.fromEntries(new FormData(f));
     try {
       if (f.id === 'stgeneral') {
-        const r = await API.admin.setSettings({ society_name: d.society_name.trim(), society_kind: d.society_kind });
+        const body = { society_name: d.society_name.trim(), society_kind: d.society_kind };
+        if (d.approval_limit !== undefined && d.approval_limit !== '') body.approval_limit = Number(d.approval_limit);
+        const r = await API.admin.setSettings(body);
+        if (body.approval_limit != null) (ST.settings = ST.settings || {}).approval_limit = body.approval_limit;
         ST.settings = Object.assign(ST.settings || {}, { society_name: d.society_name.trim(), society_kind: d.society_kind }, r && r.society_name ? r : {});
         Object.assign(SOCIETY, { name: ST.settings.society_name, kind: ST.settings.society_kind }); document.title = SOCIETY.name + ' Portal'; setErr(''); await render(); toast('Saved');
       } else if (f.id === 'stfeatures') {

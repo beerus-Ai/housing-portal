@@ -5,7 +5,7 @@ Recorded 2026-11-04, updated 2026-11-14. Only what was actually run is marked as
 ## 1. Automated suites
 | Suite | Command | Count | Result |
 | --- | --- | --- | --- |
-| Node API (`node:test`) | `npm test` | 65 | 65 pass, 0 fail on 2026-11-14 (includes `telegram`, `ai-action`, `classify-n8n`, `seed-telegram`, `email-desk`) |
+| Node API (`node:test`) | `npm test` | 73 | 73 pass, 0 fail on 2026-11-21 (includes `roles` for the faculty-review roles, `telegram`, `ai-action`, `classify-n8n`, `seed-telegram`, `email-desk`) |
 | Java backend (JUnit 5) | `cd backend && ./gradlew test` | 81 | Green in CI on PR #18 (H2 and PostgreSQL 16 jobs). Telegram and the email desk are not ported to Java yet |
 | React (Vitest) | `cd frontend && npm test` | 67 | Green in CI on PR #18 |
 | CI | GitHub Actions on PR #18 | 5 jobs | All green (runs 43481904761, 43484067380) |

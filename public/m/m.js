@@ -9,6 +9,11 @@
   const S = { me: null, leaseId: null, tab: 'home', sub: null, selId: null, cat: 'plumbing', photo: null, rtype: 'family', regType: 'owner', mode: 'login', sheet: null, note: '', pf: null, emgActive: 0, idx: { reqs: [], notices: [] } };
   const isAdmin = () => S.me.role === 'admin';
   const isGuard = () => S.me.role === 'guard';
+  const isStaff = () => S.me.role === 'staff';
+  // Roles this app does not lay out (IT) get a short note and a link to the web app.
+  const webOnly = () => S.me.role === 'it';
+  const { RAPI, costTag, updatesList, positionLabel, PROGRESS, TICKET_KINDS, ticketTag } = HP;
+  S.mj = { form: null, ticket: null };
   // permission / feature gates from GET /api/me; anything missing counts as allowed
   const can = k => isAdmin() || !Array.isArray(S.me.permissions) || S.me.permissions.includes(k);
   const feat = k => !S.me.features || S.me.features[k] !== false;
@@ -18,7 +23,8 @@
   const TABBY = ['approvals', 'requests', 'emergency', 'notices'];
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['menu', 'Menu', 'squares-four']],
-    guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['profile', 'Profile', 'user-circle']],
+    guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['help', 'Help', 'question'], ['profile', 'Profile', 'user-circle']],
+    staff: () => [['jobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ['help', 'Help', 'question'], ['support', 'Support', 'lifebuoy'], ['profile', 'Profile', 'user-circle']],
     admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['menu', 'Menu', 'squares-four']],
   };
   // which bottom tab is highlighted: every sub-screen belongs to a parent tab; anything that is not a tab belongs to Menu
@@ -30,7 +36,7 @@
   };
   // consistent sub-screen header: back arrow + large title
   const head = (title, to, act = 'tab') => `<div class="sub-head"><button class="back-ic" data-act="${act}" data-tab="${esc(to)}" aria-label="Back">${ic('arrow-left')}</button><h1 class="am-h1">${esc(title)}</h1></div>`;
-  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
+  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.mj.form = null; S.mj.ticket = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
   const dateShort = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const back = (label, to) => `<button class="back" data-act="tab" data-tab="${to}">${ic('caret-left')}${esc(label)}</button>`;
@@ -102,8 +108,15 @@
   async function doRender() {
     if (!S.me) return authView();
     stopScan();
-    if (isGuard() && !['gate', 'gatelog', 'profile'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
-    const tabs = TABS[isGuard() ? 'guard' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
+    if (webOnly()) {
+      app.innerHTML = `<div class="phone"><main class="screen" id="screen">${HP.maintBanner(S.settings)}<h1 class="am-h1">Hello, ${esc(firstName(S.me.name))}</h1>
+        <div class="m-card"><h3>Use the web app</h3><p style="margin:0">The ${esc(positionLabel(S.me))} screens (support queue, system health, backups) are on the web app. It works on a phone too.</p>
+        <a class="btn btn-primary btn-lg" href="/?web">${ic('browser')}Open the web app</a></div><button class="btn btn-secondary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button></main></div>`;
+      return;
+    }
+    if (isGuard() && !['gate', 'gatelog', 'profile', 'help', 'support'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
+    if (isStaff() && !['jobs', 'shift', 'help', 'support', 'profile'].includes(S.tab)) { S.tab = 'jobs'; S.sub = null; S.selId = null; }
+    const tabs = TABS[isGuard() ? 'guard' : isStaff() ? 'staff' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
     let pending = 0;
     if (isAdmin()) {
       pending = (await API.admin.users('pending').catch(() => [])).length;
@@ -111,11 +124,11 @@
     }
     const cur = activeTab(tabs);
     const bar = tabs.map(([k, l, i]) => `<button class="tab ${cur === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${cur === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="badge-pink">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
-    const fab = !isAdmin() && !isGuard() && !S.sub && !S.selId && ['home', 'requests', 'emergency', 'alerts', 'menu'].includes(S.tab) ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
+    const fab = !isAdmin() && !isGuard() && !isStaff() && !S.sub && !S.selId && ['home', 'requests', 'emergency', 'alerts', 'menu'].includes(S.tab) ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
     app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : tabs.length < 4 ? 'three' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
-  const screen = h => { $('#screen').innerHTML = h; wirePhotos(); };
+  const screen = h => { $('#screen').innerHTML = HP.maintBanner(S.settings) + h; wirePhotos(); };
 
   // ---------- signed out
   // Sign-in/registration building blocks: icon inside the input, show/hide password toggle.
@@ -221,8 +234,12 @@
     async requests() {
       const reqs = (await API.requests.list()).sort((x, y) => isOpen(y) - isOpen(x) || y.id - x.id); // open work first
       if (S.selId) {
-        const d = await API.requests.get(S.selId);
+        const [d, ups] = await Promise.all([API.requests.get(S.selId), RAPI.requests.updates(S.selId).catch(() => [])]);
         const vendors = isAdmin() ? await API.vendors.list() : [];
+        const reopen = d.can_reopen ? `<form id="mreopen" class="m-card" data-id="${d.id}"><h3>Not fixed?</h3><div class="field"><label for="mro">What is still wrong</label><textarea class="input" id="mro" name="reason" required maxlength="500"></textarea></div>
+          <button class="btn btn-secondary btn-lg">${ic('arrow-counter-clockwise')}Reopen request</button></form>` : '';
+        const who = d.assignee_name ? `${d.assignee_name} (society staff)` : d.vendor_name || '';
+        const jobs = ups.length || d.assignee_id ? `<div class="m-card"><h3>Job updates</h3>${updatesList(d.id, ups)}</div>` : '';
         const next = { open: [], assigned: ['in_progress', 'closed'], in_progress: ['closed'], closed: [] }[d.status];
         const rate = d.can_rate ? `<div class="col callout" style="gap:var(--space-1)"><span class="list-title" style="font-size:16px">Rate the work to close it</span><div class="row" style="justify-content:space-between;gap:0;flex-wrap:nowrap">${stars('rate')}</div></div>`
           : d.status === 'closed' && !d.rating && !isAdmin() ? '<p class="callout sm" style="margin:0">Resolved. The flat owner rates the work to close it.</p>'
@@ -231,7 +248,8 @@
           ${next.map(s => `<button class="btn btn-primary" data-act="move" data-id="${d.id}" data-s="${s}">${s === 'closed' ? 'Mark resolved' : 'Start work'}</button>`).join('')}</div></div>` : '';
         return screen(`${head('Request ' + rid(d), 'requests')}<div class="m-photo">${d.has_photo ? `<img class="photo" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : photoSlot('No photo attached', 'camera')}</div>
           <span class="kicker">${rid(d)} · ${esc(catLabel(d.category))} · ${esc(d.flat)}</span><h3>${esc(d.title)}</h3><p class="sm" style="margin:0;white-space:pre-line">${esc(d.description)}</p>
-          ${stepper(d, d.history, true)}${adm}${rate}`);
+          ${who ? `<span class="sm">Assigned to <b>${esc(who)}</b></span>` : ''}${d.est_cost != null ? `<span>${costTag(d)}</span>` : ''}
+          ${stepper(d, d.history, true)}${adm}${rate}${reopen}${jobs}`);
       }
       screen(`<h1 class="am-h1">${isAdmin() ? 'Requests' : S.me.resident_type === 'family' ? 'Flat requests' : 'My requests'}</h1>${reqs.map(reqCard).join('') || '<p class="muted">Nothing here yet.</p>'}`);
     },
@@ -269,7 +287,7 @@
     async notices() {
       const ns = await API.notices.list();
       const form = isAdmin() ? `<form id="nform" class="m-card"><h3>Post a notice</h3><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150"></div>
-        <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><button class="btn btn-primary btn-lg">${ic('megaphone')}Post and notify</button></form>` : '';
+        <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="3000"></textarea></div><button class="btn btn-primary btn-lg">${ic('megaphone')}Post and notify</button></form>` : '';
       screen(`${head('Notices', 'menu')}${form}${ns.map(noticeCard).join('') || '<p class="muted">No notices.</p>'}`);
     },
 
@@ -300,7 +318,7 @@
 
     async menu() {
       const groups = menuGroups().map(([t, items]) => [t, items.filter(i => i[4])]).filter(g => g[1].length);
-      screen(`<h1 class="am-h1">Menu</h1>${groups.map(([t, items]) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2>${items.map(([i, l, d, k]) => `<button class="am-list" data-act="${TABBY.includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${esc(k)}" data-k="${esc(k)}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(l)}</b><span class="muted sm">${esc(d)}</span></span>${ic('caret-right')}</button>`).join('')}</section>`).join('')}<button class="am-list" data-act="logout"><span class="am-li">${ic('sign-out')}</span><span class="col grow" style="gap:0;text-align:left"><b>Sign out</b><span class="muted sm">${esc(S.me.name)}</span></span></button>`);
+      screen(`<h1 class="am-h1">Menu</h1>${groups.map(([t, items]) => `<section class="am-sec"><h2 class="am-h2">${esc(t)}</h2>${items.map(([i, l, d, k]) => `<button class="am-list" data-act="${TABBY.includes(k) && isAdmin() ? 'tab' : 'quick'}" data-tab="${esc(k)}" data-k="${esc(k)}"><span class="am-li">${ic(i)}</span><span class="col grow" style="gap:0;text-align:left"><b>${esc(l)}</b><span class="muted sm">${esc(d)}</span></span>${ic('caret-right')}</button>`).join('')}</section>`).join('')}${isAdmin() ? `<a class="am-list" href="/?web"><span class="am-li">${ic('browser')}</span><span class="col grow" style="gap:0;text-align:left"><b>Committee tools on the web</b><span class="muted sm">Cost approvals, reports, attendance, accounts</span></span>${ic('caret-right')}</a>` : ''}<button class="am-list" data-act="logout"><span class="am-li">${ic('sign-out')}</span><span class="col grow" style="gap:0;text-align:left"><b>Sign out</b><span class="muted sm">${esc(S.me.name)}</span></span></button>`);
     },
 
     async vehicles() {
@@ -344,8 +362,66 @@
         <h3>Recent alerts for your flat</h3>${list.map(e => emgRow(e, false)).join('') || '<p class="muted">No alerts raised.</p>'}${sheet}`);
     },
 
+    // ---------- staff: My jobs (take up, update progress, cost estimate)
+    async jobs() {
+      const [j, sh] = await Promise.all([RAPI.staff.jobs(), RAPI.staff.shift().catch(() => null)]);
+      const open = (j && j.open) || [], recent = (j && j.recent) || [], F = S.mj.form;
+      const card = r => {
+        const k = F && F.id === r.id ? F.kind : null;
+        const form = k === 'update' ? `<form id="mjupd" class="col" data-id="${r.id}" style="gap:10px"><div class="field"><label for="mjp">Progress</label><select class="input" id="mjp" name="progress">${PROGRESS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
+            <div class="field"><label for="mjn">Note</label><textarea class="input" id="mjn" name="note" maxlength="1000" placeholder="What you did, what is left"></textarea></div>
+            <div class="field"><label for="mjph">Photo (optional)</label><input class="input" id="mjph" name="photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></div>
+            <div class="two"><button class="btn btn-primary btn-lg">Send</button><button type="button" class="btn btn-secondary btn-lg" data-act="mjclose">Cancel</button></div></form>`
+          : k === 'est' ? `<form id="mjest" class="col" data-id="${r.id}" style="gap:10px"><div class="field"><label for="mja">Amount (₹)</label><input class="input" id="mja" name="amount" type="number" min="0" step="1" required inputmode="numeric"></div>
+            <div class="field"><label for="mjen">What it is for</label><input class="input" id="mjen" name="note" maxlength="300"></div>
+            <div class="two"><button class="btn btn-primary btn-lg">Save</button><button type="button" class="btn btn-secondary btn-lg" data-act="mjclose">Cancel</button></div></form>` : '';
+        return `<div class="m-card"><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · Flat ${esc(r.flat)}</span><span class="list-title" style="font-size:19px">${esc(r.title)}</span>
+          <div class="row" style="gap:6px">${statusTag(r)}${costTag(r)}${r.work_done_at ? '<span class="tag tag-outline">Work done</span>' : ''}</div>
+          ${r.description ? `<span class="sm" style="white-space:pre-line">${esc(r.description)}</span>` : ''}
+          ${r.cost_status === 'pending' ? '<p class="callout sm" style="margin:0">Cost waiting for the head of committee.</p>' : r.cost_status === 'rejected' ? '<p class="callout sm" style="margin:0">Cost rejected. Talk to the committee.</p>' : ''}
+          ${!r.accepted_at ? `<button class="btn btn-primary btn-lg" data-act="mjaccept" data-id="${r.id}">${ic('hand-arrow-up')}Take up job</button>` : ''}
+          ${k ? form : `<div class="two"><button class="btn btn-secondary btn-lg" data-act="mjform" data-k="update" data-id="${r.id}">${ic('note-pencil')}Progress</button><button class="btn btn-secondary btn-lg" data-act="mjform" data-k="est" data-id="${r.id}">${ic('currency-inr')}Cost</button></div>`}</div>`;
+      };
+      const shiftCard = sh && sh.current ? `<button class="m-card" data-act="tab" data-tab="shift" style="text-align:left;border:0;font:inherit;color:inherit;width:100%"><span class="tag tag-accent" style="align-self:flex-start">On shift</span><span class="sm">Since ${esc(stamp(sh.current.punch_in))}. Tap to punch out.</span></button>`
+        : `<div class="m-card"><span class="sm">You are not on shift.</span><button class="btn btn-primary btn-lg" data-act="mjin">${ic('sign-in')}Punch in</button></div>`;
+      screen(`<h1 class="am-h1">My jobs</h1>${shiftCard}${open.map(card).join('') || '<p class="callout" style="margin:0">No open jobs right now.</p>'}
+        ${recent.length ? `<h2 class="am-h2">Closed this week</h2>${recent.map(r => `<div class="m-card"><span class="muted xs">${rid(r)} · Flat ${esc(r.flat)}</span><b>${esc(r.title)}</b>${r.rating ? `<span class="sm">${ic('star')} ${esc(r.rating)} / 5</span>` : ''}</div>`).join('')}` : ''}`);
+    },
+    // ---------- staff: Shift (punch in / out with hand-over)
+    async shift() {
+      const s = await RAPI.staff.shift(), cur = s.current, mates = (s.colleagues || []).filter(c => c.id !== S.me.id);
+      const body = cur ? `<form id="mjout" class="m-card"><span class="tag tag-accent" style="align-self:flex-start">On shift since ${esc(stamp(cur.punch_in))}</span><h3>Punch out</h3>
+          <div class="field"><label for="mjho">Hand over my open jobs to</label><select class="input" id="mjho" name="handover_to"><option value="">Nobody</option>${mates.map(c => `<option value="${c.id}">${esc(c.name)}${c.on_shift ? ' · on shift' : ''}</option>`).join('')}</select></div>
+          <div class="field"><label for="mjhn">Hand-over note</label><textarea class="input" id="mjhn" name="note" maxlength="500"></textarea></div><button class="btn btn-primary btn-lg">${ic('sign-out')}Punch out</button></form>`
+        : `<div class="m-card"><span class="sm">Not on shift.</span><button class="btn btn-primary btn-lg" data-act="mjin">${ic('sign-in')}Punch in</button></div>`;
+      screen(`<h1 class="am-h1">Shift</h1>${body}<h2 class="am-h2">Recent shifts</h2>${(s.recent || []).map(x => `<div class="m-card"><span class="sm"><b>${esc(stamp(x.punch_in))}</b> to ${x.punch_out ? esc(stamp(x.punch_out)) : 'now'}</span>${x.hours != null ? `<span class="muted xs">${esc(Math.round(x.hours * 10) / 10)} hours</span>` : ''}${x.handover_to_name ? `<span class="xs">Handed over to ${esc(x.handover_to_name)}</span>` : ''}</div>`).join('') || '<p class="muted">No shifts yet.</p>'}`);
+    },
+    // ---------- everyone: Help and Support
+    async help() {
+      const gs = await RAPI.help.guides();
+      screen(`<h1 class="am-h1">Help</h1>${gs.map(g => `<div class="m-card"><h3>${esc(g.title)}</h3><ol class="rl-steps">${(g.steps || []).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`).join('') || '<p class="muted">No guides yet.</p>'}
+        <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="support">${ic('lifebuoy')}Report a portal problem</button>`);
+    },
+    async support() {
+      const back = isStaff() ? '' : head('Support', isGuard() ? 'help' : 'menu');
+      if (S.mj.ticket) {
+        const t = await RAPI.support.get(S.mj.ticket);
+        return screen(`<div class="sub-head"><button class="back-ic" data-act="mjtback" aria-label="Back">${ic('arrow-left')}</button><h1 class="am-h1">Ticket #${esc(t.id)}</h1></div>
+          <div class="m-card"><b>${esc(t.subject)}</b>${ticketTag(t.status)}<span class="sm" style="white-space:pre-line">${esc(t.body)}</span></div>
+          ${(t.replies || []).map(r => `<div class="m-card"><span class="muted xs"><b>${esc(r.author)}</b> · ${esc(stamp(r.created_at))}</span><span class="sm" style="white-space:pre-line">${esc(r.body)}</span></div>`).join('')}
+          <form id="mjreply" class="m-card" data-id="${t.id}"><div class="field"><label for="mjrb">Reply</label><textarea class="input" id="mjrb" name="body" required maxlength="3000"></textarea></div><button class="btn btn-primary btn-lg">Send reply</button></form>`);
+      }
+      const list = await RAPI.support.list();
+      screen(`${back || '<h1 class="am-h1">Support</h1>'}<form id="mjnew" class="m-card"><h3>Report a portal problem</h3><span class="muted xs">For the portal itself. Building repairs go in a request.</span>
+        <div class="field"><label for="mjs">Subject</label><input class="input" id="mjs" name="subject" required maxlength="150"></div>
+        <div class="field"><label for="mjk">Kind</label><select class="input" id="mjk" name="kind">${TICKET_KINDS.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><label for="mjb">What happened</label><textarea class="input" id="mjb" name="body" required maxlength="3000"></textarea></div><button class="btn btn-primary btn-lg">${ic('paper-plane-tilt')}Send to IT support</button></form>
+        <h2 class="am-h2">Your tickets</h2>${list.map(t => `<button class="m-card" data-act="mjticket" data-id="${t.id}" style="text-align:left;border:0;font:inherit;color:inherit;width:100%"><span class="muted xs">#${esc(t.id)} · ${esc(day(t.updated_at || t.created_at))}</span><b>${esc(t.subject)}</b>${ticketTag(t.status)}</button>`).join('') || '<p class="muted">No tickets yet.</p>'}`);
+    },
+
     async profile() {
-      if (isGuard()) return screen(`<h1 class="am-h1">Profile</h1><div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">Security guard</span></div>
+      if (isGuard() || isStaff()) return screen(`<h1 class="am-h1">Profile</h1><div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">${esc(positionLabel(S.me))}</span></div>
+        ${isGuard() ? `<button class="btn btn-secondary btn-lg" data-act="tab" data-tab="support">${ic('lifebuoy')}Report a portal problem</button>` : ''}
         <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
       const m = S.me, ms = await API.household.list().catch(() => []);
       const pct = Math.round([m.name, m.phone, m.flat, m.email].filter(v => v && String(v).trim()).length / 4 * 100);
@@ -485,7 +561,7 @@
         ['garage', 'Parking', adm ? 'Slots and assignments' : 'Your slots', 'parking', park && (adm || can('parking.view'))],
         ['file-text', 'Leases', adm ? 'Tenant leases' : 'Your lease', adm ? 'leases-sub' : 'lease', adm || S.me.resident_type === 'tenant'],
         ['qr-code', 'Gate pass', 'Invite a visitor', 'gatepass', !adm && gateOn]]],
-      ['Account', [['user-circle', 'Profile', 'Your details and password', 'profile', true]]],
+      ['Account', [['user-circle', 'Profile', 'Your details and password', 'profile', true], ['question', 'Help', 'How-to guides', 'help', true], ['lifebuoy', 'Report a portal problem', 'Tell IT support', 'support', true]]],
       ['Administration', [
         ['user-check', 'Approvals', 'New residents', 'approvals', adm],
         ['users-three', 'Residents', 'Search, edit, suspend', 'set-users', adm],
@@ -737,6 +813,12 @@
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
+    mjaccept: async el => { await RAPI.staff.accept(el.dataset.id); toast('Job taken up'); render(); },
+    mjform: el => { S.mj.form = { id: Number(el.dataset.id), kind: el.dataset.k }; render(); },
+    mjclose: () => { S.mj.form = null; render(); },
+    mjin: async () => { await RAPI.staff.punchIn(); toast('Punched in'); render(); },
+    mjticket: el => { S.mj.ticket = Number(el.dataset.id); render(); window.scrollTo(0, 0); },
+    mjtback: () => { S.mj.ticket = null; render(); },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
   document.addEventListener('input', e => {
@@ -813,7 +895,18 @@
         else { const w = S.wk.list.find(x => x.id === S.wk.edit) || {}; await API.admin.updateWorker(S.wk.edit, { ...body, status: w.status || 'active' }); }
         S.wk.edit = null; toast('Worker saved'); await wkReload();
       } catch (x) { err.textContent = x.message; }
-    } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render(); }
+    } else if (f.id === 'nform') { await API.notices.create(d); toast('Posted. Residents notified.'); render();
+    } else if (f.id === 'mjupd') {
+      await RAPI.staff.update(f.dataset.id, await HP.fileToUpload(f)); S.mj.form = null; toast(d.progress === 'done' ? 'Marked done. The committee will close it.' : 'Update sent'); render();
+    } else if (f.id === 'mjest') {
+      const r = await RAPI.requests.estimate(f.dataset.id, Number(d.amount), (d.note || '').trim()); S.mj.form = null; toast(r && r.cost_status === 'pending' ? 'Sent to the head of committee for approval' : 'Estimate saved'); render();
+    } else if (f.id === 'mjout') {
+      const b = {}; if (d.handover_to) b.handover_to = Number(d.handover_to); if ((d.note || '').trim()) b.note = d.note.trim();
+      await RAPI.staff.punchOut(b); toast(b.handover_to ? 'Punched out. Jobs handed over.' : 'Punched out'); render();
+    } else if (f.id === 'mjnew') {
+      const r = await RAPI.support.create({ subject: d.subject.trim(), kind: d.kind, body: d.body.trim() }); toast('Sent to IT support'); S.mj.ticket = r && r.id ? r.id : null; render();
+    } else if (f.id === 'mjreply') { await RAPI.support.reply(f.dataset.id, d.body.trim()); toast('Reply sent'); render();
+    } else if (f.id === 'mreopen') { await RAPI.requests.reopen(f.dataset.id, (d.reason || '').trim()); toast('Request reopened'); render(); }
   }));
 
   HP.live(async () => {
@@ -821,7 +914,9 @@
     // never wipe a half-typed field, an open gate form or a visible verify result
     const ae = document.activeElement;
     if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName) && app.contains(ae)) return;
+    S.settings = await API.settings.public().catch(() => S.settings); // maintenance notice
     if (S.sub && S.sub.startsWith('set-')) return;
+    if (S.mj.form || (!S.sub && ['shift', 'support'].includes(S.tab))) return; // a job, shift or ticket form is open
     if (!S.sub && (S.pk.sel || S.wk.edit)) return;
     if (!S.sub && (S.tab === 'gate' || S.tab === 'gatepass' || S.gRes || cam)) return;
     const sc = $('#screen'), top = sc ? sc.scrollTop : 0;
@@ -830,7 +925,7 @@
   });
 
   (async () => {
-    try { const ps = await API.settings.public(); if (ps) Object.assign(SOCIETY, { ...(ps.society_name ? { name: ps.society_name } : {}), ...(ps.society_kind ? { kind: ps.society_kind } : {}) }); } catch { /* keep defaults */ }
+    try { const ps = await API.settings.public(); S.settings = ps; if (ps) Object.assign(SOCIETY, { ...(ps.society_name ? { name: ps.society_name } : {}), ...(ps.society_kind ? { kind: ps.society_kind } : {}) }); } catch { /* keep defaults */ }
     try { S.me = await API.auth.me(); } catch { S.me = null; }
     render();
   })();
