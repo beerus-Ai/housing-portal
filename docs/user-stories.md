@@ -16,6 +16,8 @@ The review listed six roles. The table maps them to the roles the portal has tod
 | 5 | Admin | Committee account with position `sysadmin` | Built: accounts, settings, flags, channels; ordinary members can no longer change these |
 | 6 | IT Staff | IT login (`it`) | Built: support queue, guides, health, backup, maintenance notice |
 
+![Figure 1. The six roles and what each can do](images/roles-overview.png)
+
 ## 2. Process list
 The review set out three processes. Process 3 is the lifecycle of a resident request in four steps.
 
@@ -28,6 +30,8 @@ The review set out three processes. Process 3 is the lifecycle of a resident req
 | 3.2 | Track | Resident, Committee Member | Built (stage tracker Open > Assigned > In progress > Resolved, replies in chat, email) |
 | 3.3 | Execution | Staff | Built (staff take up and update their own jobs; the committee confirms closing) |
 | 3.4 | Feedback | Resident | Built (1-5 rating, reopen within 7 days) |
+
+![Figure 2. Process list across roles: onboarding, raise a request, lifecycle 3.1 to 3.4](images/process-lifecycle.png)
 
 ## 3. User stories
 
@@ -46,6 +50,10 @@ The review set out three processes. Process 3 is the lifecycle of a resident req
 | US-RES-10 | to read the society's notices | I do not miss announcements | - | FR-NO-02 | Built |
 | US-RES-11 | to reopen a request if the problem comes back within a set number of days | I do not have to raise it again from the start | 3.4 | - | Built (2026-11-21) |
 
+![Figure 3. Resident registration (Join): owner, tenant or family, with consent](images/join-form.jpg)
+
+![Figure 4. Resident request: stage tracker, rating, and Reopen within 7 days](images/resident-reopen.jpg)
+
 ### 3.2 Committee Member
 | ID | As a Committee Member, I want... | so that... | Process | Source | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -60,6 +68,10 @@ The review set out three processes. Process 3 is the lifecycle of a resident req
 | US-COM-09 | to monitor every change in an audit trail | there is accountability for every decision | - | FR-AD-03 | Built |
 | US-COM-10 | to review messages the AI was unsure about | real problems are not missed and chatter is ignored | 2 | FR-WR-12 | Built |
 
+![Figure 5. Committee verifies new residents in the approval queue](images/approvals-queue.jpg)
+
+![Figure 6. Monthly report (printable)](images/monthly-report.jpg)
+
 ### 3.3 Head of Committee
 | ID | As the Head of Committee, I want... | so that... | Process | Source | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -68,6 +80,10 @@ The review set out three processes. Process 3 is the lifecycle of a resident req
 | US-HOC-03 | to see a summary of committee performance (time to assign, time to close, ratings) | I can hold the committee and vendors to account | - | FR-AD-01 | Built (2026-11-21): per-member activity in the monthly report |
 | US-HOC-04 | to approve changes to access rules and feature flags | no single member changes who can do what | - | FR-AU-04, FR-AU-05 | Built (2026-11-21): head or admin only |
 | US-HOC-05 | to be told of every emergency and every escalated request | I can step in on serious issues | 3.2 | FR-NO-07, FR-WR-10 | Built (sent to all committee members) |
+
+![Figure 7. Head of committee: cost approvals above the limit](images/cost-approvals.jpg)
+
+![Figure 8. Access control: what each resident type can do (head or admin only)](images/access-control.jpg)
 
 ### 3.4 Staff
 Staff are the society's own maintenance staff and guards, and can include vendor technicians.
@@ -81,6 +97,12 @@ Staff are the society's own maintenance staff and guards, and can include vendor
 | US-STF-05 | to hand over open jobs to the next person (Person A to Person B) at the end of a shift | no work is lost between shifts | 3.3 | - | Built (2026-11-21) |
 | US-STF-06 | as a guard, to verify visitor passes and resident tokens at the gate | only expected people enter | - | FR-AD-05, FR-AU-06 | Built |
 
+![Figure 9. Staff: My jobs (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
+
+![Figure 10. Staff: punch out with optional hand-over](images/staff-shift.jpg)
+
+![Figure 11. Cost approval and shift hand-over flows](images/cost-and-shift.png)
+
 ### 3.5 Admin
 | ID | As the Admin, I want... | so that... | Process | Source | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -90,6 +112,8 @@ Staff are the society's own maintenance staff and guards, and can include vendor
 | US-ADM-04 | to switch features on and off | the society adopts features at its own pace | - | FR-AU-05 | Built |
 | US-ADM-05 | to configure the message channels (Telegram, WhatsApp, email desk) | residents and committee are reached where they are | - | FR-WR-13, FR-WR-16 | Built |
 
+![Figure 12. Admin: accounts for committee, head, admin, staff, IT and guards](images/accounts.jpg)
+
 ### 3.6 IT Staff
 | ID | As IT Staff, I want... | so that... | Process | Source | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -97,6 +121,10 @@ Staff are the society's own maintenance staff and guards, and can include vendor
 | US-IT-02 | short training guides and a demo for each role | new residents, committee members and staff can start without help | - | `demo-script.md` | Built (2026-11-21): in-app guides per role |
 | US-IT-03 | to apply upgrades and maintenance with backups and a health check | the portal stays available and no data is lost | - | NFR-04, NFR-14 | Built (2026-11-21): backup download, maintenance notice, health; free hosting still loses data without a paid disk |
 | US-IT-04 | to see errors and service health | I find problems before users report them | - | NFR-04 | Built (2026-11-21): health page (uptime, size, integrity, counts) |
+
+![Figure 13. IT: support queue](images/it-support-queue.jpg)
+
+![Figure 14. IT: system health, backup and maintenance notice (banner shown to everyone)](images/it-system-health.jpg)
 
 ## 4. What the review added (built 2026-11-21)
 1. Head of Committee role with final approval (US-HOC-01, 02, 04).

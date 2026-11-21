@@ -24,6 +24,10 @@ Five core requirements (slide 6): onboarding, work requests, communication, visi
 | Staff | Society maintenance staff with their own login (`staff`) | See only their own jobs, take them up, post progress, punch in/out, hand over at shift end |
 | IT staff | Portal support person with their own login (`it`) | Answer support tickets, publish guides, check health, back up, announce maintenance |
 
+![Figure 1. Roles (see user-stories.md for the full stories)](images/roles-overview.png)
+
+![Figure 2. Process list: onboarding, raise a request, request lifecycle](images/process-lifecycle.png)
+
 ## 3. Functional requirements
 Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `docs/testing/test-cases.md`.
 
@@ -36,6 +40,10 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-ON-04 | Owner adds family or tenant to own flat (forced to that flat, created `pending`, committee approves) | S (extra) |
 | FR-ON-05 | Committee records tenant lease (dates, owner, police verification, agreement, parking); tenant reads it | C (extra) |
 
+![Figure 3. Registration (FR-ON-01)](images/join-form.jpg)
+
+![Figure 4. Committee approval queue (FR-ON-02)](images/approvals-queue.jpg)
+
 ### Epic 2: Authentication and roles
 | ID | Requirement | MoSCoW |
 | --- | --- | --- |
@@ -47,6 +55,8 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-AU-06 | Guards restricted by a strict allow-list (gate verify, gate log, gate overview, pulse, notifications, own profile) | M (extra) |
 | FR-AU-07 | Password reset by committee signs the user out everywhere | S |
 | FR-AU-08 | Google sign-in for existing accounts only (optional, off by default) | C (extra) |
+
+![Figure 5. Committee-editable access control (FR-AU-04)](images/access-control.jpg)
 
 ### Epic 3: Work requests
 | ID | Requirement | MoSCoW |
@@ -107,6 +117,8 @@ Stories: `user-stories.md`. API: `roles-api.md`. Built in Node and the web app; 
 | FR-RL-11 | Support tickets: every role raises a ticket about the portal; IT replies and sets status; the requester is notified | S |
 | FR-RL-12 | Help guides per role inside the portal | C |
 | FR-RL-13 | IT tools: system health (uptime, database size, integrity check, counts), database backup download (audited), maintenance notice shown to everyone | S |
+
+![Figure 6. Cost approval (FR-RL-07) and shift hand-over (FR-RL-06)](images/cost-and-shift.png)
 
 ### Epic 6: Non-functional
 See section 5 (NFR-01 to NFR-12).
