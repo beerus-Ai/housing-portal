@@ -51,7 +51,7 @@ test('public settings need no sign-in and have defaults', async () => {
     const r = await client()('GET', '/api/settings');
     assert.equal(r.status, 200);
     assert.deepEqual(r.body, { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '',
-      features: { emergency: true, gate: true, contacts: true, notices: true, parking: true } });
+      features: { emergency: true, gate: true, contacts: true, notices: true, parking: true }, maintenance: null });
   } finally { close(); }
 });
 

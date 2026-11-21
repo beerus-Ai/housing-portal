@@ -1,0 +1,54 @@
+/* Review roles (staff, IT, committee positions): My jobs, Shift, Support, Help, Reports, Accounts, maintenance banner.
+   Solid cards only, the one teal palette; pink only on badges, red only for emergencies. */
+.rl { display: flex; flex-direction: column; gap: var(--space-6); width: 100%; }
+.rl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.rl-head h1 { margin: 0; }
+.rl-head p { margin: 4px 0 0; font-size: 17px; }
+.rl-head-r { gap: var(--space-2); align-items: center; }
+.rl-head-r .field { margin: 0; }
+.rl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: var(--space-4); align-items: start; }
+.rl-job { gap: var(--space-3); font-size: 17px; }
+.rl-job-h { flex-wrap: nowrap; gap: var(--space-3); align-items: center; }
+.rl-job-t { font-size: 22px; line-height: 1.25; }
+.rl-clip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.rl-inner { background: var(--color-bg); border-radius: var(--radius-tile); padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+.rl-inner h4 { margin: 0; }
+.rl-amt { font-family: var(--font-heading); font-size: 32px; font-weight: 700; color: var(--color-accent-900); }
+.rl-stat { cursor: default; }
+.rl-guide h3 { margin: 0; }
+.rl-steps { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 8px; font-size: 17px; line-height: 1.5; }
+.rl-reply { display: flex; flex-direction: column; gap: 4px; background: var(--color-bg); border-radius: var(--radius-tile); padding: var(--space-2) var(--space-3); font-size: 16px; }
+.rl-reply.it { background: var(--color-accent-100); }
+
+/* job updates timeline (shared with the request detail) */
+.jt { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.jt-i { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); align-items: start; font-size: 16px; }
+.jt-ic { width: 40px; height: 40px; border-radius: 50%; background: var(--color-accent-100); color: var(--color-accent-700); display: grid; place-items: center; font-size: 22px; }
+.jt-photo { display: block; max-width: 240px; max-height: 180px; border-radius: var(--radius-tile); object-fit: cover; margin-top: 4px; }
+
+/* sidebar: the name opens the profile and shows the position */
+.side-me { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; border-radius: var(--radius-tile); padding: 4px; }
+.side-me:hover { background: var(--color-accent-100); }
+.side-me:focus-visible { outline: var(--focus-ring); }
+.side-pos { display: block; font-size: 14px; font-weight: 500; color: var(--color-accent-700); }
+.top-shell .side-me { flex: none; }
+
+/* maintenance notice: slim, solid, teal (not red: it is not an emergency) */
+.maint-banner { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius-tile); background: var(--color-accent-900); color: var(--color-bg); font-size: 16px; line-height: 1.4; }
+.maint-banner > i { font-size: 22px; flex: none; }
+.maint-until { opacity: .85; }
+#root > .maint-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 40; border-radius: 0; justify-content: center; }
+
+/* printing a report: only the page content, no menu, no buttons */
+.rl-printnote { display: none; }
+@media print {
+  .sidebar, .nav-reveal, .emg-banner, .maint-banner, #toast, .live, .rl-head-r .btn, .rl-head-r .field, .rq-pop { display: none !important; }
+  html, body { background: #fff !important; }
+  .web.side-shell, .web.top-shell { display: block !important; height: auto !important; overflow: visible !important; }
+  .side-shell > .page, .top-shell > .page { height: auto !important; overflow: visible !important; padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .page > * { animation: none !important; }
+  .rl-printnote { display: block; }
+  .eg-card, .table-wrap, .form-card { break-inside: avoid; border: 1px solid #ccc; }
+  .eg-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .table-wrap .table { min-width: 0; }
+}

@@ -13,7 +13,8 @@ const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping'
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 const RESIDENT_TYPES = ['owner', 'tenant', 'family'];
 const FEATURES = ['emergency', 'gate', 'contacts', 'notices', 'parking'];
-const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '' };
+const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '', approval_limit: '10000', maintenance: '' };
+const REOPEN_DAYS = Number(process.env.REOPEN_DAYS) || 7;
 const CSP_BASE = {
   'default-src': ["'self'"], 'img-src': ["'self'", 'data:'], 'style-src': ["'self'", "'unsafe-inline'"], 'script-src': ["'self'"],
   'object-src': ["'none'"], 'base-uri': ["'self'"], 'form-action': ["'self'"], 'frame-ancestors': ["'none'"],
@@ -36,7 +37,9 @@ function createApp(opts = {}) {
     try { f = JSON.parse(getSetting('features') || '{}'); } catch { /* use defaults */ }
     return Object.fromEntries(FEATURES.map(k => [k, f[k] !== false]));
   };
-  const publicSettings = () => ({ society_name: getSetting('society_name'), society_kind: getSetting('society_kind'), google_client_id: getSetting('google_client_id'), features: getFeatures() });
+  const getMaintenance = () => { try { const m = JSON.parse(getSetting('maintenance') || 'null'); return m && m.message ? m : null; } catch { return null; } };
+  const approvalLimit = () => Number(getSetting('approval_limit')) || 0;
+  const publicSettings = () => ({ society_name: getSetting('society_name'), society_kind: getSetting('society_kind'), google_client_id: getSetting('google_client_id'), features: getFeatures(), maintenance: getMaintenance() });
   const cspHeader = () => {
     const d = Object.fromEntries(Object.entries(CSP_BASE).map(([k, v]) => [k, [...v]]));
     if (getSetting('google_client_id')) {
@@ -128,10 +131,11 @@ function createApp(opts = {}) {
   };
   if (!opts.noTimers) setInterval(() => { try { escalateOverdue(); } catch { /* db closed */ } }, 10 * 60e3).unref();
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, status: u.status };
+  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, position: u.role === 'admin' ? (u.position || 'sysadmin') : null, status: u.status };
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -142,7 +146,15 @@ function createApp(opts = {}) {
       const p = req.path, m = req.method;
       const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
         (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
-      if (!okGuard) return res.status(403).json({ error: 'Not allowed for guard accounts' });
+      if (!okGuard && !COMMON_PATH(p, m)) return res.status(403).json({ error: 'Not allowed for guard accounts' });
+    }
+    // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
+    if (u.role === 'staff' || u.role === 'it') {
+      const p = req.path;
+      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
+        (u.role === 'it' && p.startsWith('/api/it/'));
+      if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
+      if (u.role === 'staff' && p === '/api/requests' && req.method !== 'GET') return res.status(403).json({ error: 'Not allowed for this account' });
     }
     req.user = u; next();
   };
@@ -155,6 +167,13 @@ function createApp(opts = {}) {
   };
   const can = key => (req, res, next) => (allowedKeys(req.user).includes(key) ? next() : res.status(403).json({ error: 'Your role does not have access to this' }));
   const admin = (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Admin only' }));
+  // Committee positions (faculty review): member, head of committee, sysadmin (older accounts with no position are sysadmin).
+  const posOf = u => (u && u.role === 'admin' ? (u.position || 'sysadmin') : null);
+  const isGov = u => ['head', 'sysadmin'].includes(posOf(u));
+  const governance = (req, res, next) => (isGov(req.user) ? next() : res.status(403).json({ error: 'Only the head of committee or the admin can do this' }));
+  const hasHead = () => !!one("SELECT 1 AS x FROM users WHERE role='admin' AND position='head' AND status='approved' LIMIT 1");
+  const canApproveCost = u => posOf(u) === 'head' || (posOf(u) === 'sysadmin' && !hasHead());
+  const committeeIds = () => q("SELECT id FROM users WHERE role='admin' AND status='approved'").map(r => r.id);
 
   const fails = new Map();
   const WINDOW = 15 * 60e3;
@@ -268,7 +287,7 @@ function createApp(opts = {}) {
     const s = typeof req.query.status === 'string' && req.query.status ? req.query.status : '';
     const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
     const where = [], p = [];
-    where.push("role!='guard'"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
+    where.push("role NOT IN ('guard','staff','it')"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
     if (term) {
       const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
       where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
@@ -283,7 +302,7 @@ function createApp(opts = {}) {
   for (const [act, status] of [['approve', 'approved'], ['reject', 'rejected']]) {
     app.post(`/api/admin/users/:id/${act}`, auth, admin, (req, res) => {
       const u = one('SELECT * FROM users WHERE id=?', req.params.id);
-      if (!u || u.role === 'admin') return res.status(404).json({ error: 'User not found' });
+      if (!u || u.role !== 'resident') return res.status(404).json({ error: 'User not found' });
       run('UPDATE users SET status=? WHERE id=?', status, u.id);
       log(req.user.id, 'user', u.id, act);
       res.json({ ok: true });
@@ -331,8 +350,8 @@ function createApp(opts = {}) {
   });
 
   // ---- admin: settings & access control
-  app.get('/api/admin/settings', auth, admin, (req, res) => res.json(publicSettings()));
-  app.put('/api/admin/settings', auth, admin, (req, res) => {
+  app.get('/api/admin/settings', auth, admin, (req, res) => res.json({ ...publicSettings(), approval_limit: approvalLimit() }));
+  app.put('/api/admin/settings', auth, admin, governance, (req, res) => {
     const b = req.body || {}, cur = publicSettings(), next = { ...cur, features: { ...cur.features } };
     for (const k of ['society_name', 'society_kind']) if (k in b) {
       const v = typeof b[k] === 'string' ? b[k].trim() : '';
@@ -343,6 +362,11 @@ function createApp(opts = {}) {
       const v = typeof b.google_client_id === 'string' ? b.google_client_id.trim() : null;
       if (v === null || !/^[A-Za-z0-9._-]{0,200}$/.test(v)) return res.status(400).json({ error: 'Google client ID has invalid characters' });
       next.google_client_id = v;
+    }
+    if ('approval_limit' in b) {
+      const v = Number(b.approval_limit);
+      if (b.approval_limit === '' || b.approval_limit === null || !Number.isFinite(v) || v < 0 || v > 1e8) return res.status(400).json({ error: 'Approval limit must be a number of rupees (0 or more)' });
+      if (v !== approvalLimit()) { log(req.user.id, 'settings', null, 'updated', 'approval_limit: ' + approvalLimit() + ' -> ' + v); db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('approval_limit', String(v)); }
     }
     if ('features' in b) {
       const f = b.features;
@@ -359,7 +383,7 @@ function createApp(opts = {}) {
     }
     for (const k of FEATURES) if (next.features[k] !== cur.features[k]) log(req.user.id, 'settings', null, 'feature_' + (next.features[k] ? 'on' : 'off'), k);
     put.run('features', JSON.stringify(next.features));
-    res.json(publicSettings());
+    res.json({ ...publicSettings(), approval_limit: approvalLimit() });
   });
   const accessMatrix = () => {
     const m = Object.fromEntries(ACCESS_ROLES.map(r => [r, Object.fromEntries(PERMISSIONS.map(p => [p.key, false]))]));
@@ -367,7 +391,7 @@ function createApp(opts = {}) {
     return m;
   };
   app.get('/api/admin/access', auth, admin, (req, res) => res.json({ roles: ACCESS_ROLES, permissions: PERMISSIONS, matrix: accessMatrix() }));
-  app.put('/api/admin/access', auth, admin, (req, res) => {
+  app.put('/api/admin/access', auth, admin, governance, (req, res) => {
     const m = req.body && req.body.matrix;
     if (!m || typeof m !== 'object' || Array.isArray(m)) return res.status(400).json({ error: 'matrix is required' });
     const cur = accessMatrix(), next = JSON.parse(JSON.stringify(cur));
@@ -497,17 +521,21 @@ function createApp(opts = {}) {
       return MAGIC[ext].every((x, i) => b[i] === x);
     } catch { return false; }
   };
-  const REQ_SELECT = `SELECT r.*, u.name AS resident_name, u.flat, v.name AS vendor_name FROM requests r
-    JOIN users u ON u.id=r.user_id LEFT JOIN vendors v ON v.id=r.vendor_id`;
+  const REQ_SELECT = `SELECT r.*, u.name AS resident_name, u.flat, v.name AS vendor_name, sa.name AS assignee_name FROM requests r
+    JOIN users u ON u.id=r.user_id LEFT JOIN vendors v ON v.id=r.vendor_id LEFT JOIN users sa ON sa.id=r.assignee_id`;
   // Residents see their own requests and any request from their own flat (owner and family share a flat view).
-  const canSee = (u, r) => u.role === 'admin' || r.user_id === u.id || (!!u.flat && r.flat === u.flat);
+  const canSee = (u, r) => u.role === 'admin' || (u.role === 'staff' ? r.assignee_id === u.id : (r.user_id === u.id || (!!u.flat && r.flat === u.flat)));
   // The requester rates, except a family member's request, which the flat owner rates. Family never rates.
   const canRate = (u, r) => u.role !== 'admin' && r.status === 'closed' && !r.rating &&
     ((r.user_id === u.id && u.resident_type !== 'family') || (u.resident_type === 'owner' && r.flat === u.flat));
+  // Reopen (faculty review): the requester or the flat owner, within REOPEN_DAYS of closing.
+  const canReopen = (u, r) => u.role === 'resident' && r.status === 'closed' &&
+    (r.user_id === u.id || (u.resident_type === 'owner' && !!u.flat && r.flat === u.flat)) &&
+    (Date.now() - Date.parse(String(r.closed_at || r.updated_at).replace(' ', 'T') + 'Z')) <= REOPEN_DAYS * 864e5;
   const shape = (r, u) => {
     const { photo, ai_category, ai_priority, ai_summary, ai_vendor_id, ai_source, ai_confidence, ai_action, ...rest } = r;
     const ai = u && u.role === 'admin' && ai_category ? { ai: { category: ai_category, priority: ai_priority, summary: ai_summary, vendor_id: ai_vendor_id, source: ai_source, confidence: ai_confidence, action: ai_action } } : {};
-    return { ...rest, ...ai, has_photo: !!photo, can_rate: !!u && canRate(u, r) };
+    return { ...rest, ...ai, has_photo: !!photo, can_rate: !!u && canRate(u, r), can_reopen: !!u && canReopen(u, r) };
   };
 
   app.post('/api/requests', auth, can('request.create'),
@@ -530,7 +558,8 @@ function createApp(opts = {}) {
 
   app.get('/api/requests', auth, (req, res) => {
     const where = [], p = [];
-    if (req.user.role !== 'admin') { where.push('(r.user_id=? OR u.flat=?)'); p.push(req.user.id, req.user.flat || ''); }
+    if (req.user.role === 'staff') { where.push('r.assignee_id=?'); p.push(req.user.id); }
+    else if (req.user.role !== 'admin') { where.push('(r.user_id=? OR u.flat=?)'); p.push(req.user.id, req.user.flat || ''); }
     if (STATUSES.includes(req.query.status)) { where.push('r.status=?'); p.push(req.query.status); }
     if (CATEGORIES.includes(req.query.category)) { where.push('r.category=?'); p.push(req.query.category); }
     if (['whatsapp', 'telegram', 'app'].includes(req.query.source)) { where.push('r.source=?'); p.push(req.query.source); }
@@ -561,12 +590,22 @@ function createApp(opts = {}) {
     if (!body) return res.status(400).json({ error: 'Write a message first' });
     const c = run('INSERT INTO comments(request_id,user_id,body) VALUES(?,?,?)', r.id, req.user.id, body);
     log(req.user.id, 'request', r.id, 'commented', body.slice(0, 80));
-    if (req.user.role === 'admin') { if (r.user_id !== req.user.id) notifyReq(r, `The committee replied on "${r.title}"`); }
+    if (req.user.role === 'admin' || req.user.role === 'staff') { if (r.user_id !== req.user.id) notifyReq(r, `${req.user.role === 'staff' ? req.user.name : 'The committee'} replied on "${r.title}"`); }
     else for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New message on request "${r.title}" from flat ${req.user.flat}`);
     res.status(201).json({ id: Number(c.lastInsertRowid) });
   });
   app.post('/api/requests/:id/assign', auth, admin, (req, res) => {
     const r = one('SELECT * FROM requests WHERE id=?', req.params.id);
+    if (req.body.staff_id != null) {
+      const s = one("SELECT * FROM users WHERE id=? AND role='staff' AND status='approved'", req.body.staff_id);
+      if (!r || !s) return res.status(404).json({ error: 'Request or staff member not found' });
+      if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
+      run("UPDATE requests SET assignee_id=?, accepted_at=NULL, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, updated_at=datetime('now') WHERE id=?", s.id, r.id);
+      log(req.user.id, 'request', r.id, 'assigned', s.name + ' (staff)');
+      notify(s.id, `New job assigned to you: "${r.title}"`);
+      notifyReq(r, `Your request "${r.title}" was assigned to ${s.name} (society staff)`);
+      return res.json({ ok: true });
+    }
     const v = one('SELECT * FROM vendors WHERE id=?', req.body.vendor_id);
     if (!r || !v) return res.status(404).json({ error: 'Request or vendor not found' });
     if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
@@ -587,7 +626,7 @@ function createApp(opts = {}) {
       const key = plate.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
       let vr; try { vr = run('INSERT INTO vehicles(flat,user_id,plate,plate_key,type,make) VALUES(?,?,?,?,?,?)', u.flat, u.id, plate, key, pv.type || 'car', pv.make || null); }
       catch { return res.status(409).json({ error: 'A vehicle with that number is already registered' }); }
-      run("UPDATE requests SET ai_action=NULL, status='closed', updated_at=datetime('now') WHERE id=?", r.id);
+      run("UPDATE requests SET ai_action=NULL, status='closed', closed_at=datetime('now'), updated_at=datetime('now') WHERE id=?", r.id);
       log(req.user.id, 'request', r.id, 'ai_action', 'registered ' + (pv.type || 'car') + ' ' + plate + ' for flat ' + u.flat);
       log(req.user.id, 'vehicle', Number(vr.lastInsertRowid), 'created', plate + ' from request #' + r.id);
       notifyReq(r, 'Your ' + (pv.type || 'vehicle') + ' ' + plate + ' has been registered for flat ' + u.flat + '.');
@@ -618,8 +657,9 @@ function createApp(opts = {}) {
     if (!STATUSES.includes(s)) return res.status(400).json({ error: 'Invalid status' });
     if (r.status === 'closed') return res.status(409).json({ error: 'Request is already closed' });
     if (ORDER[s] <= ORDER[r.status]) return res.status(409).json({ error: `Cannot move from ${r.status} to ${s}` });
-    if (!r.vendor_id) return res.status(409).json({ error: 'Assign a vendor first' });
-    run("UPDATE requests SET status=?, updated_at=datetime('now') WHERE id=?", s, r.id);
+    if (!r.vendor_id && !r.assignee_id) return res.status(409).json({ error: 'Assign a vendor or staff member first' });
+    if (['in_progress', 'closed'].includes(s) && ['pending', 'rejected'].includes(r.cost_status)) return res.status(409).json({ error: 'Waiting for the head of committee to approve the cost' });
+    run("UPDATE requests SET status=?, closed_at=CASE WHEN ?='closed' THEN datetime('now') ELSE closed_at END, updated_at=datetime('now') WHERE id=?", s, s, r.id);
     log(req.user.id, 'request', r.id, 'status', `${r.status} -> ${s}${req.body.note ? ': ' + str(req.body.note, 300) : ''}`);
     notifyReq(r, `Your request "${r.title}" is now ${s.replace('_', ' ')}`);
     res.json({ ok: true });
@@ -686,6 +726,8 @@ function createApp(opts = {}) {
   // ---- live updates: clients poll this and only redraw when the token changes (no data is returned, just a version string)
   app.get('/api/pulse', auth, (req, res) => {
     const u = req.user;
+    if (u.role === 'staff') return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM requests WHERE assignee_id=?", u.id).m, one('SELECT COUNT(*) AS n FROM job_updates WHERE user_id=?', u.id).n, one('SELECT COALESCE(MAX(id),0) AS m FROM staff_shifts WHERE user_id=?', u.id).m].join('|') });
+    if (u.role === 'it') return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM support_tickets").m, one('SELECT COUNT(*) AS n FROM support_replies').n].join('|') });
     if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
       desk.seen();
@@ -742,8 +784,12 @@ function createApp(opts = {}) {
     if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
     const r = run('INSERT INTO notices(title,body,author_id) VALUES(?,?,?)', title, body, req.user.id);
     log(req.user.id, 'notice', r.lastInsertRowid, 'posted', title);
-    for (const u of q("SELECT id FROM users WHERE status='approved' AND role!='guard' AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`); // guards cannot read notices, so do not notify them
-    res.status(201).json({ id: Number(r.lastInsertRowid) });
+    for (const u of q("SELECT id FROM users WHERE status='approved' AND role NOT IN ('guard','staff','it') AND id!=?", req.user.id)) notify(u.id, `New notice: ${title}`); // guards, staff and IT cannot read notices, so do not notify them
+    // Broadcast (faculty review): residents who linked Telegram get the notice in their chat too.
+    let telegram_sent = 0;
+    for (const u of q("SELECT id,telegram_id FROM users WHERE role='resident' AND status='approved' AND telegram_id IS NOT NULL")) { tgSend(u.telegram_id, 'Notice: ' + title + '\n\n' + body.slice(0, 3500), u.id, null); telegram_sent++; }
+    if (telegram_sent) log(req.user.id, 'notice', r.lastInsertRowid, 'broadcast', 'telegram x' + telegram_sent);
+    res.status(201).json({ id: Number(r.lastInsertRowid), telegram_sent });
   });
   app.delete('/api/notices/:id', auth, admin, (req, res) => {
     const n = one('SELECT * FROM notices WHERE id=?', req.params.id);
@@ -757,7 +803,7 @@ function createApp(opts = {}) {
   app.post('/api/notifications/read', auth, (req, res) => { run('UPDATE notifications SET is_read=1 WHERE user_id=?', req.user.id); res.json({ ok: true }); });
 
   // ---- guards (committee creates gate staff accounts)
-  app.post('/api/admin/guards', auth, admin, (req, res) => {
+  app.post('/api/admin/guards', auth, admin, governance, (req, res) => {
     const b = req.body || {};
     const name = str(b.name, 100), email = str(b.email, 200).toLowerCase(), pw = typeof b.password === 'string' ? b.password : '';
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
@@ -768,7 +814,7 @@ function createApp(opts = {}) {
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
   app.get('/api/admin/guards', auth, admin, (req, res) => res.json(q("SELECT id,name,email,status,created_at FROM users WHERE role='guard' ORDER BY id DESC")));
-  app.delete('/api/admin/guards/:id', auth, admin, (req, res) => {
+  app.delete('/api/admin/guards/:id', auth, admin, governance, (req, res) => {
     const g = one("SELECT * FROM users WHERE id=? AND role='guard'", req.params.id);
     if (!g) return res.status(404).json({ error: 'Guard not found' });
     run('DELETE FROM notifications WHERE user_id=?', g.id);
@@ -1060,7 +1106,7 @@ function createApp(opts = {}) {
     res.json({ ok: true, linked, created, review, ignored });
   });
   // Points the Telegram bot's webhook at this server (committee action; needs TELEGRAM_BOT_TOKEN).
-  app.post('/api/admin/telegram/set-webhook', auth, admin, async (req, res) => {
+  app.post('/api/admin/telegram/set-webhook', auth, admin, governance, async (req, res) => {
     const tok = process.env.TELEGRAM_BOT_TOKEN;
     if (!tok) return res.status(400).json({ error: 'Set TELEGRAM_BOT_TOKEN in the environment first' });
     const base = (str(req.body.base_url, 300) || (req.protocol + '://' + req.get('host'))).replace(/\/+$/, '');
@@ -1355,6 +1401,7 @@ function createApp(opts = {}) {
     res.json({ ok: true });
   });
 
+  require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));

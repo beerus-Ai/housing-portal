@@ -19,6 +19,10 @@ Five core requirements (slide 6): onboarding, work requests, communication, visi
 | Guard | Gate staff account created by the committee | Verify visitor QR/6-digit passes and resident tokens, see the gate log; nothing else |
 | Messaging-only resident | Resident who does not open the portal and writes to the society's Telegram bot (live) or WhatsApp number (in progress) | Report a problem in a message and get status replies in the same chat |
 | Committee member away from the dashboard | Committee member who works from their email inbox | Get each new item by email and assign, approve the next stage, reply or approve residents from the email |
+| Head of committee | Committee account with position `head` (faculty review, 2026-11-21) | Approve costs above the limit, control settings and access rules, see each member's activity |
+| Admin | Committee account with position `sysadmin` (older committee accounts default to this) | Manage accounts for every role, settings, feature switches, channels, IT tools |
+| Staff | Society maintenance staff with their own login (`staff`) | See only their own jobs, take them up, post progress, punch in/out, hand over at shift end |
+| IT staff | Portal support person with their own login (`it`) | Answer support tickets, publish guides, check health, back up, announce maintenance |
 
 ## 3. Functional requirements
 Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `docs/testing/test-cases.md`.
@@ -36,7 +40,7 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | ID | Requirement | MoSCoW |
 | --- | --- | --- |
 | FR-AU-01 | Email and password sign-in with hashed passwords (bcrypt), session cookie (httpOnly, SameSite=Lax, Secure in production) | M |
-| FR-AU-02 | Role check on every route; roles owner, tenant, family, committee, guard | M |
+| FR-AU-02 | Role check on every route; roles owner, tenant, family, committee (member, head, admin), staff, IT, guard | M |
 | FR-AU-03 | Login throttling (5 failures per 15 minutes per key) and equalised timing for unknown emails | M |
 | FR-AU-04 | Committee-editable permission matrix for owner/tenant/family (9 permissions) | S (extra) |
 | FR-AU-05 | Feature flags (emergency, gate, contacts, notices, parking) switchable by the committee | C (extra) |
@@ -84,6 +88,25 @@ Priorities: M Must, S Should, C Could. IDs are stable and are referenced by `doc
 | FR-AD-03 | Audit trail of every state change (who, what, when), latest 200 shown | M |
 | FR-AD-04 | CSV export of requests | C |
 | FR-AD-05 | Gate passes (QR plus 6-digit code), resident gate token, guard verify and gate log; vehicles, parking slots, workers register | C (extra; visitor management is out of scope on slide 8, built here as resident-created passes only) |
+
+### Epic 7: Roles from the faculty review (2026-11-21)
+Stories: `user-stories.md`. API: `roles-api.md`. Built in Node and the web app; not yet ported to Java/React.
+
+| ID | Requirement | MoSCoW |
+| --- | --- | --- |
+| FR-RL-01 | Committee positions: member, head of committee, admin (sysadmin). Only the head or admin change settings, feature switches, access rules, the Telegram webhook and accounts; members keep all daily committee work | M |
+| FR-RL-02 | Accounts page: head or admin creates, promotes, suspends and removes committee, staff, IT and guard accounts; nobody suspends or demotes themselves; at least one head or admin account always stays | M |
+| FR-RL-03 | Staff login: a staff member sees only the requests assigned to them (strict allow-list like guards) | M |
+| FR-RL-04 | Allocation to staff: the committee assigns a request to a vendor or a staff member; either one lets the request move forward | M |
+| FR-RL-05 | Staff take up a job (assigned to in progress), post progress (started, waiting for parts, work done) with a note and photo; the resident sees each update; "work done" asks the committee to confirm and close | M |
+| FR-RL-06 | Punch in and out; at punch-out a staff member may hand all open jobs to a colleague with a note; committee sees attendance and hand-overs | S |
+| FR-RL-07 | Cost estimate on a request (committee or assigned staff); above the approval limit (default Rs 10,000, set in Settings) work cannot start or close until the head approves; with no head account the admin approves | S |
+| FR-RL-08 | Resident reopens a closed request within 7 days with a reason (requester or flat owner); rating is cleared and the committee and assignee are told | S |
+| FR-RL-09 | Monthly report (raised, closed, reopened, escalated, average hours to assign and close, rating, by category, by vendor/staff, activity per committee member), printable | S |
+| FR-RL-10 | Notices are also sent to residents who linked Telegram | C |
+| FR-RL-11 | Support tickets: every role raises a ticket about the portal; IT replies and sets status; the requester is notified | S |
+| FR-RL-12 | Help guides per role inside the portal | C |
+| FR-RL-13 | IT tools: system health (uptime, database size, integrity check, counts), database backup download (audited), maintenance notice shown to everyone | S |
 
 ### Epic 6: Non-functional
 See section 5 (NFR-01 to NFR-12).
