@@ -1,6 +1,6 @@
 # Requirements: Sahyadri Heights Housing Society Portal
 
-Source: BPA "Using AI" Session 3 brief (slides 4-9, 13). MoSCoW labels follow slide 8; where the build went beyond slide 8 the item is labelled and marked **(extra)**. Items for the AI-native workflows marked **(in progress)** are built but not fully verified with real providers; items without the mark are built, tested and live (updated 2026-11-14).
+Source: BPA "Using AI" Session 3 brief (slides 4-9, 13). The same requirements are restated as user stories by role (faculty review, 2026-11-21) in `user-stories.md`. Word copies of all docs are in `docs/word/`. MoSCoW labels follow slide 8; where the build went beyond slide 8 the item is labelled and marked **(extra)**. Items for the AI-native workflows marked **(in progress)** are built but not fully verified with real providers; items without the mark are built, tested and live (updated 2026-11-14).
 
 ## 1. Business need and scope
 A residential society of several hundred flats is run on WhatsApp groups, paper registers and phone calls. Three problems: residents cannot track complaints, the committee cannot see what is pending, and resident and vendor records are scattered. Goal: one portal to know who lives there, resolve their requests and communicate reliably, with less manual effort and clearer accountability.
