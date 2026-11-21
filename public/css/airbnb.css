@@ -8,6 +8,9 @@
 
 /* ---- minimal login ---- */
 .auth.auth-min { display: flex; align-items: center; justify-content: center; padding: clamp(16px, 4vw, 48px); background: radial-gradient(1200px 700px at 15% 10%, #dff4fb 0, transparent 60%), radial-gradient(900px 600px at 90% 90%, #ffe3ee 0, transparent 55%), #f6fbfd; }
+/* The app locks body scrolling (app.css); the sign-in/join screen scrolls itself so the full form is reachable on short windows. */
+html:has(.auth-min), html:has(.auth-min) body { height: auto; min-height: 100%; overflow-y: auto; }
+.auth.auth-min { align-items: safe center; }
 .am-card { width: min(100%, 440px); background: #fff; border-radius: 32px; padding: clamp(24px, 4vw, 40px); box-shadow: var(--ab-shadow-h); display: flex; flex-direction: column; gap: var(--space-3); animation: rise .45s var(--ease) both; }
 .am-card > * { animation: none; }
 .am-brand { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
