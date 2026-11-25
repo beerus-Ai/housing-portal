@@ -149,11 +149,16 @@ function createApp(opts = {}) {
         p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p);
       if (!okGuard && !COMMON_PATH(p, m)) return res.status(403).json({ error: 'Not allowed for guard accounts' });
     }
+    // Service providers: the tuck shop owner and the laundry service see only their own shop or laundry.
+    if (u.role === 'shop' || u.role === 'laundry') {
+      const p = req.path, mine = u.role === 'shop' ? '/api/shop/' : '/api/laundry/';
+      if (!COMMON_PATH(p, req.method) && !p.startsWith(mine)) return res.status(403).json({ error: 'Not allowed for this account' });
+    }
     // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
     if (u.role === 'staff' || u.role === 'it') {
       const p = req.path;
       const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || p === '/api/inventory' || p.startsWith('/api/inventory/') || p === '/api/waste/logs' || p === '/api/waste/schedule' ||
-        p === '/api/shop/items' || p === '/api/laundry/rates' || /^\/api\/(shop|laundry)\/orders(\/\d+\/status)?$/.test(p) || p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) || p === '/api/services/summary' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
+        p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) || p === '/api/services/summary' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
         (u.role === 'it' && p.startsWith('/api/it/'));
       if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
       if (u.role === 'staff' && p === '/api/requests' && req.method !== 'GET') return res.status(403).json({ error: 'Not allowed for this account' });

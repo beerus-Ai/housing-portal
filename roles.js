@@ -7,7 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const GUIDES = require('./guides');
 
-const KINDS = { member: ['admin', 'member'], head: ['admin', 'head'], sysadmin: ['admin', 'sysadmin'], staff: ['staff', null], it: ['it', null], guard: ['guard', null] };
+const KINDS = { member: ['admin', 'member'], head: ['admin', 'head'], sysadmin: ['admin', 'sysadmin'], staff: ['staff', null], it: ['it', null], guard: ['guard', null], shop: ['shop', null], laundry: ['laundry', null] };
 const PROGRESS = { started: 'Started', waiting_parts: 'Waiting for parts', done: 'Work done' };
 const TICKET_KINDS = ['bug', 'question', 'access', 'other'];
 const TICKET_STATUS = ['open', 'in_progress', 'resolved'];
@@ -22,7 +22,7 @@ module.exports = function mountRoles(app, c) {
   const itOnly = (req, res, next) => (isIT(req.user) ? next() : res.status(403).json({ error: 'IT staff only' }));
   const staffOnly = (req, res, next) => (req.user.role === 'staff' ? next() : res.status(403).json({ error: 'Staff only' }));
   const govCount = () => one("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND status='approved' AND COALESCE(position,'sysadmin') IN ('head','sysadmin')").n;
-  const ACC_SELECT = "SELECT id,name,email,role,position,status,created_at FROM users WHERE role IN ('admin','staff','it','guard') AND status!='removed'";
+  const ACC_SELECT = "SELECT id,name,email,role,position,status,created_at FROM users WHERE role IN ('admin','staff','it','guard','shop','laundry') AND status!='removed'";
   const accRow = a => ({ ...a, position: a.role === 'admin' ? (a.position || 'sysadmin') : null, on_shift: a.role === 'staff' ? onShift(a.id) : undefined });
 
   // ---------- accounts for every non-resident role (head of committee or admin only)
@@ -39,7 +39,7 @@ module.exports = function mountRoles(app, c) {
     log(req.user.id, 'user', r.lastInsertRowid, 'account_created', `${b.kind}: ${email}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
-  const accTarget = id => one("SELECT * FROM users WHERE id=? AND role IN ('admin','staff','it','guard') AND status!='removed'", id);
+  const accTarget = id => one("SELECT * FROM users WHERE id=? AND role IN ('admin','staff','it','guard','shop','laundry') AND status!='removed'", id);
   const losesGov = (u, nextPos, nextStatus) => isGov(u) && u.status === 'approved' && (!['head', 'sysadmin'].includes(nextPos) || nextStatus !== 'approved') && govCount() <= 1;
   app.patch('/api/admin/accounts/:id', auth, admin, governance, (req, res) => {
     const u = accTarget(req.params.id);

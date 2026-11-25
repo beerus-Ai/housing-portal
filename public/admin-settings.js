@@ -77,23 +77,30 @@
     <h3>Messages</h3><ul class="st-users" style="list-style:none;padding:0;margin:0">${msgs || '<li class="muted">No messages yet.</li>'}</ul>`;
   };
 
+  // A row shows the person only; editing, password reset, suspend and remove sit behind the "⋯" menu.
   const userRow = u => {
     const stag = { approved: 'tag-accent', pending: 'tag-accent-2', suspended: 'tag-danger', rejected: 'tag-neutral' }[u.status] || 'tag-neutral';
     const ctl = u.status === 'approved' || u.status === 'suspended';
-    return `<li class="st-user" data-id="${u.id}"><div class="st-user-h"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(u.name)}</b><span class="muted sm st-ell">${esc(u.email)}</span></span>
-      <span class="row" style="gap:6px"><span class="tag tag-outline">${esc(TYPE[u.resident_type] || u.resident_type || u.role)}</span><span class="tag ${stag}">${esc(u.status)}</span></span></div>
-      <div class="st-user-c">
+    const open = ST.edit === u.id ? 'edit' : ST.pw === u.id ? 'pw' : ST.del === u.id ? 'del' : '';
+    const menu = HP.kebab(`More actions for ${u.name}`, [
+      { label: 'Edit details', icon: 'pencil-simple', act: 'stedit', data: { id: u.id } },
+      { label: 'Reset password', icon: 'key', act: 'stpw', data: { id: u.id } },
+      ctl ? { label: u.status === 'approved' ? 'Suspend' : 'Reactivate', icon: u.status === 'approved' ? 'pause-circle' : 'play-circle', act: 'stsuspend', data: { id: u.id, to: u.status === 'approved' ? 'suspended' : 'approved' } } : null,
+      { label: 'Remove', icon: 'trash', act: 'stdel', data: { id: u.id }, danger: true },
+    ]);
+    const panel = open === 'edit' ? `<div class="st-user-c st-panel-in">
         <div class="field st-sel"><label for="ut${u.id}">Type</label><select class="input" id="ut${u.id}" data-utype="${u.id}">${['owner', 'tenant', 'family'].map(t => `<option value="${t}" ${u.resident_type === t ? 'selected' : ''}>${TYPE[t]}</option>`).join('')}</select></div>
         <form class="st-uflat" data-id="${u.id}"><div class="field"><label for="uf${u.id}">Flat</label><div class="row" style="flex-wrap:nowrap;gap:6px"><input class="input" id="uf${u.id}" name="flat" required maxlength="20" value="${esc(u.flat || '')}"><button class="btn btn-secondary">Save</button></div></div></form>
-        <div class="row st-acts">${ctl ? `<button type="button" class="btn btn-secondary" data-act="stsuspend" data-id="${u.id}" data-to="${u.status === 'approved' ? 'suspended' : 'approved'}">${ic(u.status === 'approved' ? 'pause-circle' : 'play-circle')}${u.status === 'approved' ? 'Suspend' : 'Reactivate'}</button>` : ''}
-          <button type="button" class="btn btn-secondary" data-act="stpw" data-id="${u.id}" aria-expanded="${ST.pw === u.id}">${ic('key')}Reset password</button>
-          ${ST.del === u.id ? `<button type="button" class="btn btn-danger" data-act="stdelok" data-id="${u.id}">Remove ${esc(u.name)}?</button><button type="button" class="btn btn-secondary" data-act="stdelkeep">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="stdel" data-id="${u.id}" aria-label="Remove ${esc(u.name)}">${ic('trash')}Remove</button>`}</div>
-        ${ST.pw === u.id ? `<form class="st-upw row" data-id="${u.id}"><div class="field grow"><label for="up${u.id}">New password (8+ characters)</label><input class="input" id="up${u.id}" name="password" type="password" required minlength="8" autocomplete="new-password"></div><button class="btn btn-primary" style="align-self:flex-end">Set password</button><button type="button" class="btn btn-secondary" data-act="stpw" data-id="${u.id}" style="align-self:flex-end">Cancel</button></form>` : ''}
-      </div></li>`;
+        <button type="button" class="btn btn-ghost" data-act="stclose" style="align-self:flex-end">Done</button></div>`
+      : open === 'pw' ? `<form class="st-upw row st-panel-in" data-id="${u.id}"><div class="field grow"><label for="up${u.id}">New password (8+ characters)</label><input class="input" id="up${u.id}" name="password" type="password" required minlength="8" autocomplete="new-password"></div><button class="btn btn-primary" style="align-self:flex-end">Set password</button><button type="button" class="btn btn-secondary" data-act="stclose" style="align-self:flex-end">Cancel</button></form>`
+      : open === 'del' ? `<div class="row st-panel-in"><span>Remove ${esc(u.name)}? They will no longer be able to sign in.</span><span class="row-acts"><button type="button" class="btn btn-danger" data-act="stdelok" data-id="${u.id}">Remove</button><button type="button" class="btn btn-secondary" data-act="stdelkeep">Keep</button></span></div>` : '';
+    return `<li class="st-user ${open ? 'open' : ''}" data-id="${u.id}"><div class="st-user-h"><span class="avatar light">${esc(initials(u.name))}</span>
+      <span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(u.name)}</b><span class="muted sm st-ell">${esc(u.email)}${u.flat ? ' · Flat ' + esc(u.flat) : ''}</span></span>
+      <span class="row st-tags"><span class="tag tag-outline">${esc(TYPE[u.resident_type] || u.resident_type || u.role)}</span><span class="tag ${stag}">${esc(u.status)}</span></span>${menu}</div>${panel}</li>`;
   };
   const filtered = () => { const q = ST.q.trim().toLowerCase(); return ST.users.filter(u => (!ST.stf || u.status === ST.stf) && (!q || [u.name, u.email, u.flat].some(x => String(x || '').toLowerCase().includes(q)))); };
   const drawUsers = () => { const l = $('#stlist'); if (!l) return; const f = filtered(); l.innerHTML = f.map(userRow).join('') || '<li class="muted">No residents match.</li>'; const c = $('#stcount'); if (c) c.textContent = f.length + ' of ' + ST.users.length; };
-  const users = () => `<h2>Users</h2><p class="muted">Approve or reject new residents on the Approvals page. Manage everyone else here.</p>
+  const users = () => `<h2>Residents</h2><p class="muted">Everyone who lives in the society. Use ⋯ on a row to edit, reset a password, suspend or remove. New residents are verified on the Verification page.</p>
     <div class="row st-filters"><div class="field grow"><label class="sr" for="stq">Search residents</label><input class="input" id="stq" type="search" placeholder="Search by name, email or flat" autocomplete="off" value="${esc(ST.q)}"></div>
       <div class="field"><label class="sr" for="stsf">Status</label><select class="input" id="stsf"><option value="">Any status</option>${['approved', 'pending', 'suspended', 'rejected'].map(s => `<option value="${s}" ${ST.stf === s ? 'selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`).join('')}</select></div><span class="muted sm" id="stcount"></span></div>
     <ul class="st-users" id="stlist"></ul>`;
@@ -111,7 +118,7 @@
     let loadErr = '';
     try {
       if (s === 'access') { ST.access = await API.admin.access(); ST.orig = clone(ST.access.matrix); ST.draft = clone(ST.access.matrix); }
-      else if (s === 'users') { ST.users = (await API.admin.allUsers()).filter(u => u.role !== 'admin' && u.role !== 'guard'); if (S.suq != null) { ST.q = S.suq; S.suq = null; } }
+      else if (s === 'users') { ST.users = (await API.admin.allUsers()).filter(u => u.role === 'resident'); if (S.suq != null) { ST.q = S.suq; S.suq = null; } }
       else if (s === 'guards') ST.guards = await API.gate.guards();
       else if (s === 'ai') ST.ai = await API.admin.ai();
       else ST.settings = await API.admin.settings();
@@ -128,16 +135,18 @@
   PAGES.ai = () => { S.setSec = 'ai'; return PAGES.settings(); };
 
   // ---------- events
-  ACT.stsec = el => { if (el.dataset.s === sec() && S.page === 'settings') return; if (isDirty() && sec() === 'access' && S.page === 'settings' && !confirmLeave()) return; S.setSec = el.dataset.s; S.page = 'settings'; ST.pw = ST.del = ST.gdel = null; render(); };
+  ACT.stsec = el => { if (el.dataset.s === sec() && S.page === 'settings') return; if (isDirty() && sec() === 'access' && S.page === 'settings' && !confirmLeave()) return; S.setSec = el.dataset.s; S.page = 'settings'; ST.pw = ST.del = ST.gdel = ST.edit = null; render(); };
   // No window.confirm: a dirty matrix just warns inline and a second click leaves.
   let warned = false;
   const confirmLeave = () => { if (warned) { warned = false; return true; } warned = true; setErr('You have unsaved changes. Save or discard them, or choose the section again to leave.'); return false; };
   ACT.stdiscard = () => { ST.draft = clone(ST.orig); document.querySelectorAll('input[data-role]').forEach(i => { i.checked = !!(ST.draft[i.dataset.role] && ST.draft[i.dataset.role][i.dataset.perm]); }); paintDirty(); };
   ACT.stsaveaccess = run(async () => { await API.admin.setAccess(ST.draft); toast('Access saved'); warned = false; render(); });
-  const reload = async () => { ST.users = (await API.admin.allUsers()).filter(u => u.role !== 'admin' && u.role !== 'guard'); drawUsers(); };
+  const reload = async () => { ST.users = (await API.admin.allUsers()).filter(u => u.role === 'resident'); drawUsers(); };
   ACT.stsuspend = run(async el => { await API.admin.patchUser(el.dataset.id, { status: el.dataset.to }); toast(el.dataset.to === 'suspended' ? 'Suspended' : 'Reactivated'); await reload(); });
-  ACT.stpw = el => { const id = Number(el.dataset.id); ST.pw = ST.pw === id ? null : id; ST.del = null; drawUsers(); const i = $(`#up${id}`); if (i) i.focus(); };
-  ACT.stdel = el => { ST.del = Number(el.dataset.id); ST.pw = null; drawUsers(); };
+  ACT.stpw = el => { const id = Number(el.dataset.id); ST.pw = ST.pw === id ? null : id; ST.del = ST.edit = null; drawUsers(); const i = $(`#up${id}`); if (i) i.focus(); };
+  ACT.stedit = el => { const id = Number(el.dataset.id); ST.edit = ST.edit === id ? null : id; ST.pw = ST.del = null; drawUsers(); const i = $(`#ut${id}`); if (i) i.focus(); };
+  ACT.stclose = () => { ST.edit = ST.pw = ST.del = null; drawUsers(); };
+  ACT.stdel = el => { ST.del = Number(el.dataset.id); ST.pw = ST.edit = null; drawUsers(); };
   ACT.stdelkeep = () => { ST.del = null; drawUsers(); };
   ACT.stdelok = run(async el => { await API.admin.removeUser(el.dataset.id); ST.del = null; toast('Removed'); await reload(); });
   ACT.stdigest = run(async () => { const d = await API.admin.digest(); ST.digest = d.text; const p = $('#stdigest'); if (p) { p.textContent = d.text; p.hidden = false; } });

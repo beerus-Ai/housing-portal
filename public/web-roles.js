@@ -22,7 +22,7 @@
   const hrs = h => (h == null || h === '' ? '–' : `${Math.round(Number(h) * 10) / 10} h`);
   const num = v => (v == null || v === '' ? '–' : v);
   const errLine = () => `<p class="err" id="rlerr" role="alert">${esc(R.err)}</p>`;
-  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard' };
+  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard', shop: 'Tuck shop owner', laundry: 'Laundry service' };
 
   // ---------- staff: My jobs
   const jobCard = r => {
@@ -205,21 +205,26 @@
   };
 
   // ---------- head / sysadmin: Accounts
+  // Accounts list: the person, role and status; position, suspend and remove sit behind the "⋯" menu.
   const accRow = a => {
     const me = a.id === S.me.id, committee = a.role === 'admin';
     const kind = committee ? (HP.POSITION[a.position] || 'Admin') : KIND_LABEL[a.role] || a.role;
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
-    const ctl = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : `${committee ? `<label class="sr" for="rlpos${a.id}">Position of ${esc(a.name)}</label><select class="input" id="rlpos${a.id}" data-rlpos="${a.id}" style="width:auto">${['member', 'head', 'sysadmin'].map(p => `<option value="${p}" ${(a.position || 'sysadmin') === p ? 'selected' : ''}>${esc(HP.POSITION[p])}</option>`).join('')}</select>` : ''}
-      <button type="button" class="btn btn-secondary" data-act="rlsus" data-id="${a.id}" data-to="${a.status === 'suspended' ? 'approved' : 'suspended'}">${ic(a.status === 'suspended' ? 'play-circle' : 'pause-circle')}${a.status === 'suspended' ? 'Reactivate' : 'Suspend'}</button>
-      ${R.accDel === a.id ? `<button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove ${esc(a.name)}?</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="rldel" data-id="${a.id}" aria-label="Remove ${esc(a.name)}">${ic('trash')}Remove</button>`}`;
+    const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
+      committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
+      { label: a.status === 'suspended' ? 'Reactivate' : 'Suspend', icon: a.status === 'suspended' ? 'play-circle' : 'pause-circle', act: 'rlsus', data: { id: a.id, to: a.status === 'suspended' ? 'approved' : 'suspended' } },
+      { label: 'Remove', icon: 'trash', act: 'rldel', data: { id: a.id }, danger: true },
+    ]);
+    const extra = R.accDel === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="justify-content:space-between"><span>Remove ${esc(a.name)}? They will no longer be able to sign in.</span><span class="row-acts"><button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button></span></span></td></tr>`
+      : R.accPos === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="gap:10px"><label for="rlpos${a.id}">Position of ${esc(a.name)}</label><select class="input" id="rlpos${a.id}" data-rlpos="${a.id}" style="width:auto">${['member', 'head', 'sysadmin'].map(p => `<option value="${p}" ${(a.position || 'sysadmin') === p ? 'selected' : ''}>${esc(HP.POSITION[p])}</option>`).join('')}</select><button type="button" class="btn btn-ghost" data-act="rlposclose">Done</button></span></td></tr>` : '';
     return `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(a.name))}</span><span class="col" style="gap:0"><b>${esc(a.name)}</b><span class="muted xs">${esc(a.email)}</span></span></span></td>
-      <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td><span class="row" style="gap:var(--space-1);justify-content:flex-end">${ctl}</span></td></tr>`;
+      <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td class="acc-menu">${menu}</td></tr>${extra}`;
   };
   PAGES.accounts = async () => {
     if (!isGov()) return page(`<div class="rl">${head('Accounts', '')}<p class="callout" style="margin:0">Only the head of committee or the admin can manage accounts.</p></div>`);
     const list = await RAPI.admin.accounts();
-    const order = ['admin', 'staff', 'it', 'guard'], sorted = [...list].sort((x, y) => order.indexOf(x.role) - order.indexOf(y.role) || String(x.name).localeCompare(String(y.name)));
-    page(`<div class="rl">${head('Accounts', 'Committee, staff, IT and guard accounts. Residents are managed under Residents.')}${errLine()}
+    const order = ['admin', 'staff', 'it', 'guard', 'shop', 'laundry'], sorted = [...list].sort((x, y) => order.indexOf(x.role) - order.indexOf(y.role) || String(x.name).localeCompare(String(y.name)));
+    page(`<div class="rl">${head('Accounts', 'Committee, staff, IT, guard and service-provider accounts. Residents are managed under Residents.')}${errLine()}
       ${table(['Person', 'Role', 'Status', 'Added', ''], sorted.map(accRow), 'No accounts yet.')}
       <form id="rlacc" class="form-card col" style="max-width:720px"><h3>Add an account</h3>
         <div class="two">${field('rlan', 'Full name', '<input class="input" id="rlan" name="name" required maxlength="100">')}${field('rlak', 'Role', `<select class="input" id="rlak" name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>`)}</div>
@@ -228,7 +233,9 @@
   };
   const accRun = fn => async el => { R.err = ''; try { await fn(el); } catch (x) { R.err = x.message; toast(x.message, 'error'); } render(); };
   ACT.rlsus = accRun(async el => { await RAPI.admin.patchAccount(el.dataset.id, { status: el.dataset.to }); toast(el.dataset.to === 'suspended' ? 'Account suspended' : 'Account reactivated'); });
-  ACT.rldel = el => { R.accDel = Number(el.dataset.id); render(); };
+  ACT.rldel = el => { R.accDel = Number(el.dataset.id); R.accPos = null; render(); };
+  ACT.rlposopen = el => { R.accPos = Number(el.dataset.id); R.accDel = null; render(); };
+  ACT.rlposclose = () => { R.accPos = null; render(); };
   ACT.rldelno = () => { R.accDel = null; render(); };
   ACT.rldelok = accRun(async el => { R.accDel = null; await RAPI.admin.removeAccount(el.dataset.id); toast('Account removed'); });
 

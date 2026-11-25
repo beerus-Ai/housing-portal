@@ -67,9 +67,9 @@ S = {
  "FR-SM-09": ("resident", "to report a missed pickup", "it is followed up like any request"),
  "FR-SM-10": ("resident", "a calm dashboard that shows only what needs me", "I know what to do at a glance"),
  "FR-SV-01": ("resident", "to order groceries from the society tuck shop", "I need not step out for everyday items"),
- "FR-SV-02": ("staff member", "shop orders that move placed, ready, delivered", "residents know when their order arrives"),
+ "FR-SV-02": ("tuck shop owner", "new orders sent to me to move placed, ready, delivered", "residents know when their order arrives"),
  "FR-SV-03": ("resident", "to book a laundry pickup with my items", "laundry is collected at my door"),
- "FR-SV-04": ("staff member", "to move laundry through pickup, washing, ready and delivered", "the flat knows where its clothes are"),
+ "FR-SV-04": ("laundry service", "to move laundry through pickup, washing, ready and delivered", "the flat knows where its clothes are"),
  "FR-SV-05": ("guard", "to log parcels for a flat and mark them collected", "residents are told and nothing goes missing"),
  "FR-SV-06": ("committee member", "to post events residents can say they will attend", "we know how many to plan for"),
 }

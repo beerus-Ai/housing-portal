@@ -45,20 +45,26 @@ async function boot() {
   return { admin, resident, account, close: () => server.close() };
 }
 
-test('tuck shop: committee lists items, residents order, stock moves, flow is enforced', async () => {
+test('tuck shop: the owner lists items and fulfils orders; the committee only watches', async () => {
   const t = await boot();
   try {
-    const a = await t.resident('a@x.test', 'A-1'), b = await t.resident('b@x.test', 'B-1'), st = await t.account('staff', 'st@x.test');
+    const a = await t.resident('a@x.test', 'A-1'), b = await t.resident('b@x.test', 'B-1'), st = await t.account('shop', 'shop@x.test');
     assert.equal((await a('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 30, stock: 5 })).status, 403);
-    assert.equal((await t.admin('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 0, stock: 5 })).status, 400);
-    const milk = (await t.admin('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 30, stock: 5, unit: '500 ml' })).body.id;
-    assert.equal((await t.admin('POST', '/api/shop/items', { name: 'milk', category: 'dairy', price: 30, stock: 5 })).status, 409);
+    assert.equal((await t.admin('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 30, stock: 5 })).status, 403, 'committee does not run the shop');
+    assert.equal((await st('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 0, stock: 5 })).status, 400);
+    const milk = (await st('POST', '/api/shop/items', { name: 'Milk', category: 'dairy', price: 30, stock: 5, unit: '500 ml' })).body.id;
+    assert.equal((await st('POST', '/api/shop/items', { name: 'milk', category: 'dairy', price: 30, stock: 5 })).status, 409);
     assert.equal((await a('POST', '/api/shop/orders', { items: [{ id: milk, qty: 6 }] })).status, 409, 'cannot buy more than stock');
     const o = await a('POST', '/api/shop/orders', { items: [{ id: milk, qty: 2 }], note: 'Leave at the door' });
     assert.equal(o.status, 201); assert.equal(o.body.total, 60);
     assert.equal((await a('GET', '/api/shop/items')).body.find(i => i.id === milk).stock, 3);
     assert.equal((await b('GET', '/api/shop/orders')).body.length, 0, 'other flats do not see the order');
     assert.equal((await b('POST', `/api/shop/orders/${o.body.id}/status`, { status: 'cancelled' })).status, 404);
+    assert.ok((await st('GET', '/api/notifications')).body.some(n => /New tuck shop order/.test(n.message)), 'the owner gets the order');
+    assert.ok(!(await t.admin('GET', '/api/notifications')).body.some(n => /New tuck shop order/.test(n.message)), 'the committee is not asked to fulfil it');
+    assert.equal((await t.admin('GET', '/api/shop/orders')).body.length, 1, 'the committee sees the state');
+    assert.equal((await t.admin('POST', `/api/shop/orders/${o.body.id}/status`, { status: 'ready' })).status, 404, 'the committee cannot change it');
+    assert.equal((await st('GET', '/api/requests')).status, 403, 'the shop owner stays on the shop routes');
     assert.equal((await a('POST', `/api/shop/orders/${o.body.id}/status`, { status: 'ready' })).status, 403, 'residents only cancel');
     assert.equal((await st('POST', `/api/shop/orders/${o.body.id}/status`, { status: 'delivered' })).status, 409, 'placed -> delivered skips ready');
     assert.equal((await st('POST', `/api/shop/orders/${o.body.id}/status`, { status: 'ready' })).status, 200);
@@ -68,22 +74,25 @@ test('tuck shop: committee lists items, residents order, stock moves, flow is en
     // a cancelled order puts the stock back
     const o2 = (await a('POST', '/api/shop/orders', { items: [{ id: milk, qty: 3 }] })).body.id;
     assert.equal((await a('POST', `/api/shop/orders/${o2}/status`, { status: 'cancelled' })).status, 200);
-    assert.equal((await t.admin('GET', '/api/shop/items')).body.find(i => i.id === milk).stock, 3);
+    assert.equal((await st('GET', '/api/shop/items')).body.find(i => i.id === milk).stock, 3);
     assert.ok((await t.admin('GET', '/api/admin/audit')).body.some(x => x.entity === 'shop_order' && x.action === 'delivered'));
   } finally { t.close(); }
 });
 
-test('laundry: rates, pickup booking, forward-only status, resident cancel before pickup', async () => {
+test('laundry: the laundry service sets prices and moves orders; the committee only watches', async () => {
   const t = await boot();
   try {
-    const a = await t.resident('a@x.test', 'A-1'), st = await t.account('staff', 'st@x.test');
-    const shirt = (await t.admin('POST', '/api/laundry/rates', { item: 'Shirt', price: 20 })).body.id;
-    assert.equal((await t.admin('POST', '/api/laundry/rates', { item: 'shirt', price: 25 })).status, 409);
+    const a = await t.resident('a@x.test', 'A-1'), st = await t.account('laundry', 'ln@x.test');
+    assert.equal((await t.admin('POST', '/api/laundry/rates', { item: 'Shirt', price: 20 })).status, 403);
+    const shirt = (await st('POST', '/api/laundry/rates', { item: 'Shirt', price: 20 })).body.id;
+    assert.equal((await st('POST', '/api/laundry/rates', { item: 'shirt', price: 25 })).status, 409);
     assert.equal((await a('POST', '/api/laundry/orders', { pickup_date: '2026-11-24', pickup_slot: 'morning', items: [{ id: shirt, qty: 3 }] })).status, 400, 'past date');
     assert.equal((await a('POST', '/api/laundry/orders', { pickup_date: '2026-12-20', pickup_slot: 'morning', items: [{ id: shirt, qty: 3 }] })).status, 400, 'too far ahead');
     assert.equal((await a('POST', '/api/laundry/orders', { pickup_date: '2026-11-26', pickup_slot: 'night', items: [{ id: shirt, qty: 3 }] })).status, 400, 'bad slot');
     const o = await a('POST', '/api/laundry/orders', { pickup_date: '2026-11-26', pickup_slot: 'morning', items: [{ id: shirt, qty: 3 }] });
     assert.equal(o.status, 201); assert.equal(o.body.total, 60);
+    assert.equal((await t.admin('POST', `/api/laundry/orders/${o.body.id}/status`, { status: 'picked_up' })).status, 404, 'the committee cannot change it');
+    assert.equal((await t.admin('GET', '/api/laundry/orders')).body.length, 1);
     assert.equal((await st('POST', `/api/laundry/orders/${o.body.id}/status`, { status: 'ready' })).status, 409, 'forward one step at a time');
     for (const s of ['picked_up', 'washing', 'ready', 'delivered']) assert.equal((await st('POST', `/api/laundry/orders/${o.body.id}/status`, { status: s })).status, 200, s);
     assert.ok((await a('GET', '/api/notifications')).body.some(n => /Laundry #\d+ is ready/.test(n.message)));

@@ -1,5 +1,6 @@
 // Resident services (2026-11-25, contract docs/services-api.md): tuck shop (the e-commerce interface on the
 // product architecture whiteboard), laundry service, parcel desk at the gate and community events.
+// The tuck shop owner (role shop) and the laundry service (role laundry) fulfil orders; the committee only sees the state.
 // Payment is cash or UPI on delivery for now; the payment gateway is a planned interface. Every change is audited.
 
 const SHOP_CATEGORIES = ['groceries', 'dairy', 'snacks', 'household', 'personal care', 'other'];
@@ -17,12 +18,13 @@ module.exports = function mountServices(app, c) {
   const nowLocal = () => { const n = istNow(clock()); return `${n.date}T${n.time}`; };
   const bad = (res, msg) => res.status(400).json({ error: msg });
   const role = r => (req, res, next) => (r.includes(req.user.role) ? next() : res.status(403).json({ error: 'Not allowed for this account' }));
-  const committee = role(['admin']);
-  const team = role(['admin', 'staff']);
+  const shopOwner = role(['shop']);
+  const laundryOp = role(['laundry']);
   const desk = role(['admin', 'staff', 'guard']);
+  const committee = role(['admin']);
   const resident = (req, res, next) => (req.user.role === 'resident' && req.user.flat ? next() : res.status(403).json({ error: 'Residents with a flat only' }));
-  const staffIds = () => q("SELECT id FROM users WHERE role='staff' AND status='approved'").map(r => r.id);
-  const notifyTeam = msg => { for (const id of [...committeeIds(), ...staffIds()]) notify(id, msg); };
+  // New orders go to the provider who fulfils them (not the committee, which only sees the state).
+  const notifyRole = (r, msg) => { for (const u of q("SELECT id FROM users WHERE role=? AND status='approved'", r)) notify(u.id, msg); };
   const notifyFlat = (flat, msg) => { for (const u of q("SELECT id FROM users WHERE role='resident' AND status='approved' AND flat=?", flat)) notify(u.id, msg); };
   const linesOk = (lines, max = 30) => Array.isArray(lines) && lines.length && lines.length <= max && lines.every(l => Number.isInteger(Number(l.id)) && Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 50);
 
@@ -37,8 +39,10 @@ module.exports = function mountServices(app, c) {
       stock: 'stock' in b ? Number(b.stock) : base.stock ?? 0,
       unit: 'unit' in b ? str(b.unit, 20) || null : base.unit ?? null,
       active: 'active' in b ? (b.active ? 1 : 0) : base.active ?? 1,
+      image: 'image' in b ? (b.image || null) : base.image ?? null,
     };
     if (!i.name) return [null, 'Give the item a name'];
+    if (i.image != null && !/^\/img\/shop\/[a-z0-9-]+\.(jpg|png|webp)$/.test(i.image)) return [null, 'Choose a photo from the shop library'];
     if (!SHOP_CATEGORIES.includes(i.category)) return [null, 'Choose a category'];
     if (!(i.price > 0) || i.price > 100000) return [null, 'Price must be more than 0'];
     if (!Number.isInteger(i.stock) || i.stock < 0 || i.stock > 100000) return [null, 'Stock must be a whole number from 0'];
@@ -46,20 +50,20 @@ module.exports = function mountServices(app, c) {
     return [i, null];
   };
   app.get('/api/shop/items', auth, (req, res) => {
-    const all = ['admin', 'staff'].includes(req.user.role);
+    const all = ['admin', 'shop'].includes(req.user.role);
     res.json(q(`SELECT * FROM shop_items ${all ? '' : 'WHERE active=1'} ORDER BY category, name`).map(i => ({ ...i, active: !!i.active })));
   });
-  app.post('/api/shop/items', auth, committee, (req, res) => {
+  app.post('/api/shop/items', auth, shopOwner, (req, res) => {
     const [i, err] = itemBody(req.body || {}); if (err) return bad(res, err);
     if (one('SELECT id FROM shop_items WHERE lower(name)=lower(?)', i.name)) return res.status(409).json({ error: 'An item with that name already exists' });
-    const r = run('INSERT INTO shop_items(name,category,price,stock,unit,active) VALUES(?,?,?,?,?,?)', i.name, i.category, i.price, i.stock, i.unit, i.active);
+    const r = run('INSERT INTO shop_items(name,category,price,stock,unit,active,image) VALUES(?,?,?,?,?,?,?)', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image);
     log(req.user.id, 'shop_item', r.lastInsertRowid, 'created', `${i.name} at ${i.price}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
-  app.patch('/api/shop/items/:id', auth, committee, (req, res) => {
+  app.patch('/api/shop/items/:id', auth, shopOwner, (req, res) => {
     const base = one('SELECT * FROM shop_items WHERE id=?', req.params.id); if (!base) return res.status(404).json({ error: 'Item not found' });
     const [i, err] = itemBody(req.body || {}, base); if (err) return bad(res, err);
-    run('UPDATE shop_items SET name=?,category=?,price=?,stock=?,unit=?,active=? WHERE id=?', i.name, i.category, i.price, i.stock, i.unit, i.active, base.id);
+    run('UPDATE shop_items SET name=?,category=?,price=?,stock=?,unit=?,active=?,image=? WHERE id=?', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image, base.id);
     log(req.user.id, 'shop_item', base.id, 'updated', `${i.name}: price ${i.price}, stock ${i.stock}${i.active ? '' : ', hidden'}`);
     res.json({ ok: true });
   });
@@ -83,17 +87,17 @@ module.exports = function mountServices(app, c) {
       run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id);
     }
     log(req.user.id, 'shop_order', id, 'placed', `flat ${req.user.flat}: ${lines.length} items, ${total}`);
-    notifyTeam(`New tuck shop order #${id} from flat ${req.user.flat} (₹${total})`);
+    notifyRole('shop', `New tuck shop order #${id} from flat ${req.user.flat} (₹${total})`);
     res.status(201).json({ id, total });
   });
   app.get('/api/shop/orders', auth, (req, res) => {
     if (req.user.role === 'resident') return res.json(q('SELECT * FROM shop_orders WHERE flat=? ORDER BY id DESC LIMIT 100', req.user.flat || '').map(orderOut));
-    if (!['admin', 'staff'].includes(req.user.role)) return res.status(403).json({ error: 'Not allowed for this account' });
+    if (!['admin', 'shop'].includes(req.user.role)) return res.status(403).json({ error: 'Not allowed for this account' });
     res.json(q("SELECT o.*, u.name AS resident FROM shop_orders o JOIN users u ON u.id=o.user_id ORDER BY (o.status IN ('delivered','cancelled')), o.id DESC LIMIT 200").map(orderOut));
   });
   app.post('/api/shop/orders/:id/status', auth, (req, res) => {
     const o = one('SELECT * FROM shop_orders WHERE id=?', req.params.id);
-    const isTeam = ['admin', 'staff'].includes(req.user.role);
+    const isTeam = req.user.role === 'shop';
     if (!o || (!isTeam && !(req.user.role === 'resident' && o.flat === req.user.flat))) return res.status(404).json({ error: 'Order not found' });
     const to = (req.body || {}).status;
     if (!(SHOP_FLOW[o.status] || []).includes(to)) return res.status(409).json({ error: `A ${o.status} order cannot move to ${to}` });
@@ -102,7 +106,7 @@ module.exports = function mountServices(app, c) {
     if (to === 'cancelled') for (const l of q('SELECT item_id, qty FROM shop_order_lines WHERE order_id=?', o.id)) run('UPDATE shop_items SET stock=stock+? WHERE id=?', l.qty, l.item_id);
     log(req.user.id, 'shop_order', o.id, to, `${o.status} -> ${to}`);
     if (isTeam) notifyFlat(o.flat, to === 'ready' ? `Your tuck shop order #${o.id} is ready` : to === 'delivered' ? `Tuck shop order #${o.id} delivered` : `Tuck shop order #${o.id} was cancelled`);
-    else notifyTeam(`Flat ${o.flat} cancelled tuck shop order #${o.id}`);
+    else notifyRole('shop', `Flat ${o.flat} cancelled tuck shop order #${o.id}`);
     res.json({ ok: true, status: to });
   });
 
@@ -110,10 +114,10 @@ module.exports = function mountServices(app, c) {
   // Laundry service
   // =====================================================================
   app.get('/api/laundry/rates', auth, (req, res) => {
-    const all = ['admin', 'staff'].includes(req.user.role);
+    const all = ['admin', 'laundry'].includes(req.user.role);
     res.json(q(`SELECT * FROM laundry_rates ${all ? '' : 'WHERE active=1'} ORDER BY item`).map(r => ({ ...r, active: !!r.active })));
   });
-  app.post('/api/laundry/rates', auth, committee, (req, res) => {
+  app.post('/api/laundry/rates', auth, laundryOp, (req, res) => {
     const item = str((req.body || {}).item, 60), price = Number((req.body || {}).price);
     if (!item) return bad(res, 'Name the item, e.g. Shirt (wash and iron)');
     if (!(price > 0) || price > 10000) return bad(res, 'Price must be more than 0');
@@ -122,7 +126,7 @@ module.exports = function mountServices(app, c) {
     log(req.user.id, 'laundry_rate', r.lastInsertRowid, 'created', `${item} ${money(price)}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
-  app.patch('/api/laundry/rates/:id', auth, committee, (req, res) => {
+  app.patch('/api/laundry/rates/:id', auth, laundryOp, (req, res) => {
     const r0 = one('SELECT * FROM laundry_rates WHERE id=?', req.params.id); if (!r0) return res.status(404).json({ error: 'Rate not found' });
     const b = req.body || {};
     const price = 'price' in b ? Number(b.price) : r0.price, active = 'active' in b ? (b.active ? 1 : 0) : r0.active;
@@ -149,17 +153,17 @@ module.exports = function mountServices(app, c) {
     const id = Number(r.lastInsertRowid);
     for (const l of lines) run('INSERT INTO laundry_lines(order_id,rate_id,item,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.item, l.price, l.qty);
     log(req.user.id, 'laundry_order', id, 'requested', `flat ${req.user.flat}: ${b.pickup_date} ${b.pickup_slot}, ${total}`);
-    notifyTeam(`Laundry pickup #${id} for flat ${req.user.flat} on ${b.pickup_date} (${b.pickup_slot})`);
+    notifyRole('laundry', `Laundry pickup #${id} for flat ${req.user.flat} on ${b.pickup_date} (${b.pickup_slot})`);
     res.status(201).json({ id, total });
   });
   app.get('/api/laundry/orders', auth, (req, res) => {
     if (req.user.role === 'resident') return res.json(q('SELECT * FROM laundry_orders WHERE flat=? ORDER BY id DESC LIMIT 100', req.user.flat || '').map(laundryOut));
-    if (!['admin', 'staff'].includes(req.user.role)) return res.status(403).json({ error: 'Not allowed for this account' });
+    if (!['admin', 'laundry'].includes(req.user.role)) return res.status(403).json({ error: 'Not allowed for this account' });
     res.json(q("SELECT o.*, u.name AS resident FROM laundry_orders o JOIN users u ON u.id=o.user_id ORDER BY (o.status IN ('delivered','cancelled')), o.pickup_date, o.id LIMIT 200").map(laundryOut));
   });
   app.post('/api/laundry/orders/:id/status', auth, (req, res) => {
     const o = one('SELECT * FROM laundry_orders WHERE id=?', req.params.id);
-    const isTeam = ['admin', 'staff'].includes(req.user.role);
+    const isTeam = req.user.role === 'laundry';
     if (!o || (!isTeam && !(req.user.role === 'resident' && o.flat === req.user.flat))) return res.status(404).json({ error: 'Laundry order not found' });
     const to = (req.body || {}).status;
     if (!(LAUNDRY_FLOW[o.status] || []).includes(to)) return res.status(409).json({ error: `A ${o.status.replace('_', ' ')} order cannot move to ${String(to).replace('_', ' ')}` });
@@ -167,7 +171,7 @@ module.exports = function mountServices(app, c) {
     run("UPDATE laundry_orders SET status=?, updated_at=datetime('now') WHERE id=?", to, o.id);
     log(req.user.id, 'laundry_order', o.id, to, `${o.status} -> ${to}`);
     const msg = { picked_up: 'picked up', washing: 'being washed', ready: 'ready', delivered: 'delivered', cancelled: 'cancelled' }[to];
-    if (isTeam) notifyFlat(o.flat, `Laundry #${o.id} is ${msg}`); else notifyTeam(`Flat ${o.flat} cancelled laundry pickup #${o.id}`);
+    if (isTeam) notifyFlat(o.flat, `Laundry #${o.id} is ${msg}`); else notifyRole('laundry', `Flat ${o.flat} cancelled laundry pickup #${o.id}`);
     res.json({ ok: true, status: to });
   });
 

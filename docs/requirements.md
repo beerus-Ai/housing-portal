@@ -118,7 +118,7 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | ID | Requirement | Role | Priority |
 | --- | --- | --- | --- |
 | FR-RL-01 | Only the head or admin change settings, access rules and accounts | Head of Committee, Admin | M |
-| FR-RL-02 | Create and manage accounts for every role; nobody suspends or demotes themselves; one head or admin always remains | Admin | M |
+| FR-RL-02 | Create and manage accounts for every role (incl. tuck shop owner and laundry service); lists show the person only, actions sit behind a ⋯ menu; nobody suspends or demotes themselves; one head or admin always remains | Admin | M |
 | FR-AU-04 | Edit what owners, tenants and family may do | Admin | S |
 | FR-AU-05 | Switch features on and off | Admin | C |
 
@@ -155,9 +155,9 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | ID | Requirement | Role | Priority |
 | --- | --- | --- | --- |
 | FR-SV-01 | Tuck shop: the committee lists items with price and stock; residents order for delivery; stock never goes below 0 | Resident, Committee Member | C |
-| FR-SV-02 | Shop orders move placed, ready, delivered; residents cancel until ready; cancelling puts stock back | Staff, Resident | C |
+| FR-SV-02 | The tuck shop owner gets new orders and moves them placed, ready, delivered; residents cancel until ready (stock goes back); the committee only sees the state | Tuck shop owner, Resident | C |
 | FR-SV-03 | Laundry: the committee sets prices; residents book a pickup (date and time slot) with items | Resident, Committee Member | C |
-| FR-SV-04 | Laundry moves requested, picked up, washing, ready, delivered, one step at a time; the flat is told at each step | Staff | C |
+| FR-SV-04 | The laundry service moves laundry requested, picked up, washing, ready, delivered, one step at a time; the flat is told at each step; the committee only sees the state | Laundry service | C |
 | FR-SV-05 | Parcel desk: the guard logs a delivery for a flat, the flat is told, the guard marks it collected | Staff (guard), Resident | S |
 | FR-SV-06 | Community events: the committee posts and cancels events; residents say they are going | Committee Member, Resident | C |
 
