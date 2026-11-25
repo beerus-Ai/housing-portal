@@ -30,6 +30,7 @@
       <form id="stgeneral" class="col st-form">${field('stn', 'Society name', `<input class="input" id="stn" name="society_name" required maxlength="100" value="${esc(s.society_name)}">`)}
       ${field('stk', 'Type of society', `<select class="input" id="stk" name="society_kind">${kinds.map(k => `<option ${k === s.society_kind ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select>`)}
       ${field('stal', 'Cost approval limit (rupees)', `<input class="input" id="stal" name="approval_limit" type="number" min="0" step="1" inputmode="numeric" style="max-width:220px" value="${esc(s.approval_limit != null ? s.approval_limit : 10000)}">`, 'Cost estimates above this amount wait for the head of committee to approve.')}
+      ${field('stcl', 'Resident credit limit (rupees)', `<input class="input" id="stcl" name="credit_limit" type="number" min="0" step="1" inputmode="numeric" style="max-width:220px" value="${esc(s.credit_limit != null ? s.credit_limit : 3000)}">`, 'Most a flat can owe for tuck shop and laundry bought on its maintenance account. 0 switches credit off.')}
       ${saveRow('Save')}</form>`;
   };
 
@@ -81,14 +82,17 @@
   const userRow = u => {
     const stag = { approved: 'tag-accent', pending: 'tag-accent-2', suspended: 'tag-danger', rejected: 'tag-neutral' }[u.status] || 'tag-neutral';
     const ctl = u.status === 'approved' || u.status === 'suspended';
-    const open = ST.edit === u.id ? 'edit' : ST.pw === u.id ? 'pw' : ST.del === u.id ? 'del' : '';
+    const open = ST.card === u.id ? 'card' : ST.edit === u.id ? 'edit' : ST.pw === u.id ? 'pw' : ST.del === u.id ? 'del' : '';
     const menu = HP.kebab(`More actions for ${u.name}`, [
+      { label: 'Card and activity', icon: 'identification-card', act: 'stcard', data: { id: u.id } },
       { label: 'Edit details', icon: 'pencil-simple', act: 'stedit', data: { id: u.id } },
       { label: 'Reset password', icon: 'key', act: 'stpw', data: { id: u.id } },
       ctl ? { label: u.status === 'approved' ? 'Suspend' : 'Reactivate', icon: u.status === 'approved' ? 'pause-circle' : 'play-circle', act: 'stsuspend', data: { id: u.id, to: u.status === 'approved' ? 'suspended' : 'approved' } } : null,
       { label: 'Remove', icon: 'trash', act: 'stdel', data: { id: u.id }, danger: true },
     ]);
-    const panel = open === 'edit' ? `<div class="st-user-c st-panel-in">
+    const panel = open === 'card' ? `<div class="st-panel-in col" style="align-items:stretch">${ST.cardData ? HP.cardPanel(ST.cardData, { name: u.name }) : '<p class="muted">Loading…</p>'}
+        <form class="st-card-issue row" data-id="${u.id}" style="gap:8px;flex-wrap:nowrap"><label class="sr" for="sc${u.id}">Card number</label><input class="input" id="sc${u.id}" name="serial" placeholder="Tap or type a card number to issue or replace" autocomplete="off"><button class="btn btn-primary">${ic('identification-card')}Issue card</button><button type="button" class="btn btn-secondary" data-act="stclose">Close</button></form></div>`
+      : open === 'edit' ? `<div class="st-user-c st-panel-in">
         <div class="field st-sel"><label for="ut${u.id}">Type</label><select class="input" id="ut${u.id}" data-utype="${u.id}">${['owner', 'tenant', 'family'].map(t => `<option value="${t}" ${u.resident_type === t ? 'selected' : ''}>${TYPE[t]}</option>`).join('')}</select></div>
         <form class="st-uflat" data-id="${u.id}"><div class="field"><label for="uf${u.id}">Flat</label><div class="row" style="flex-wrap:nowrap;gap:6px"><input class="input" id="uf${u.id}" name="flat" required maxlength="20" value="${esc(u.flat || '')}"><button class="btn btn-secondary">Save</button></div></div></form>
         <button type="button" class="btn btn-ghost" data-act="stclose" style="align-self:flex-end">Done</button></div>`
@@ -145,7 +149,8 @@
   ACT.stsuspend = run(async el => { await API.admin.patchUser(el.dataset.id, { status: el.dataset.to }); toast(el.dataset.to === 'suspended' ? 'Suspended' : 'Reactivated'); await reload(); });
   ACT.stpw = el => { const id = Number(el.dataset.id); ST.pw = ST.pw === id ? null : id; ST.del = ST.edit = null; drawUsers(); const i = $(`#up${id}`); if (i) i.focus(); };
   ACT.stedit = el => { const id = Number(el.dataset.id); ST.edit = ST.edit === id ? null : id; ST.pw = ST.del = null; drawUsers(); const i = $(`#ut${id}`); if (i) i.focus(); };
-  ACT.stclose = () => { ST.edit = ST.pw = ST.del = null; drawUsers(); };
+  ACT.stclose = () => { ST.edit = ST.pw = ST.del = ST.card = null; drawUsers(); };
+  ACT.stcard = async el => { const id = Number(el.dataset.id); ST.card = ST.card === id ? null : id; ST.edit = ST.pw = ST.del = null; ST.cardData = null; drawUsers(); if (ST.card) { try { ST.cardData = await HP.api('GET', `/api/admin/users/${id}/card`); } catch (x) { ST.cardData = { activity: [], cards: [] }; } drawUsers(); } };
   ACT.stdel = el => { ST.del = Number(el.dataset.id); ST.pw = ST.edit = null; drawUsers(); };
   ACT.stdelkeep = () => { ST.del = null; drawUsers(); };
   ACT.stdelok = run(async el => { await API.admin.removeUser(el.dataset.id); ST.del = null; toast('Removed'); await reload(); });
@@ -156,6 +161,12 @@
   ACT.stgdkeep = () => { ST.gdel = null; render(); };
   ACT.stgdok = run(async el => { ST.gdel = null; await API.gate.removeGuard(el.dataset.id); toast('Guard removed'); render(); });
 
+  document.addEventListener('submit', async e => {
+    const f = e.target.closest && e.target.closest('.st-card-issue'); if (!f) return;
+    e.preventDefault(); const id = f.dataset.id;
+    try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial: f.serial.value }); toast('Community card issued'); ST.cardData = await HP.api('GET', `/api/admin/users/${id}/card`); drawUsers(); }
+    catch (x) { toast(x.message, 'error'); }
+  });
   document.addEventListener('input', e => {
     if (e.target.id === 'stq') { ST.q = e.target.value; drawUsers(); }
   });
@@ -174,6 +185,7 @@
       if (f.id === 'stgeneral') {
         const body = { society_name: d.society_name.trim(), society_kind: d.society_kind };
         if (d.approval_limit !== undefined && d.approval_limit !== '') body.approval_limit = Number(d.approval_limit);
+        if (d.credit_limit !== undefined && d.credit_limit !== '') body.credit_limit = Number(d.credit_limit);
         const r = await API.admin.setSettings(body);
         if (body.approval_limit != null) (ST.settings = ST.settings || {}).approval_limit = body.approval_limit;
         ST.settings = Object.assign(ST.settings || {}, { society_name: d.society_name.trim(), society_kind: d.society_kind }, r && r.society_name ? r : {});

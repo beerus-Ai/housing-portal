@@ -111,6 +111,54 @@ for r, p in enumerate(d["personas"], 5):
     pe.cell(row=r, column=1).alignment = Alignment(horizontal="center", vertical="top")
     pe.row_dimensions[r].height = 15 * max(len(p["goals"]), 3) + 6
 
+# ---------- Tests and capacity
+if d.get("tests") and d.get("capacity"):
+    tc_ = wb.create_sheet("Tests and capacity")
+    title(tc_, "Tests done and capacity", "Automated suites, documented cases and the load test (scripts/load-test)", 5)
+    header(tc_, 4, ["Suite", "Tests", "Covers"], [36, 10, 70])
+    for r, (a, b, c) in enumerate(d["tests"]["suites"], 5):
+        for i, v in enumerate([a, b, c], 1): x = tc_.cell(row=r, column=i, value=v); x.font = F(size=10, bold=i == 1); x.alignment = wrap
+    r0 = 6 + len(d["tests"]["suites"])
+    for i, h in enumerate(["Users at once", "Requests/s", "p50 ms", "p95 ms", "Errors"], 1): x = tc_.cell(row=r0, column=i, value=h); x.font = F(bold=True, color="FFFFFF", size=10); x.fill = fill(NAVY)
+    for r, l in enumerate(d["capacity"]["levels"], r0 + 1):
+        for i, k in enumerate(["concurrency", "rps", "p50_ms", "p95_ms", "errors"], 1): tc_.cell(row=r, column=i, value=l[k]).font = F(size=10)
+    rr = r0 + len(d["capacity"]["levels"]) + 2
+    tc_.cell(row=rr, column=1, value=f"About {d['capacity']['users']} people at the same moment ({d['capacity']['sustained_rps']} requests/s at p95 under 500 ms)").font = F(bold=True, color=NAVY, size=11)
+    for r, (a, b, c) in enumerate(d["capacity"]["scale"], rr + 2):
+        for i, v in enumerate([a, b, c], 1): x = tc_.cell(row=r, column=i, value=v); x.font = F(size=10, bold=i == 1); x.alignment = wrap
+    ch = BarChart(); ch.type = "col"; ch.title = "Requests/s by requests in flight"
+    ch.add_data(Reference(tc_, min_col=2, min_row=r0, max_row=r0 + len(d['capacity']['levels'])), titles_from_data=True)
+    ch.set_categories(Reference(tc_, min_col=1, min_row=r0 + 1, max_row=r0 + len(d['capacity']['levels'])))
+    ch.series[0].graphicalProperties.solidFill = TEAL; ch.legend = None; ch.roundedCorners = False; ch.x_axis.delete = False; ch.y_axis.delete = False; ch.height, ch.width = 7, 14
+    tc_.add_chart(ch, f"G{r0}")
+
+# ---------- Technology stack and API map
+st = wb.create_sheet("API map")
+title(st, "Technology stack and API map", "How the front end and the back-end APIs are connected (contracts in docs/*-api.md)", 4)
+header(st, 4, ["Tier", "What"], [20, 110])
+for r, (a, b) in enumerate(d["stack"]["tiers"], 5):
+    st.cell(row=r, column=1, value=a).font = F(bold=True, color=NAVY, size=10)
+    st.cell(row=r, column=2, value=b).font = F(size=10); st.cell(row=r, column=2).alignment = wrap
+r0 = 6 + len(d["stack"]["tiers"])
+for i, (h, w) in enumerate(zip(["Area", "Main routes", "Used by", "Contract"], [26, 70, 30, 20]), 1):
+    c = st.cell(row=r0, column=i, value=h); c.font = F(bold=True, color="FFFFFF", size=10); c.fill = fill(NAVY)
+    st.column_dimensions[c.column_letter].width = max(st.column_dimensions[c.column_letter].width or 0, w)
+for r, row in enumerate(d["stack"]["apis"], r0 + 1):
+    for c, v in enumerate(row, 1):
+        cell = st.cell(row=r, column=c, value=v); cell.font = F(size=10, bold=c == 1, color=NAVY if c == 1 else "3A3A3A"); cell.alignment = wrap
+
+# ---------- Roles (owner, tenant, family, committee)
+ro = wb.create_sheet("Roles")
+title(ro, "Owner, tenant, family and committee", "Who can do what (defaults; the committee can change resident access in Settings)", 5)
+header(ro, 4, [""] + d["roles"]["cols"], [24, 30, 30, 30, 40])
+for r, row in enumerate(d["roles"]["rows"], 5):
+    for c, v in enumerate(row, 1):
+        cell = ro.cell(row=r, column=c, value=v)
+        cell.font = F(size=10, bold=c == 1, color=NAVY if c == 1 else "3A3A3A")
+        cell.alignment = wrap
+        cell.fill = fill(BEIGE) if r % 2 else PatternFill()
+ro.cell(row=6 + len(d["roles"]["rows"]), column=1, value=d["roles"]["note"]).font = F(size=10, italic=True, color="666666")
+
 # ---------- Scope ----------
 sc = wb.create_sheet("Scope")
 title(sc, "Scope", "Problem, goal, what is in and out (Session 3 brief; product architecture whiteboard, 25 Nov 2026)", 3)
@@ -251,7 +299,7 @@ dn.height, dn.width = 9, 9
 db.add_chart(dn, f"G{tot + 2}")
 
 for ws in wb.worksheets:
-    ws.sheet_properties.tabColor = {"Dashboard": NAVY, "Functional Requirements": TEAL, "Non-Functional": DTEAL, "Personas": CORAL, "Scope": LIME, "User Stories": GREY}[ws.title]
+    ws.sheet_properties.tabColor = {"Dashboard": NAVY, "Functional Requirements": TEAL, "Non-Functional": DTEAL, "Personas": CORAL, "Roles": CORAL, "API map": NAVY, "Tests and capacity": DTEAL, "Scope": LIME, "User Stories": GREY}[ws.title]
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True

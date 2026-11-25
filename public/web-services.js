@@ -6,12 +6,12 @@
   const { S, PAGES, ACT, page, render, isAdmin } = W;
   const V = RAPI.svc;
   const $ = (s, r = document) => r.querySelector(s);
-  const X = { cart: {}, wash: {}, err: '', itemEdit: null };
+  const X = { cart: {}, wash: {}, err: '', itemEdit: null, ful: 'delivery', pay: 'cash', counter: {}, who: null, cpay: 'cash' };
   const role = () => (S.me ? S.me.role : '');
   const isRes = () => role() === 'resident';
   const isShop = () => role() === 'shop', isLaundry = () => role() === 'laundry';
   const isDesk = () => ['admin', 'staff', 'guard'].includes(role());
-  W.noRedraw = (prev => () => (prev && prev()) || (['shop', 'laundry'].includes(S.page) && (Object.keys(X.cart).length > 0 || Object.keys(X.wash).length > 0)) || X.itemEdit != null)(W.noRedraw);
+  W.noRedraw = (prev => () => (prev && prev()) || (['shop', 'laundry'].includes(S.page) && (Object.keys(X.cart).length > 0 || Object.keys(X.wash).length > 0 || X.who != null)) || X.itemEdit != null)(W.noRedraw);
 
   const head = (title, sub, right = '') => `<header class="rl-head"><div><h1>${esc(title)}</h1>${sub ? `<p class="muted">${esc(sub)}</p>` : ''}</div><div class="row rl-head-r">${HP.liveBadge()}${right}</div></header>`;
   const field = (id, label, input, hint) => `<div class="field"><label for="${id}">${esc(label)}</label>${input}${hint ? `<span class="muted sm">${esc(hint)}</span>` : ''}</div>`;
@@ -20,7 +20,7 @@
   const cap = s => String(s || '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
   const istToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
   const tag = (s, map) => { const [cls, label] = map[s] || ['tag-neutral', cap(s)]; return `<span class="tag ${cls}">${esc(label)}</span>`; };
-  const SHOP_TAG = { placed: ['tag-accent-2', 'Placed'], ready: ['tag-accent', 'Ready'], delivered: ['tag-outline', 'Delivered'], cancelled: ['tag-neutral', 'Cancelled'] };
+  const SHOP_TAG = { placed: ['tag-accent-2', 'Placed'], ready: ['tag-accent', 'Ready'], delivered: ['tag-outline', 'Delivered'], collected: ['tag-outline', 'Collected'], cancelled: ['tag-neutral', 'Cancelled'] };
   const LAUNDRY_STEPS = [['requested', 'Requested'], ['picked_up', 'Picked up'], ['washing', 'Washing'], ['ready', 'Ready'], ['delivered', 'Delivered']];
   const NEXT_LAUNDRY = { requested: 'picked_up', picked_up: 'washing', washing: 'ready', ready: 'delivered' };
   const CATS = ['groceries', 'dairy', 'snacks', 'household', 'personal care', 'other'];
@@ -28,6 +28,13 @@
   const PHOTOS = ['milk', 'bread', 'eggs', 'rice', 'tea', 'biscuits', 'detergent', 'soap'];
   const photoSel = (id, cur) => `<select class="input" id="${id}" name="image"><option value="">No photo (icon)</option>${PHOTOS.map(p => `<option value="/img/shop/${p}.jpg" ${cur === `/img/shop/${p}.jpg` ? 'selected' : ''}>${esc(cap(p))}</option>`).join('')}</select>`;
   const CAT_IC = { groceries: 'basket', dairy: 'drop', snacks: 'cookie', household: 'broom', 'personal care': 'hand-soap', other: 'package' };
+  // How the order is received and paid (purchases are linked to the flat's finances).
+  const PAY_LABEL = { cash: 'Cash', upi: 'UPI', account: 'On account' };
+  const payTag = o => { const st = o.payment_status; const [cls, t] = st === 'paid' ? ['tag-outline', `${PAY_LABEL[o.payment]} · paid`] : st === 'on_account' ? ['tag-accent-2', 'On account · in dues'] : ['tag-neutral', `${PAY_LABEL[o.payment] || 'Cash'} on ${o.fulfilment === 'pickup' ? 'pick-up' : 'delivery'}`]; return `<span class="tag ${cls}">${esc(t)}</span>`; };
+  const fulTag = o => o.fulfilment ? `<span class="tag tag-outline">${ic(o.fulfilment === 'pickup' ? 'storefront' : o.fulfilment === 'counter' ? 'identification-card' : 'house')} ${o.fulfilment === 'pickup' ? 'Pick-up' : o.fulfilment === 'counter' ? 'At the counter (card)' : 'To the door'}</span>` : '';
+  // Delivery or pick-up and the payment method, with the credit left on the maintenance account.
+  const checkout = (credit, kind) => `<fieldset class="sv-choice"><legend>${kind === 'shop' ? 'How do you want it?' : 'Pickup and return'}</legend>${kind === 'shop' ? ['delivery', 'pickup'].map(v => `<label class="sv-opt ${X.ful === v ? 'on' : ''}"><input type="radio" name="fulfilment" value="${v}" ${X.ful === v ? 'checked' : ''} data-svful>${ic(v === 'pickup' ? 'storefront' : 'house')}<span><b>${v === 'pickup' ? 'Pick up at the shop' : 'Deliver to my door'}</b><span class="muted sm">${v === 'pickup' ? 'Collect it when it is ready' : 'Flat ' + esc(S.me.flat || '')}</span></span></label>`).join('') : '<p class="muted sm" style="margin:0">Collected from and returned to your door.</p>'}</fieldset>
+    <fieldset class="sv-choice"><legend>How will you pay?</legend>${['cash', 'upi', 'account'].map(v => { const off = v === 'account' && credit && credit.limit <= 0; return `<label class="sv-opt ${X.pay === v ? 'on' : ''} ${off ? 'off' : ''}"><input type="radio" name="payment" value="${v}" ${X.pay === v ? 'checked' : ''} ${off ? 'disabled' : ''} data-svpay>${ic(v === 'cash' ? 'money' : v === 'upi' ? 'qr-code' : 'receipt')}<span><b>${v === 'cash' ? 'Cash' : v === 'upi' ? 'UPI' : 'Add to my maintenance account'}</b><span class="muted sm">${v === 'account' ? (credit ? (credit.limit > 0 ? `Pay later with your dues · ${rupees(Math.max(0, credit.limit - credit.used))} of ${rupees(credit.limit)} credit left` : 'Credit is switched off') : 'Pay later with your dues') : `Pay when you ${kind === 'shop' && X.ful === 'pickup' ? 'collect' : 'receive'} it`}</span></span></label>`; }).join('')}</fieldset>`;
   const lines = o => (o.lines || []).map(l => `${l.qty} × ${esc(l.name || l.item)}`).join(', ');
   const steps = cur => { const n = LAUNDRY_STEPS.findIndex(s => s[0] === cur); return `<span class="sv-steps" aria-label="Stage: ${esc(cap(cur))}">${LAUNDRY_STEPS.map(([k, l], i) => `<span class="sv-step ${i <= n ? 'on' : ''}"><i></i>${esc(l)}</span>`).join('')}</span>`; };
 
@@ -35,27 +42,27 @@
   // Tuck shop
   // =====================================================================
   PAGES.shop = async () => {
-    const [items, orders] = await Promise.all([V.items(), V.orders()]);
+    const [items, orders, credit] = await Promise.all([V.items(), V.orders(), isRes() ? HP.api('GET', '/api/credit').catch(() => null) : null]);
     if (isRes()) {
       const cartLines = Object.entries(X.cart).map(([id, qty]) => ({ it: items.find(i => i.id === Number(id)), qty })).filter(x => x.it && x.qty > 0);
       const total = cartLines.reduce((t, x) => t + x.it.price * x.qty, 0);
       const card = i => { const q = X.cart[i.id] || 0; return `<article class="form-card sv-item ${q ? 'in' : ''}">${i.image ? `<img class="sv-photo" src="${esc(i.image)}" alt="${esc(i.name)}" loading="lazy">` : `<span class="tile lg">${ic(CAT_IC[i.category] || 'package')}</span>`}
         <span class="col" style="gap:2px;min-width:0;flex:1"><b>${esc(i.name)}</b><span class="muted sm">${esc(i.unit || cap(i.category))} · ${i.stock ? esc(i.stock) + ' left' : 'Sold out'}</span><span class="sv-price">${esc(rupees(i.price))}</span></span>
         <span class="sv-qty">${q ? `<button class="btn btn-secondary" data-act="svcart" data-id="${i.id}" data-d="-1" aria-label="One less ${esc(i.name)}">${ic('minus')}</button><b aria-live="polite">${q}</b>` : ''}<button class="btn btn-primary" data-act="svcart" data-id="${i.id}" data-d="1" ${q >= i.stock ? 'disabled' : ''} aria-label="Add ${esc(i.name)}">${ic('plus')}</button></span></article>`; };
-      const mine = orders.slice(0, 8).map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · ${esc(stamp(o.created_at))}</span><span>${lines(o)}</span><b>${esc(rupees(o.total))}</b></span>
+      const mine = orders.slice(0, 8).map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · ${esc(stamp(o.created_at))}</span><span>${lines(o)}</span><span class="row" style="gap:6px"><b>${esc(rupees(o.total))}</b>${fulTag(o)}${payTag(o)}</span></span>
         <span class="sv-state">${tag(o.status, SHOP_TAG)}</span><span class="row-acts">${o.status === 'placed' ? `<button class="btn btn-secondary" data-act="svshopst" data-id="${o.id}" data-s="cancelled">Cancel</button>` : ''}</span></div>`).join('');
-      return page(`<div class="rl">${head('Tuck shop', 'Everyday groceries from the society shop, delivered to your door. Pay cash or UPI on delivery.')}
+      return page(`<div class="rl">${head('Tuck shop', 'Everyday groceries from the society shop. Delivered to your door or ready to pick up; pay cash, UPI or on your maintenance account.')}
         <div class="sv-shop"><div class="sv-grid">${items.map(card).join('') || '<p class="muted">The shop has no items yet.</p>'}</div>
         <aside class="form-card col sv-cart"><h3 style="margin:0">${ic('shopping-cart')} Your basket</h3>
           ${cartLines.length ? cartLines.map(x => `<div class="row" style="justify-content:space-between"><span>${x.qty} × ${esc(x.it.name)}</span><b>${esc(rupees(x.it.price * x.qty))}</b></div>`).join('') : '<p class="muted" style="margin:0">Tap + to add items.</p>'}
           <div class="row sv-total"><span>Total</span><b>${esc(rupees(total))}</b></div>
-          <form id="svorder" class="col" style="gap:var(--space-2)">${field('svnote', 'Note (optional)', '<input class="input" id="svnote" name="note" maxlength="300" placeholder="e.g. Ring the bell twice">')}
+          <form id="svorder" class="col" style="gap:var(--space-2)">${checkout(credit, 'shop')}${field('svnote', 'Note (optional)', '<input class="input" id="svnote" name="note" maxlength="300" placeholder="e.g. Ring the bell twice">')}
           ${errLine()}<button class="btn btn-primary btn-lg" ${cartLines.length ? '' : 'disabled'}>${ic('paper-plane-tilt')}Place order</button></form></aside></div>
         <section class="col" style="gap:var(--space-2)"><h2>Your orders</h2>${mine || '<p class="muted">No orders yet.</p>'}</section></div>`);
     }
     const open = orders.filter(o => ['placed', 'ready'].includes(o.status)), recent = orders.filter(o => !['placed', 'ready'].includes(o.status)).slice(0, 10);
-    const acts = o => !isShop() ? '' : `<span class="row-acts">${o.status === 'placed' ? `<button class="btn btn-primary" data-act="svshopst" data-id="${o.id}" data-s="ready">${ic('check')}Ready</button>` : `<button class="btn btn-primary" data-act="svshopst" data-id="${o.id}" data-s="delivered">${ic('truck')}Delivered</button>`}<button class="btn btn-secondary" data-act="svshopst" data-id="${o.id}" data-s="cancelled">Cancel</button></span>`;
-    const queue = open.map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · Flat ${esc(o.flat)} · ${esc(o.resident || '')} · ${esc(stamp(o.created_at))}</span><span>${lines(o)}</span>${o.note ? `<span class="muted sm">${esc(o.note)}</span>` : ''}<b>${esc(rupees(o.total))}</b></span>
+    const acts = o => !isShop() ? '' : `<span class="row-acts">${o.status === 'placed' ? `<button class="btn btn-primary" data-act="svshopst" data-id="${o.id}" data-s="ready">${ic('check')}Ready</button>` : (o.fulfilment === 'pickup' ? `<button class="btn btn-primary" data-act="svshopst" data-id="${o.id}" data-s="collected">${ic('hand-arrow-down')}Collected${o.payment !== 'account' ? ' · paid' : ''}</button>` : `<button class="btn btn-primary" data-act="svshopst" data-id="${o.id}" data-s="delivered">${ic('truck')}Delivered${o.payment !== 'account' ? ' · paid' : ''}</button>`)}<button class="btn btn-secondary" data-act="svshopst" data-id="${o.id}" data-s="cancelled">Cancel</button></span>`;
+    const queue = open.map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · Flat ${esc(o.flat)} · ${esc(o.resident || '')} · ${esc(stamp(o.created_at))}</span><span>${lines(o)}</span>${o.note ? `<span class="muted sm">${esc(o.note)}</span>` : ''}<span class="row" style="gap:6px"><b>${esc(rupees(o.total))}</b>${fulTag(o)}${payTag(o)}</span></span>
       <span class="sv-state">${tag(o.status, SHOP_TAG)}</span>${acts(o)}</div>`).join('');
     const stock = isShop() ? `<section class="col" style="gap:var(--space-2)"><h2>Items and stock</h2><div class="table-wrap"><table class="table"><thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Stock</th><th>Shown</th><th></th></tr></thead><tbody>
       ${items.map(i => X.itemEdit === i.id ? `<tr><td colspan="6"><form id="svitemedit" class="row" data-id="${i.id}" style="gap:8px;flex-wrap:wrap"><input class="input" name="price" type="number" min="1" step="0.5" value="${esc(i.price)}" style="width:110px" aria-label="Price"><input class="input" name="stock" type="number" min="0" step="1" value="${esc(i.stock)}" style="width:100px" aria-label="Stock">${photoSel('svie' + i.id, i.image)}<label class="row" style="gap:6px"><input type="checkbox" name="active" ${i.active ? 'checked' : ''}> Shown</label><button class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-act="svitemedit" data-id="">Cancel</button></form></td></tr>`
@@ -65,30 +72,49 @@
         ${field('svim', 'Photo', photoSel('svim', ''))}
         ${errLine()}<div class="row"><button class="btn btn-primary">${ic('plus')}Add item</button></div></form></section>` : '';
     const watch = isShop() ? '' : `<p class="callout" style="margin:0">${ic('eye')} The tuck shop owner prepares and delivers orders. You can follow their state here.</p>
-      <section class="col" style="gap:var(--space-2)"><h2>Recently finished</h2>${recent.map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · Flat ${esc(o.flat)} · ${esc(stamp(o.updated_at || o.created_at))}</span><span>${lines(o)}</span></span><span class="sv-state">${tag(o.status, SHOP_TAG)}</span></div>`).join('') || '<p class="muted">Nothing finished yet.</p>'}</section>`;
+      <section class="col" style="gap:var(--space-2)"><h2>Recently finished</h2>${recent.map(o => `<div class="list-row sv-order"><span class="tile">${ic('shopping-bag')}</span><span class="col" style="gap:2px;flex:1;min-width:0"><span class="muted xs">#${o.id} · Flat ${esc(o.flat)} · ${esc(stamp(o.updated_at || o.created_at))}</span><span>${lines(o)}</span><span class="row" style="gap:6px">${fulTag(o)}${payTag(o)}</span></span><span class="sv-state">${tag(o.status, SHOP_TAG)}</span></div>`).join('') || '<p class="muted">Nothing finished yet.</p>'}</section>`;
+    const cLines = Object.entries(X.counter).map(([id, qty]) => ({ it: items.find(i => i.id === Number(id)), qty })).filter(x => x.it && x.qty > 0);
+    const cTotal = cLines.reduce((t, x) => t + x.it.price * x.qty, 0);
+    const counter = !isShop() ? '' : `<section class="form-card col sv-counter"><h2 style="margin:0">${ic('identification-card')} Counter sale with a community card</h2>
+      <form id="svcard" class="row" style="gap:8px;flex-wrap:nowrap"><label class="sr" for="svcs">Card number</label><input class="input" id="svcs" name="serial" autocomplete="off" placeholder="Tap the resident's card (or type its number)" value="${esc(X.who ? X.who.serial : '')}">${'NDEFReader' in window ? `<button type="button" class="btn btn-secondary" data-act="svnfc">${ic('contactless-payment')}NFC</button>` : ''}<button class="btn btn-secondary">Find</button></form>
+      ${X.who ? `<div class="row sv-who"><span class="avatar">${esc(X.who.name.split(' ').map(w => w[0]).join('').slice(0, 2))}</span><span class="col" style="gap:0;flex:1"><b>${esc(X.who.name)}</b><span class="muted sm">Flat ${esc(X.who.flat)} · credit ${esc(rupees(X.who.credit_used))} of ${esc(rupees(X.who.credit_limit || 0))} used</span></span><button type="button" class="btn btn-ghost" data-act="svwhoclear">Clear</button></div>
+        <div class="sv-counter-items">${items.filter(i => i.active).map(i => `<div class="row sv-rate">${i.image ? `<img class="sv-thumb" src="${esc(i.image)}" alt="">` : ''}<span style="flex:1">${esc(i.name)} <span class="muted sm">${esc(rupees(i.price))} · ${esc(i.stock)} left</span></span><span class="sv-qty">${X.counter[i.id] ? `<button type="button" class="btn btn-secondary" data-act="svctr" data-id="${i.id}" data-d="-1" aria-label="One less">${ic('minus')}</button><b>${X.counter[i.id]}</b>` : ''}<button type="button" class="btn btn-primary" data-act="svctr" data-id="${i.id}" data-d="1" ${(X.counter[i.id] || 0) >= i.stock ? 'disabled' : ''} aria-label="Add ${esc(i.name)}">${ic('plus')}</button></span></div>`).join('')}</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">${[['cash', 'Cash', 'money'], ['upi', 'UPI', 'qr-code'], ['account', 'Maintenance account', 'receipt']].map(([v, l, icn]) => `<button type="button" class="btn ${X.cpay === v ? 'btn-primary' : 'btn-secondary'}" data-act="svcpay" data-v="${v}" aria-pressed="${X.cpay === v}">${ic(icn)}${l}</button>`).join('')}</div>
+        <div class="row sv-total"><span>Total</span><b>${esc(rupees(cTotal))}</b></div><button type="button" class="btn btn-primary btn-lg" data-act="svcharge" ${cLines.length ? '' : 'disabled'}>${ic('check')}Charge ${esc(rupees(cTotal))} ${X.cpay === 'account' ? 'to the account' : X.cpay === 'upi' ? 'by UPI' : 'in cash'}</button>` : '<p class="muted sm" style="margin:0">Tap a resident\'s card to sell at the counter and charge cash, UPI or their maintenance account.</p>'}</section>`;
     const shopHero = isShop() ? HP.hero({ theme: 'shop', name: S.me.name, kicker: `Tuck shop · ${HP.todayLabel()}`, line: open.length ? `<b>${open.length} order${open.length > 1 ? 's' : ''}</b> to prepare · ${items.filter(i => i.stock <= 3).length} item(s) low on stock` : 'No orders waiting. Stock looks after itself as residents order.', actions: [] }) : '';
     page(`<div class="rl">${shopHero}${head('Tuck shop', isShop() ? `${open.length} open order${open.length === 1 ? '' : 's'}. Prepare, then mark delivered.` : `${open.length} open order${open.length === 1 ? '' : 's'} at the tuck shop.`)}
-      ${isShop() ? '' : watch.split('\n')[0]}<section class="col" style="gap:var(--space-2)"><h2>${isShop() ? 'Orders to handle' : 'Open orders'}</h2>${queue || '<p class="muted">No open orders.</p>'}</section>${stock}${isShop() ? '' : watch.split('\n').slice(1).join('')}</div>`);
+      ${isShop() ? counter : watch.split('\n')[0]}<section class="col" style="gap:var(--space-2)"><h2>${isShop() ? 'Orders to handle' : 'Open orders'}</h2>${queue || '<p class="muted">No open orders.</p>'}</section>${stock}${isShop() ? '' : watch.split('\n').slice(1).join('')}</div>`);
   };
   ACT.svcart = el => { const id = el.dataset.id, d = Number(el.dataset.d); X.cart[id] = Math.max(0, (X.cart[id] || 0) + d); if (!X.cart[id]) delete X.cart[id]; render(); };
   ACT.svshopst = async el => { try { await V.orderStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'cancelled' ? 'Order cancelled' : 'Order ' + el.dataset.s); } catch (x) { toast(x.message, 'error'); } render(); };
+  const lookUp = async serial => { try { X.who = { ...(await HP.api('POST', '/api/shop/card', { serial })), serial }; } catch (x) { X.who = null; toast(x.message, 'error'); } render(); };
+  ACT.svctr = el => { const id = el.dataset.id; X.counter[id] = Math.max(0, (X.counter[id] || 0) + Number(el.dataset.d)); if (!X.counter[id]) delete X.counter[id]; render(); };
+  ACT.svcpay = el => { X.cpay = el.dataset.v; render(); };
+  ACT.svwhoclear = () => { X.who = null; X.counter = {}; render(); };
+  ACT.svnfc = async () => { try { const r = new NDEFReader(); await r.scan(); toast('Hold the card to the phone'); r.onreading = e => lookUp(e.serialNumber || ''); } catch (x) { toast(x.message || 'NFC not available', 'error'); } }; // eslint-disable-line no-undef
+  ACT.svcharge = async () => {
+    try { const items = Object.entries(X.counter).map(([id, qty]) => ({ id: Number(id), qty })); const r = await HP.api('POST', '/api/shop/counter', { serial: X.who.serial, items, payment: X.cpay });
+      toast(`${rupees(r.total)} charged to ${r.name} (${r.payment === 'account' ? 'maintenance account' : r.payment.toUpperCase()})`); X.counter = {}; X.who = null; }
+    catch (x) { toast(x.message, 'error'); }
+    render();
+  };
   ACT.svitemedit = el => { X.itemEdit = el.dataset.id ? Number(el.dataset.id) : null; render(); };
 
   // =====================================================================
   // Laundry service
   // =====================================================================
   PAGES.laundry = async () => {
-    const [rates, orders] = await Promise.all([V.rates(), V.laundry()]);
+    const [rates, orders, credit] = await Promise.all([V.rates(), V.laundry(), isRes() ? HP.api('GET', '/api/credit').catch(() => null) : null]);
     if (isRes()) {
       const total = rates.reduce((t, r) => t + r.price * (X.wash[r.id] || 0), 0);
       const today = istToday();
-      const mine = orders.slice(0, 8).map(o => `<article class="form-card col sv-wash"><div class="row" style="justify-content:space-between"><span class="muted sm">#${o.id} · pickup ${esc(day(o.pickup_date))}, ${esc(o.pickup_slot)}</span><b>${esc(rupees(o.total))}</b></div>
+      const mine = orders.slice(0, 8).map(o => `<article class="form-card col sv-wash"><div class="row" style="justify-content:space-between"><span class="muted sm">#${o.id} · pickup ${esc(day(o.pickup_date))}, ${esc(o.pickup_slot)}</span><span class="row" style="gap:6px"><b>${esc(rupees(o.total))}</b>${payTag(o)}</span></div>
         <span>${lines(o)}</span>${o.status === 'cancelled' ? '<span class="tag tag-neutral">Cancelled</span>' : steps(o.status)}${o.status === 'requested' ? `<button class="link-btn" data-act="svwashst" data-id="${o.id}" data-s="cancelled" style="align-self:flex-start">Cancel pickup</button>` : ''}</article>`).join('');
-      return page(`<div class="rl">${head('Laundry', 'Book a pickup. Clothes come back washed and ironed; pay on delivery.')}
+      return page(`<div class="rl">${head('Laundry', 'Book a pickup. Clothes come back washed and ironed; pay on delivery or on your maintenance account.')}
         <div class="split-eq" style="align-items:start"><form id="svwash" class="form-card col"><h3 style="margin:0">${ic('t-shirt')} Book a pickup</h3>
           <div class="col sv-rates">${rates.map(r => `<div class="row sv-rate"><span style="flex:1">${esc(r.item)} <span class="muted sm">${esc(rupees(r.price))}</span></span><span class="sv-qty">${X.wash[r.id] ? `<button type="button" class="btn btn-secondary" data-act="svwash" data-id="${r.id}" data-d="-1" aria-label="One less">${ic('minus')}</button><b>${X.wash[r.id]}</b>` : ''}<button type="button" class="btn btn-primary" data-act="svwash" data-id="${r.id}" data-d="1" aria-label="Add ${esc(r.item)}">${ic('plus')}</button></span></div>`).join('') || '<p class="muted">No laundry prices yet.</p>'}</div>
           <div class="two">${field('svwd', 'Pickup date', `<input class="input" id="svwd" name="pickup_date" type="date" min="${today}" value="${today}" required>`)}${field('svws', 'Time', `<select class="input" id="svws" name="pickup_slot"><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select>`)}</div>
-          ${field('svwn', 'Note (optional)', '<input class="input" id="svwn" name="note" maxlength="300" placeholder="e.g. Starch the shirts">')}
+          ${field('svwn', 'Note (optional)', '<input class="input" id="svwn" name="note" maxlength="300" placeholder="e.g. Starch the shirts">')}${checkout(credit, 'laundry')}
           <div class="row sv-total"><span>Total</span><b>${esc(rupees(total))}</b></div>${errLine()}<button class="btn btn-primary btn-lg" ${total ? '' : 'disabled'}>${ic('calendar-check')}Book pickup</button></form>
           <section class="col" style="gap:var(--space-3)"><h2>Your laundry</h2>${mine || '<p class="muted">No laundry booked yet.</p>'}</section></div></div>`);
     }
@@ -143,14 +169,19 @@
   // Form submits
   // =====================================================================
   const forms = {
-    svorder: async f => { const items = Object.entries(X.cart).map(([id, qty]) => ({ id: Number(id), qty })); const r = await V.order({ items, note: f.note.value }); X.cart = {}; toast(`Order #${r.id} placed: ${rupees(r.total)}`); },
+    svcard: async f => { await lookUp(f.serial.value.trim()); },
+    svorder: async f => { const items = Object.entries(X.cart).map(([id, qty]) => ({ id: Number(id), qty })); const r = await V.order({ items, note: f.note.value, fulfilment: X.ful, payment: X.pay }); X.cart = {}; toast(r.payment === 'account' ? `Order #${r.id} placed: ${rupees(r.total)} added to your maintenance account` : `Order #${r.id} placed: ${rupees(r.total)}, pay ${PAY_LABEL[r.payment]} on ${r.fulfilment === 'pickup' ? 'pick-up' : 'delivery'}`); },
     svitem: async f => { await V.addItem({ name: f.name.value, category: f.category.value, price: Number(f.price.value), stock: Number(f.stock.value), unit: f.unit.value, image: f.image.value || null }); toast('Item added'); },
     svitemedit: async f => { await V.updateItem(f.dataset.id, { price: Number(f.price.value), stock: Number(f.stock.value), active: f.active.checked, image: f.image.value || null }); X.itemEdit = null; toast('Saved'); },
-    svwash: async f => { const items = Object.entries(X.wash).map(([id, qty]) => ({ id: Number(id), qty })); const r = await V.bookLaundry({ pickup_date: f.pickup_date.value, pickup_slot: f.pickup_slot.value, note: f.note.value, items }); X.wash = {}; toast(`Pickup #${r.id} booked: ${rupees(r.total)}`); },
+    svwash: async f => { const items = Object.entries(X.wash).map(([id, qty]) => ({ id: Number(id), qty })); const r = await V.bookLaundry({ pickup_date: f.pickup_date.value, pickup_slot: f.pickup_slot.value, note: f.note.value, items, payment: X.pay }); X.wash = {}; toast(`Pickup #${r.id} booked: ${rupees(r.total)}`); },
     svrate: async f => { await V.addRate({ item: f.item.value, price: Number(f.price.value) }); toast('Price added'); },
     svparcel: async f => { await V.logParcel({ flat: f.flat.value, carrier: f.carrier.value, note: f.note.value }); toast('Logged. The flat has been told.'); },
     svevent: async f => { await V.addEvent({ title: f.title.value, starts_at: f.starts_at.value, location: f.location.value, description: f.description.value }); toast('Event posted'); },
   };
+  document.addEventListener('change', e => {
+    if (e.target.matches('[data-svful]')) { X.ful = e.target.value; render(); }
+    if (e.target.matches('[data-svpay]')) { X.pay = e.target.value; render(); }
+  });
   document.addEventListener('submit', async e => {
     const fn = forms[e.target.id]; if (!fn) return;
     e.preventDefault(); X.err = ''; setErr('');

@@ -265,7 +265,7 @@
           <figure style="margin:0">${d.has_photo ? `<img class="photo" style="height:240px;border-radius:14px" alt="Photo attached by resident" src="${API.requests.photoUrl(d.id)}">` : `<div style="height:240px;border-radius:14px;overflow:hidden">${photoSlot('No photo attached', 'camera')}</div>`}<figcaption class="muted sm">Photo attached by resident</figcaption></figure></div>`;
         S.selId = d.id;
       }
-      const filter = isAdmin() ? `<div class="row"><select class="input" id="fs" style="width:auto" aria-label="Filter by status"><option value="">Any status</option>${['open', 'assigned', 'in_progress', 'closed'].map(s => `<option value="${s}" ${S.filter === s ? 'selected' : ''}>${s.replace('_', ' ')}</option>`).join('')}</select>${S.catFilter ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearcat">${esc(catLabel(S.catFilter))} ✕</button>` : ''}${srcName ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearsrc">Via ${esc(srcName)} ✕</button>` : ''}<a href="${API.admin.exportUrl}">Export CSV</a></div>` : '';
+      const filter = isAdmin() ? `<div class="row"><select class="input" id="fs" style="width:auto" aria-label="Filter by status"><option value="">Any status</option>${['open', 'assigned', 'in_progress', 'closed'].map(s => `<option value="${s}" ${S.filter === s ? 'selected' : ''}>${s.replace('_', ' ')}</option>`).join('')}</select><span class="row" style="gap:4px">${HP.CATS.map(([k, l]) => `<button type="button" class="tag ${S.catFilter === k ? 'tag-accent' : 'tag-outline'} link-btn" style="text-decoration:none;color:inherit" data-act="catfilter" data-c="${k}">${esc(l)}</button>`).join('')}${['telegram', 'whatsapp'].map(c => `<button type="button" class="tag ${S.srcFilter === c ? 'tag-accent' : 'tag-outline'} link-btn" style="text-decoration:none;color:inherit" data-act="srcfilter" data-src="${c}" data-count="0">Via ${c === 'telegram' ? 'Telegram' : 'WhatsApp'}</button>`).join('')}</span>${S.catFilter ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearcat">${esc(catLabel(S.catFilter))} ✕</button>` : ''}${srcName ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearsrc">Via ${esc(srcName)} ✕</button>` : ''}<a href="${API.admin.exportUrl}">Export CSV</a></div>` : '';
       page(`<div class="split"><div class="col" style="gap:var(--space-1)"><h2 style="margin-bottom:var(--space-3)">${heading}</h2>${filter}${reqs.map(reqRow).join('') || '<p class="muted">No requests.</p>'}</div><div class="col" style="gap:var(--space-4)">${detail}</div></div>`);
     },
 
@@ -409,7 +409,7 @@
       page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Verification: approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
         <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span></span></span></td>
           <td>${esc(u.flat)}</td><td>${esc(TYPE[u.resident_type] || '')}</td><td>${esc(day(u.created_at))}</td>
-          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
+          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end;flex-wrap:nowrap"><label class="sr" for="card${u.id}">Card number for ${esc(u.name)}</label><input class="input" id="card${u.id}" placeholder="Card number (tap or type)" style="width:190px" autocomplete="off"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
     },
 
     async leases() {
@@ -537,7 +537,6 @@
       else await API.requests.assign(el.dataset.id, Number(v.replace(/^v:/, '')));
       toast('Assigned'); render();
     },
-    useai: async el => { await API.requests.assign(el.dataset.id, Number(el.dataset.v)); toast('Assigned'); render(); },
     aiaction: async el => { try { const r = await API.requests.aiAction(el.dataset.id); toast(r.plate ? 'Registered ' + r.plate : r.vendor ? 'Assigned ' + r.vendor : 'Done'); } catch (e) { toast(e.message, 'error'); } render(); },
     aidismiss: async el => { try { await API.requests.aiDismiss(el.dataset.id); toast('Suggestion dismissed'); } catch (e) { toast(e.message, 'error'); } render(); },
     draftnotice: async el => {
@@ -572,7 +571,13 @@
     gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message, 'error'); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
-    decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
+    decide: async el => {
+      const card = el.dataset.d === 'approve' && document.getElementById('card' + el.dataset.id) ? document.getElementById('card' + el.dataset.id).value.trim() : '';
+      await API.admin.decide(el.dataset.id, el.dataset.d);
+      if (card) { try { await HP.api('POST', `/api/admin/users/${el.dataset.id}/card`, { serial: card }); toast('Approved and community card issued'); } catch (x) { toast('Approved, but the card was not issued: ' + x.message, 'error'); } }
+      else toast(el.dataset.d === 'approve' ? 'Approved. Issue a card from Residents when you have one.' : 'Rejected');
+      render();
+    },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
   document.addEventListener('change', guard(async e => {

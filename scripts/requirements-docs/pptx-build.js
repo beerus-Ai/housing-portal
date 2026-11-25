@@ -196,6 +196,14 @@ module.exports = async function buildPptx(d, outFile) {
   });
   s.addNotes('Names are illustrative; no real resident data is used. Goals and pains for each persona are in the Word document.');
 
+  // 6b. Owner, tenant, family and committee
+  s = sslide();
+  title(s, 'Owner, tenant, family, committee', 2);
+  const head = [{ text: '', options: { fill: { color: C.navy } } }, ...d.roles.cols.map(c => ({ text: c, options: { bold: true, color: 'FFFFFF', fill: { color: C.navy } } }))];
+  s.addTable([head, ...d.roles.rows.map((r, i) => r.map((x, j) => ({ text: x, options: { bold: j === 0, color: j === 0 ? C.navy : C.ink, fill: { color: i % 2 ? 'FFFFFF' : C.beige } } })))],
+    { x: 0.6, y: 1.45, w: 12.1, colW: [2.1, 2.5, 2.5, 2.5, 2.5], fontFace: 'Calibri', fontSize: 11, border: { type: 'solid', pt: 0.5, color: 'E2DFD3' }, valign: 'middle', rowH: 0.52 });
+  s.addText(d.roles.note, { x: 0.6, y: 6.25, w: 12.1, h: 0.6, fontSize: 11, italic: true, color: S.accent6, margin: 0, isTextBox: true });
+
   // 7. Process list
   section(sections[3]);
   s = sslide();
@@ -292,6 +300,34 @@ module.exports = async function buildPptx(d, outFile) {
     s.addText(n.short, { x: x + 0.1, y: yy + 1.38, w: 1.42, h: 1.05, fontSize: 11, color: S.text1, align: 'center', valign: 'top', margin: 0, isTextBox: true });
   });
   s.addText('Coral tiles: a target still has to be agreed or the control is not built yet.', { x: 0.6, y: 6.75, w: 8, h: 0.3, fontSize: 11, italic: true, color: S.accent2, margin: 0, isTextBox: true });
+
+  // 12b. Technology stack and API connections
+  s = slide('CONTENT');
+  title(s, 'Stack and API connections');
+  const clients = ['Web app', 'Phone app (PWA)', 'Flutter app', 'React app'];
+  clients.forEach((c, i) => { card(s, 0.6 + i * 3.08, 1.45, 2.9, 0.9); s.addText(c, { x: 0.6 + i * 3.08, y: 1.45, w: 2.9, h: 0.9, fontFace: 'Arial', fontSize: 16, bold: true, color: S.accent4, align: 'center', valign: 'middle', margin: 0, isTextBox: true }); });
+  s.addText('HTTPS + JSON · session cookie after POST /api/login', { x: 0.6, y: 2.45, w: 12.1, h: 0.4, fontSize: 13, bold: true, color: S.accent4, align: 'center', margin: 0, isTextBox: true });
+  card(s, 0.6, 2.95, 12.1, 1.45, S.text2);
+  s.addText([{ text: 'REST API · Node 22 + Express', options: { fontSize: 22, bold: true, fontFace: 'Arial', breakLine: true } }, { text: 'Role check on every route · strict allow-lists · CSRF check · audit trail · notifications · live refresh (/api/pulse). Java Spring Boot with the same URLs is the migration target.', options: { fontSize: 13, color: 'CFD3F0' } }],
+    { x: 0.9, y: 3.0, w: 11.6, h: 1.35, color: S.background1, valign: 'middle', margin: 0, isTextBox: true });
+  s.addText('reads and writes · sends', { x: 0.6, y: 4.5, w: 12.1, h: 0.4, fontSize: 13, bold: true, color: S.accent4, align: 'center', margin: 0, isTextBox: true });
+  [['Database', 'SQLite now · PostgreSQL 16'], ['Messaging', 'Telegram · n8n LLM gate'], ['Email desk', 'n8n + Gmail, signed links'], ['Community cards', 'Web NFC · USB reader']].forEach(([h, sub], i) => { card(s, 0.6 + i * 3.08, 5.0, 2.9, 1.3); s.addText([{ text: h, options: { bold: true, fontSize: 16, color: S.text2, breakLine: true, fontFace: 'Arial' } }, { text: sub, options: { fontSize: 12 } }], { x: 0.75 + i * 3.08, y: 5.0, w: 2.6, h: 1.3, color: S.text1, valign: 'middle', margin: 0, isTextBox: true }); });
+  s.addText('Every client uses the same API, so all screens show the same data. API map: Word, PDF and the Excel register (API map sheet).', { x: 0.6, y: 6.5, w: 12.1, h: 0.35, fontSize: 11, italic: true, color: S.accent6, margin: 0, isTextBox: true });
+
+  if (d.tests) {
+    s = slide('CONTENT'); title(s, 'Tests done');
+    d.tests.other.forEach(([l, v], i) => { card(s, 0.6, 1.45 + i * 1.25, 3.6, 1.05); s.addText(String(v), { x: 0.85, y: 1.45 + i * 1.25, w: 1.5, h: 1.05, fontFace: 'Arial', fontSize: 30, bold: true, color: S.text2, valign: 'middle', margin: 0, isTextBox: true }); s.addText(l, { x: 2.35, y: 1.45 + i * 1.25, w: 1.8, h: 1.05, fontSize: 13, color: S.text1, valign: 'middle', margin: 0, isTextBox: true }); });
+    s.addChart(pres.charts.BAR, [{ name: 'Tests', labels: d.tests.suites.map(x => x[0]), values: d.tests.suites.map(x => x[1]) }], { x: 4.5, y: 1.4, w: 8.3, h: 5.2, barDir: 'bar', chartColors: [C.teal], showTitle: true, title: 'Automated tests per suite', titleFontSize: 14, titleColor: C.navy, titleFontFace: '+mn-lt', showLegend: false,
+      catAxisLabelColor: '555555', catAxisLabelFontSize: 12, catAxisLabelFontFace: '+mn-lt', catAxisOrientation: 'maxMin', valAxisLabelColor: '888888', valAxisLabelFontSize: 11, valAxisLabelFontFace: '+mn-lt', valGridLine: { color: 'E6E3D8', size: 0.5 }, catGridLine: { style: 'none' }, showValue: true, dataLabelPosition: 'outEnd', dataLabelFontSize: 11, dataLabelColor: '333333', dataLabelFontFace: '+mn-lt' });
+  }
+  if (d.capacity) {
+    const K = d.capacity;
+    s = slide('CONTENT'); title(s, 'Capacity and scaling');
+    [[K.users.toLocaleString('en-IN'), 'people at the same moment'], [K.sustained_rps + '/s', 'requests sustained'], [K.db_mb + ' MB', 'test database']].forEach(([v, l], i) => { card(s, 0.6, 1.45 + i * 1.2, 3.6, 1.0); s.addText(v, { x: 0.85, y: 1.45 + i * 1.2, w: 1.9, h: 1.0, fontFace: 'Arial', fontSize: 26, bold: true, color: S.text2, valign: 'middle', margin: 0, isTextBox: true }); s.addText(l, { x: 2.75, y: 1.45 + i * 1.2, w: 1.4, h: 1.0, fontSize: 12, color: S.text1, valign: 'middle', margin: 0, isTextBox: true }); });
+    s.addChart(pres.charts.BAR, [{ name: 'Requests/s', labels: K.levels.map(l => l.concurrency + ' in flight'), values: K.levels.map(l => l.rps) }], { x: 4.5, y: 1.4, w: 8.3, h: 2.9, barDir: 'col', chartColors: [C.teal], showTitle: true, title: 'Requests per second by requests in flight (p95 under 500 ms counts as OK)', titleFontSize: 13, titleColor: C.navy, titleFontFace: '+mn-lt', showLegend: false,
+      catAxisLabelColor: '555555', catAxisLabelFontSize: 11, catAxisLabelFontFace: '+mn-lt', valAxisLabelColor: '888888', valAxisLabelFontSize: 10, valAxisLabelFontFace: '+mn-lt', valGridLine: { color: 'E6E3D8', size: 0.5 }, catGridLine: { style: 'none' }, showValue: true, dataLabelPosition: 'outEnd', dataLabelFontSize: 10, dataLabelColor: '333333', dataLabelFontFace: '+mn-lt' });
+    K.scale.forEach(([w, c2, tools], i) => { const y = 4.55 + i * 0.75; card(s, 0.6 + i * 0.3, y, 12.1 - i * 0.3, 0.66, i === 0 ? S.background2 : 'E6F6FB'); s.addText([{ text: `${i + 1}. ${w}: `, options: { bold: true, color: S.text2 } }, { text: tools }], { x: 0.8 + i * 0.3, y, w: 11.8 - i * 0.3, h: 0.66, fontSize: 12, color: S.text1, valign: 'middle', margin: 0, isTextBox: true }); });
+  }
 
   // 13. Next steps
   section(sections[5]);

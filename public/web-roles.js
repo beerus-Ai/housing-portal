@@ -217,10 +217,12 @@
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
     const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
       committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
+      { label: 'Issue card', icon: 'identification-card', act: 'rlcard', data: { id: a.id } },
       { label: a.status === 'suspended' ? 'Reactivate' : 'Suspend', icon: a.status === 'suspended' ? 'play-circle' : 'pause-circle', act: 'rlsus', data: { id: a.id, to: a.status === 'suspended' ? 'approved' : 'suspended' } },
       { label: 'Remove', icon: 'trash', act: 'rldel', data: { id: a.id }, danger: true },
     ]);
-    const extra = R.accDel === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="justify-content:space-between"><span>Remove ${esc(a.name)}? They will no longer be able to sign in.</span><span class="row-acts"><button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button></span></span></td></tr>`
+    const extra = R.accCard === a.id ? `<tr class="acc-panel"><td colspan="5"><form class="rl-card-issue row" data-id="${a.id}" style="gap:8px;flex-wrap:nowrap"><label for="rlci${a.id}">Card for ${esc(a.name)}</label><input class="input" id="rlci${a.id}" name="serial" autocomplete="off" placeholder="Tap or type the card number" style="max-width:300px"><button class="btn btn-primary">Issue card</button><button type="button" class="btn btn-ghost" data-act="rlposclose">Cancel</button></form></td></tr>`
+      : R.accDel === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="justify-content:space-between"><span>Remove ${esc(a.name)}? They will no longer be able to sign in.</span><span class="row-acts"><button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button></span></span></td></tr>`
       : R.accPos === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="gap:10px"><label for="rlpos${a.id}">Position of ${esc(a.name)}</label><select class="input" id="rlpos${a.id}" data-rlpos="${a.id}" style="width:auto">${['member', 'head', 'sysadmin'].map(p => `<option value="${p}" ${(a.position || 'sysadmin') === p ? 'selected' : ''}>${esc(HP.POSITION[p])}</option>`).join('')}</select><button type="button" class="btn btn-ghost" data-act="rlposclose">Done</button></span></td></tr>` : '';
     return `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(a.name))}</span><span class="col" style="gap:0"><b>${esc(a.name)}</b><span class="muted xs">${esc(a.email)}</span></span></span></td>
       <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td class="acc-menu">${menu}</td></tr>${extra}`;
@@ -234,19 +236,28 @@
       <form id="rlacc" class="form-card col" style="max-width:720px"><h3>Add an account</h3>
         <div class="two">${field('rlan', 'Full name', '<input class="input" id="rlan" name="name" required maxlength="100">')}${field('rlak', 'Role', `<select class="input" id="rlak" name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>`)}</div>
         <div class="two">${field('rlae', 'Email', '<input class="input" id="rlae" name="email" type="email" required autocomplete="off">')}${field('rlap', 'Temporary password (8+ characters)', '<input class="input" id="rlap" name="password" type="password" required minlength="8" autocomplete="new-password">')}</div>
+        ${field('rlac', 'Community card number', '<input class="input" id="rlac" name="card" autocomplete="off" placeholder="Tap or type the card you hand them" style="max-width:360px">', 'Staff tap it at the gate to punch in and out.')}
         <div class="row"><button class="btn btn-primary">${ic('user-plus')}Add account</button><span class="muted sm">Ask them to change the password after signing in.</span></div></form></div>`);
   };
   const accRun = fn => async el => { R.err = ''; try { await fn(el); } catch (x) { R.err = x.message; toast(x.message, 'error'); } render(); };
   ACT.rlsus = accRun(async el => { await RAPI.admin.patchAccount(el.dataset.id, { status: el.dataset.to }); toast(el.dataset.to === 'suspended' ? 'Account suspended' : 'Account reactivated'); });
   ACT.rldel = el => { R.accDel = Number(el.dataset.id); R.accPos = null; render(); };
   ACT.rlposopen = el => { R.accPos = Number(el.dataset.id); R.accDel = null; render(); };
-  ACT.rlposclose = () => { R.accPos = null; render(); };
+  ACT.rlposclose = () => { R.accPos = R.accCard = null; render(); };
+  ACT.rlcard = el => { R.accCard = Number(el.dataset.id); R.accPos = R.accDel = null; render().then(() => { const i = document.getElementById('rlci' + el.dataset.id); if (i) i.focus(); }); };
+  document.addEventListener('submit', async e => {
+    const f = e.target.closest && e.target.closest('.rl-card-issue'); if (!f) return;
+    e.preventDefault();
+    try { await HP.api('POST', `/api/admin/users/${f.dataset.id}/card`, { serial: f.serial.value }); toast('Community card issued'); R.accCard = null; } catch (x) { toast(x.message, 'error'); }
+    render();
+  });
   ACT.rldelno = () => { R.accDel = null; render(); };
   ACT.rldelok = accRun(async el => { R.accDel = null; await RAPI.admin.removeAccount(el.dataset.id); toast('Account removed'); });
 
   // ---------- everyone: Profile
   PAGES.profile = async () => {
     const m = S.me;
+    const myCard = await HP.api('GET', '/api/me/card').catch(() => null);
     const rows = [['user', 'Name', m.name], ['identification-badge', 'Role', positionLabel(m)], ['envelope-simple', 'Email', m.email], ['phone', 'Phone', m.phone]];
     if (m.flat) rows.splice(2, 0, ['house', 'Flat', m.flat]);
     page(`<div class="rl">${head('Profile', '')}
@@ -256,7 +267,8 @@
       <div class="col" style="gap:var(--space-4)">${W.flatNav() ? '<p class="callout" style="margin:0">Ask the committee to change your name or phone number.</p>' : `<form id="rlprof" class="form-card col"><h3>Your details</h3>${field('rlpn', 'Full name', `<input class="input" id="rlpn" name="name" required maxlength="100" value="${esc(m.name)}" autocomplete="name">`)}${field('rlpp', 'Mobile', `<input class="input" id="rlpp" name="phone" maxlength="20" inputmode="tel" value="${esc(m.phone || '')}" autocomplete="tel">`)}
         <div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save</button></div></form>`}
         <form id="rlpw" class="form-card col"><h3>Change password</h3>${field('rlpc', 'Current password', '<input class="input" id="rlpc" name="current" type="password" required autocomplete="current-password">')}${field('rlpx', 'New password (8+ characters)', '<input class="input" id="rlpx" name="next" type="password" required minlength="8" autocomplete="new-password">')}
-        ${errLine()}<div class="row"><button class="btn btn-primary">${ic('lock-key')}Change password</button></div></form></div></div></div>`);
+        ${errLine()}<div class="row"><button class="btn btn-primary">${ic('lock-key')}Change password</button></div></form></div></div>
+      ${myCard ? `<section class="col" style="gap:var(--space-2)"><h2>My community card</h2><p class="muted" style="margin:0">Your card is your ID in the society: tap it at the gate${m.role === 'resident' ? ' and at the tuck shop counter' : m.role === 'staff' || m.role === 'shop' || m.role === 'laundry' ? ' to punch in and out' : ''}.</p>${HP.cardPanel(myCard, { name: m.name })}</section>` : ''}</div>`);
   };
 
   // ---------- events
@@ -294,7 +306,10 @@
         await RAPI.it.maintenance(msg, msg ? until : undefined); S.settings = await API.settings.public().catch(() => S.settings);
         toast(msg ? 'Maintenance notice is showing for everyone' : 'Maintenance notice removed'); await render();
       } else if (f.id === 'rlacc') {
-        await RAPI.admin.createAccount({ name: d.name.trim(), email: d.email.trim(), password: d.password, kind: d.kind }); toast((KIND_LABEL[d.kind] || 'Account') + ' added'); await render();
+        const made = await RAPI.admin.createAccount({ name: d.name.trim(), email: d.email.trim(), password: d.password, kind: d.kind });
+        if (d.card && d.card.trim() && made && made.id) { try { await HP.api('POST', `/api/admin/users/${made.id}/card`, { serial: d.card.trim() }); toast((KIND_LABEL[d.kind] || 'Account') + ' added with a community card'); } catch (x) { toast('Account added, but the card was not issued: ' + x.message, 'error'); } }
+        else toast((KIND_LABEL[d.kind] || 'Account') + ' added');
+        await render();
       } else if (f.id === 'rlprof') {
         const u = await API.profile.update({ name: d.name.trim(), phone: (d.phone || '').trim() }); Object.assign(S.me, u || { name: d.name.trim(), phone: d.phone }); toast('Details saved'); await render();
       } else if (f.id === 'rlpw') {

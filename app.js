@@ -13,7 +13,7 @@ const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping'
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 const RESIDENT_TYPES = ['owner', 'tenant', 'family'];
 const FEATURES = ['emergency', 'gate', 'contacts', 'notices', 'parking'];
-const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '', approval_limit: '10000', maintenance: '' };
+const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '', approval_limit: '10000', credit_limit: '3000', maintenance: '' };
 const REOPEN_DAYS = Number(process.env.REOPEN_DAYS) || 7;
 const CSP_BASE = {
   'default-src': ["'self'"], 'img-src': ["'self'", 'data:'], 'style-src': ["'self'", "'unsafe-inline'"], 'script-src': ["'self'"],
@@ -38,7 +38,10 @@ function createApp(opts = {}) {
     return Object.fromEntries(FEATURES.map(k => [k, f[k] !== false]));
   };
   const getMaintenance = () => { try { const m = JSON.parse(getSetting('maintenance') || 'null'); return m && m.message ? m : null; } catch { return null; } };
+  const HP_isGov = u => u && u.role === 'admin' && ['head', 'sysadmin'].includes(u.position || 'sysadmin');
+  const committeeIds = () => q("SELECT id FROM users WHERE role='admin' AND status='approved'").map(r => r.id);
   const approvalLimit = () => Number(getSetting('approval_limit')) || 0;
+  const creditLimit = () => { const v = Number(getSetting('credit_limit')); return Number.isFinite(v) ? v : 3000; };
   const publicSettings = () => ({ society_name: getSetting('society_name'), society_kind: getSetting('society_kind'), google_client_id: getSetting('google_client_id'), features: getFeatures(), maintenance: getMaintenance() });
   const cspHeader = () => {
     const d = Object.fromEntries(Object.entries(CSP_BASE).map(([k, v]) => [k, [...v]]));
@@ -124,7 +127,7 @@ function createApp(opts = {}) {
     for (const r of rows) {
       run("UPDATE requests SET escalated_at=datetime('now') WHERE id=?", r.id);
       log(null, 'request', r.id, 'escalated', 'open longer than ' + SLA_HOURS + 'h');
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'Escalated: "' + r.title + '" (flat ' + r.flat + ') has been open over ' + SLA_HOURS + ' hours');
+      for (const id of committeeIds()) notify(id, 'Escalated: "' + r.title + '" (flat ' + r.flat + ') has been open over ' + SLA_HOURS + ' hours');
       notifyReq(r, 'Your request "' + r.title + '" is taking longer than expected, so we escalated it to the committee');
     }
     return rows.length;
@@ -135,7 +138,7 @@ function createApp(opts = {}) {
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
-  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -183,7 +186,6 @@ function createApp(opts = {}) {
   const governance = (req, res, next) => (isGov(req.user) ? next() : res.status(403).json({ error: 'Only the head of committee or the admin can do this' }));
   const hasHead = () => !!one("SELECT 1 AS x FROM users WHERE role='admin' AND position='head' AND status='approved' LIMIT 1");
   const canApproveCost = u => posOf(u) === 'head' || (posOf(u) === 'sysadmin' && !hasHead());
-  const committeeIds = () => q("SELECT id FROM users WHERE role='admin' AND status='approved'").map(r => r.id);
 
   const fails = new Map();
   const WINDOW = 15 * 60e3;
@@ -214,7 +216,7 @@ function createApp(opts = {}) {
     const r = run("INSERT INTO users(name,email,phone,flat,resident_type,password_hash,consent_at) VALUES(?,?,?,?,?,?,datetime('now'))",
       name, email, phone, flat, rtype, bcrypt.hashSync(pw, 10));
     log(r.lastInsertRowid, 'user', r.lastInsertRowid, 'registered', `${rtype} flat ${flat}`);
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New registration awaiting approval: ${name} (flat ${flat})`);
+    for (const id of committeeIds()) notify(id, `New registration awaiting approval: ${name} (flat ${flat})`);
     desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ message: 'Registered. An admin will review your account.' });
   });
@@ -297,7 +299,7 @@ function createApp(opts = {}) {
     const s = typeof req.query.status === 'string' && req.query.status ? req.query.status : '';
     const term = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '';
     const where = [], p = [];
-    where.push("role NOT IN ('guard','staff','it')"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
+    where.push("role NOT IN ('guard','staff','it','shop','laundry')"); if (s) { where.push('status=?'); p.push(s); } // guards have their own list (/api/admin/guards)
     if (term) {
       const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
       where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
@@ -343,6 +345,7 @@ function createApp(opts = {}) {
   app.post('/api/admin/users/:id/reset-password', auth, admin, (req, res) => {
     const u = residentTarget(req, true);
     if (!u) return res.status(404).json({ error: 'User not found' });
+    if (u.role === 'guard' && !HP_isGov(req.user)) return res.status(403).json({ error: 'Only the head of committee or the admin can reset a guard password' });
     const pw = req.body && typeof req.body.password === 'string' ? req.body.password : '';
     if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
     run('UPDATE users SET password_hash=? WHERE id=?', bcrypt.hashSync(pw, 10), u.id); // existing sessions stop matching pwFp
@@ -355,12 +358,13 @@ function createApp(opts = {}) {
     const u = residentTarget(req);
     if (!u) return res.status(404).json({ error: 'User not found' });
     run("UPDATE users SET status='removed' WHERE id=?", u.id);
+    if (app.locals.retireCards) app.locals.retireCards(u.id, req.user.id);
     log(req.user.id, 'user', u.id, 'removed', `${u.name} (${u.status})`);
     res.json({ ok: true });
   });
 
   // ---- admin: settings & access control
-  app.get('/api/admin/settings', auth, admin, (req, res) => res.json({ ...publicSettings(), approval_limit: approvalLimit() }));
+  app.get('/api/admin/settings', auth, admin, (req, res) => res.json({ ...publicSettings(), approval_limit: approvalLimit(), credit_limit: creditLimit() }));
   app.put('/api/admin/settings', auth, admin, governance, (req, res) => {
     const b = req.body || {}, cur = publicSettings(), next = { ...cur, features: { ...cur.features } };
     for (const k of ['society_name', 'society_kind']) if (k in b) {
@@ -372,6 +376,11 @@ function createApp(opts = {}) {
       const v = typeof b.google_client_id === 'string' ? b.google_client_id.trim() : null;
       if (v === null || !/^[A-Za-z0-9._-]{0,200}$/.test(v)) return res.status(400).json({ error: 'Google client ID has invalid characters' });
       next.google_client_id = v;
+    }
+    if ('credit_limit' in b) {
+      const v = Number(b.credit_limit);
+      if (b.credit_limit === '' || b.credit_limit === null || !Number.isFinite(v) || v < 0 || v > 1e7) return res.status(400).json({ error: 'Credit limit must be a number of rupees (0 turns credit off)' });
+      if (v !== creditLimit()) { log(req.user.id, 'settings', null, 'updated', 'credit_limit: ' + creditLimit() + ' -> ' + v); db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('credit_limit', String(v)); }
     }
     if ('approval_limit' in b) {
       const v = Number(b.approval_limit);
@@ -393,7 +402,7 @@ function createApp(opts = {}) {
     }
     for (const k of FEATURES) if (next.features[k] !== cur.features[k]) log(req.user.id, 'settings', null, 'feature_' + (next.features[k] ? 'on' : 'off'), k);
     put.run('features', JSON.stringify(next.features));
-    res.json({ ...publicSettings(), approval_limit: approvalLimit() });
+    res.json({ ...publicSettings(), approval_limit: approvalLimit(), credit_limit: creditLimit() });
   });
   const accessMatrix = () => {
     const m = Object.fromEntries(ACCESS_ROLES.map(r => [r, Object.fromEntries(PERMISSIONS.map(p => [p.key, false]))]));
@@ -472,7 +481,7 @@ function createApp(opts = {}) {
     log(req.user.id, 'emergency', id, 'raised', type);
     const label = type.charAt(0).toUpperCase() + type.slice(1);
     const msg = `EMERGENCY (${label}) from flat ${req.user.flat || 'n/a'}${note ? ': ' + note : ''}`;
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, msg);
+    for (const id of committeeIds()) notify(id, msg);
     desk.alert('emergency', id);
     res.status(201).json({ id });
   });
@@ -561,7 +570,7 @@ function createApp(opts = {}) {
         req.user.id, category, title, description, req.file ? req.file.filename : null);
       log(req.user.id, 'request', r.lastInsertRowid, 'created', `${category}: ${title}`);
       const tri = applyTriage(Number(r.lastInsertRowid), title + '. ' + description);
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New ${category} request from flat ${req.user.flat}: ${title}${tri.priority === 'urgent' ? ' (AI: urgent)' : ''}`);
+      for (const id of committeeIds()) notify(id, `New ${category} request from flat ${req.user.flat}: ${title}${tri.priority === 'urgent' ? ' (AI: urgent)' : ''}`);
       desk.alert('request', Number(r.lastInsertRowid));
       res.status(201).json({ id: Number(r.lastInsertRowid) });
     });
@@ -601,7 +610,7 @@ function createApp(opts = {}) {
     const c = run('INSERT INTO comments(request_id,user_id,body) VALUES(?,?,?)', r.id, req.user.id, body);
     log(req.user.id, 'request', r.id, 'commented', body.slice(0, 80));
     if (req.user.role === 'admin' || req.user.role === 'staff') { if (r.user_id !== req.user.id) notifyReq(r, `${req.user.role === 'staff' ? req.user.name : 'The committee'} replied on "${r.title}"`); }
-    else for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `New message on request "${r.title}" from flat ${req.user.flat}`);
+    else for (const id of committeeIds()) notify(id, `New message on request "${r.title}" from flat ${req.user.flat}`);
     res.status(201).json({ id: Number(c.lastInsertRowid) });
   });
   app.post('/api/requests/:id/assign', auth, admin, (req, res) => {
@@ -610,6 +619,9 @@ function createApp(opts = {}) {
       const s = one("SELECT * FROM users WHERE id=? AND role='staff' AND status='approved'", req.body.staff_id);
       if (!r || !s) return res.status(404).json({ error: 'Request or staff member not found' });
       if (r.status === 'closed') return res.status(409).json({ error: 'Request is closed' });
+      // Department rule (FR-RL-15): housekeeping goes to cleaning staff, repairs to maintenance; security to either.
+      const need = r.category === 'housekeeping' ? 'cleaning' : r.category === 'security' ? null : 'maintenance';
+      if (need && (s.department || 'maintenance') !== need) return res.status(409).json({ error: `${s.name} works in ${s.department || 'maintenance'}; this ${r.category} job needs ${need} staff` });
       run("UPDATE requests SET assignee_id=?, accepted_at=NULL, status=CASE WHEN status='open' THEN 'assigned' ELSE status END, updated_at=datetime('now') WHERE id=?", s.id, r.id);
       log(req.user.id, 'request', r.id, 'assigned', s.name + ' (staff)');
       notify(s.id, `New job assigned to you: "${r.title}"`);
@@ -707,7 +719,7 @@ function createApp(opts = {}) {
     const r = run("INSERT INTO users(name,email,phone,flat,resident_type,password_hash,consent_at) VALUES(?,?,?,?,?,?,datetime('now'))",
       name, email, phone, req.user.flat, rtype, bcrypt.hashSync(pw, 10));
     log(req.user.id, 'user', r.lastInsertRowid, 'household_added', `${rtype} flat ${req.user.flat}`);
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, `${req.user.name} added ${name} (${rtype}) to flat ${req.user.flat}: awaiting approval`);
+    for (const id of committeeIds()) notify(id, `${req.user.name} added ${name} (${rtype}) to flat ${req.user.flat}: awaiting approval`);
     desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
@@ -766,7 +778,7 @@ function createApp(opts = {}) {
         COALESCE(SUM(CASE WHEN status!='closed' AND julianday('now')-julianday(created_at) > 2 THEN 1 ELSE 0 END),0) AS overdue,
         COALESCE(SUM(CASE WHEN (status='closed' AND julianday(updated_at)-julianday(created_at) <= 2)
                    OR (status!='closed' AND julianday('now')-julianday(created_at) <= 2) THEN 1 ELSE 0 END),0) AS within FROM requests`),
-      unassigned: one("SELECT COUNT(*) AS n FROM requests WHERE vendor_id IS NULL AND status!='closed'").n,
+      unassigned: one("SELECT COUNT(*) AS n FROM requests WHERE vendor_id IS NULL AND assignee_id IS NULL AND status!='closed'").n,
       awaiting_rating: one("SELECT COUNT(*) AS n FROM requests WHERE status='closed' AND rating IS NULL").n,
       notices_30d: one("SELECT COUNT(*) AS n FROM notices WHERE created_at >= datetime('now','-30 days')").n,
       households: one("SELECT COUNT(DISTINCT flat) AS n FROM users WHERE status='approved' AND role!='admin'").n,
@@ -977,7 +989,7 @@ function createApp(opts = {}) {
     log(u.id, 'request', id, 'created', tri.category + ': ' + title + ' (via ' + chLabel + ')');
     applyTriage(id, body);
     if (msgId) run("UPDATE whatsapp_messages SET status='received', request_id=? WHERE id=?", id, msgId);
-    for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via ' + chLabel + ': ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
+    for (const id of committeeIds()) notify(id, 'New ' + tri.category + ' request from flat ' + u.flat + ' via ' + chLabel + ': ' + title + (tri.priority === 'urgent' ? ' (AI: urgent)' : ''));
     desk.alert('request', id);
     const text = 'Thanks, request #' + id + ' is logged as ' + tri.category + (tri.priority === 'urgent' ? ' (urgent)' : '') + '. We will update you here as it moves.';
     send(from, text, u.id, id);
@@ -991,7 +1003,7 @@ function createApp(opts = {}) {
       const etype = /\bfire\b/.test(low) ? 'fire' : /\b(theft|intruder|break|robbery|burglar)/.test(low) ? 'theft' : /\b(ambulance|injur|medical|unconscious|accident)/.test(low) ? 'medical' : /\b(fight|violen|assault|attack|threat)/.test(low) ? 'violence' : /\b(lift|elevator|trapped)\b/.test(low) ? 'lift' : 'other';
       // Flag it as a real emergency on the committee dashboard (unless this resident already has one open), not just a notification.
       if (!one("SELECT id FROM emergencies WHERE user_id=? AND status='active' LIMIT 1", u.id)) desk.alert('emergency', Number(run("INSERT INTO emergencies(user_id,type,note,status) VALUES(?,?,?,'active')", u.id, etype, body.slice(0, 300)).lastInsertRowid));
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, 'EMERGENCY (' + etype + ') from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
+      for (const id of committeeIds()) notify(id, 'EMERGENCY (' + etype + ') from flat ' + u.flat + ' via ' + chLabel + ': ' + body.slice(0, 80));
       mark('received');
       return { replies: [reply(u, 'If this is a real emergency, call the gate/security now or use the Emergency button in the app - ' + chLabel + ' is not monitored around the clock. The committee has been alerted and it is flagged as an emergency in the portal.')], created: null };
     }
@@ -1005,7 +1017,7 @@ function createApp(opts = {}) {
     if (v.decision === 'ignore') { mark('ignored'); return { replies: [], created: null, decision: 'ignore', kind: v.kind }; }
     if (v.decision === 'review') {
       mark('review');
-      for (const a of q("SELECT id FROM users WHERE role='admin'")) notify(a.id, chLabel + ' message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
+      for (const id of committeeIds()) notify(id, chLabel + ' message needs review (flat ' + u.flat + '): ' + body.slice(0, 80));
       if (inId) desk.alert('review', inId);
       return { replies: [], created: null, decision: 'review', kind: v.kind };
     }
@@ -1179,7 +1191,7 @@ function createApp(opts = {}) {
   const digestStats = () => {
     const n = (sql, ...p) => one(sql, ...p).n;
     return {
-      sla_hours: SLA_HOURS, open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"), unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL"),
+      sla_hours: SLA_HOURS, open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"), unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL AND assignee_id IS NULL"),
       escalated: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND escalated_at IS NOT NULL"), urgent: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed' AND ai_priority='urgent'"),
       pending_users: n("SELECT COUNT(*) AS n FROM users WHERE role='resident' AND status='pending'"), whatsapp_7d: n("SELECT COUNT(*) AS n FROM requests WHERE source='whatsapp' AND created_at >= datetime('now','-7 days')"),
     };
@@ -1206,7 +1218,7 @@ function createApp(opts = {}) {
       },
       requests: {
         open: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"),
-        unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL"),
+        unassigned: n("SELECT COUNT(*) AS n FROM requests WHERE status='open' AND vendor_id IS NULL AND assignee_id IS NULL"),
         in_progress: n("SELECT COUNT(*) AS n FROM requests WHERE status='in_progress'"),
         closed_30d: n("SELECT COUNT(*) AS n FROM requests WHERE status='closed' AND updated_at >= datetime('now','-30 days')"),
       },
@@ -1412,9 +1424,9 @@ function createApp(opts = {}) {
   });
 
   require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
-  require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, clock: opts.clock });
-  require('./nfc')(app, { q, one, run, log, notify, auth, str });
-  require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, can, clock: opts.clock });
+  require('./nfc')(app, { q, one, run, log, notify, auth, str, creditLimit });
+  require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));

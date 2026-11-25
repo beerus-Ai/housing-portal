@@ -36,6 +36,21 @@ The six roles from the whiteboard.
 | 5 | **Admin** | Society office manager | Manage accounts, settings and access for every role | User lists on paper; access never revoked |
 | 6 | **IT Staff** | Support person for the portal | Answer support queries, train users, keep the system healthy and upgraded | No channel for issues; no backups |
 
+### Owner, tenant, family and committee
+
+| | Owner | Tenant | Family member | Committee member |
+|---|---|---|---|---|
+| **Who** | Owns the flat | Rents the flat from the owner | Lives in the flat with the owner | Resident elected to run the society |
+| **Account** | Resident | Resident | Resident | Committee (position member; head and admin are senior positions) |
+| **Raise and track requests** | Yes, for the whole flat | Yes, for the flat | Yes, for the flat | Sees and handles everyone's requests |
+| **Rate finished work** | Yes, also for the family | Yes, own requests | No (the owner rates) | No |
+| **Add family or tenants** | Yes (committee approves) | No | No | Approves new residents (Verification) |
+| **Lease** | - | Reads own lease | - | Records tenants' leases |
+| **Money** | The flat's dues and shop/laundry credit | Same flat account (shared) | Same flat account (shared) | Raises bills and records payments for all flats |
+| **Runs the society** | No | No | No | Assigns work, notices, reports, monitoring |
+
+Head of committee: everything a member does plus approving costs above the limit (default Rs 10,000) and governing settings and accounts. Admin: accounts for every role, settings, access rules and system health. What each resident type may do is a default the committee can change in Settings > Access.
+
 ## 3. Functional Requirements
 
 Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test-cases.md](testing/test-cases.md). Everything is built in the web app unless marked *not built*.
@@ -183,3 +198,99 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | NFR-12 | Performance | No load target set or measured |
 | NFR-13 | Email actions | Signed links valid 7 days; opening a link never acts without a confirm click |
 | NFR-14 | Hosting | Free hosting resets the database; production needs a persistent database |
+
+## 5. Technology stack and how the front end and back end connect
+
+| Tier | What |
+| --- | --- |
+| **Clients** | Web app (vanilla JavaScript, no build step) at / ; installable phone app (PWA) at /m/ ; Android wrapper (Capacitor) ; Flutter app ; React + TypeScript app (migration target) |
+| **API** | One REST API with JSON over HTTPS: Node 22 + Express (system of record). A Java Spring Boot API with the same URLs and JSON is the migration target |
+| **Security** | Session cookie (httpOnly, SameSite, Secure in production) after POST /api/login; role check on every route; strict allow-lists for guard, staff, IT, shop and laundry; CSRF origin check; strict Content Security Policy |
+| **Data** | SQLite (node:sqlite) for the Node API; PostgreSQL 16 for the Java API and production; photos in an upload folder |
+| **Integrations** | Telegram Bot API (message intake), n8n workflows (free LLM gate, Gmail email desk), optional Anthropic API for triage, Web NFC / USB readers for cards |
+| **Hosting** | Render (Docker), deployed from GitHub; CI runs Node, Java (H2 and PostgreSQL), React, Docker and Flutter checks on every pull request |
+
+```
+Web app (/)   Phone app (/m/)   Flutter app   React app
+        \           |             |            /
+         HTTPS + JSON, session cookie after POST /api/login
+                              |
+               REST API (Node + Express; Java Spring Boot later)
+       role check on every route · audit trail · notifications
+              |                    |                     |
+      SQLite / PostgreSQL     Telegram · n8n · Gmail     Web NFC / USB card reader
+```
+
+**How a screen gets its data**
+
+1. The browser or app signs in with POST /api/login and receives a session cookie.
+2. Every screen calls the REST API with fetch (JSON); the cookie identifies the person and the server checks the role.
+3. The API reads and writes the database and records every change in the audit trail.
+4. Changes notify people (in-app notifications, Telegram, email) and the screens refresh within seconds by polling /api/pulse.
+5. The same API serves every client, so the web app, phone app and Flutter app always show the same data.
+
+**API map** (contracts in `docs/*-api.md`)
+
+| Area | Main routes | Used by | Contract |
+| --- | --- | --- | --- |
+| Sign-in and profile | `/api/login, /api/logout, /api/register, /api/me` | All | app.js |
+| Requests (lifecycle) | `/api/requests, /api/requests/:id/status, /assign, /rate, /reopen` | Resident, committee, staff | app.js, roles.js |
+| Committee administration | `/api/admin/users, /api/admin/stats, /api/admin/settings, /api/admin/access, /api/admin/audit` | Committee | app.js |
+| Roles, staff and IT | `/api/admin/accounts, /api/staff/*, /api/admin/approvals, /api/admin/reports/monthly, /api/support, /api/it/*` | Committee, staff, IT | roles-api.md |
+| Notices and alerts | `/api/notices, /api/notifications, /api/emergencies, /api/pulse` | All | app.js |
+| Gate and visitors | `/api/gate/passes, /api/gate/verify, /api/gate/log, /api/parcels` | Resident, guard, committee | app.js, services-api.md |
+| Community cards (NFC) | `/api/gate/cards, /api/gate/tap, /api/gate/presence, /api/admin/users/:id/card, /api/me/card` | Guard, committee, everyone (own card) | nfc-api.md |
+| Society modules | `/api/amenities, /api/bookings, /api/dues, /api/admin/dues, /api/inventory, /api/waste/*` | Resident, committee, staff | modules-api.md |
+| Resident services | `/api/shop/*, /api/laundry/*, /api/events, /api/credit, /api/services/summary` | Resident, shop, laundry, committee | services-api.md |
+| Message intake | `/api/telegram/webhook, /api/whatsapp/webhook (secret-checked)` | Telegram, WhatsApp provider | app.js |
+| Email desk | `/desk/:token (signed 7-day links)` | Committee by email | email-desk.js |
+
+## 6. Tests done
+
+| Suite | Tests | Covers |
+| --- | --- | --- |
+| Node API (node:test) | 86 | Every story; runs in CI |
+| Integration (agents, cross-module) | 53 | Onboarding, requests, money, access, dashboards, web wiring |
+| Java API (JUnit) | 81 | Same API on H2 and PostgreSQL 16 |
+| React app (Vitest) | 67 | Migration client |
+| Flutter app | 18 | Phone app |
+
+| Also | |
+| --- | --- |
+| Documented test cases | 80 |
+| Requirements linked to tests | 72 of 76 |
+| Defects logged (all fixed or tracked) | 29 |
+| CI jobs on every pull request | 6 |
+
+Browser walkthroughs of every role on a local server (resident, committee member, head, admin, cleaner, maintenance, guard, tuck shop, laundry, IT); emulator checks of the Flutter app; live checks after each deploy. Details: `docs/testing/`.
+
+## 7. Capacity and scaling
+
+Measured on Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz · 8 cores · Node v24.15.0 with the real server and a seeded database (9 MB). One active user = 0.3 requests/s (live refresh every 5 s plus page loads). Supported = highest load with p95 under 500 ms and no errors.
+
+**Result: about 210 requests/s sustained, which is about 700 people using the portal at the same moment.** Sign-ins: about 14 per second (password hashing).
+
+| Requests in flight | Requests/s | p50 ms | p95 ms | Errors |
+| --- | --- | --- | --- | --- |
+| 10 | 202 | 48 | 68 | 0 |
+| 50 | 210 | 244 | 275 | 0 |
+| 100 | 206 | 497 | 598 | 0 |
+| 200 | 212 | 952 | 1072 | 0 |
+| 400 | 242 | 1865 | 3219 | 0 |
+
+| Database | |
+| --- | --- |
+| Data tested | 2,000 residents, 20,000 requests, 100,000 audit rows, 5,000 orders = 9 MB |
+| Growth | about 75 bytes per stored record; a 500-flat society for 5 years stays well under 1 GB |
+| SQLite limits | Files up to 281 TB; one writer at a time (fine for one society); no network access |
+| Free hosting | Render free plan: 0.1 CPU and the database is wiped on redeploy; plan figures are lower than this machine |
+
+**To scale**
+
+| When | Change | Tools |
+| --- | --- | --- |
+| One society, up to about 700 people at once (measured) | Today's setup, on a paid instance with a persistent disk | Render Starter + disk (fixes the data wipe) |
+| Several hundred to a few thousand active users | Move data to PostgreSQL (the Java API is ready for it); run 2+ app instances behind the load balancer; keep sessions in the database or Redis | PostgreSQL 16, Redis, 2-4 instances |
+| Many societies / tens of thousands | Multi-tenant data (society id), push updates instead of 5 s polling, object storage for photos, read replicas, rate limits | Managed PostgreSQL + replicas, S3, WebSockets/SSE |
+
+Re-run: `node scripts/load-test/load.js`.

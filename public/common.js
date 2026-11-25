@@ -264,6 +264,11 @@ window.HP = (() => {
     },
   };
 
+  // Community card: card number, money for the flat, and the person's activity (gate, shop, laundry, payments, shifts).
+  const cardPanel = (d, opts = {}) => `<div class="cardp">
+    <div class="cardp-card"><span class="cardp-chip">${ic('contactless-payment')}</span><span class="cardp-k">Community card</span><b class="cardp-n">${d.cards && d.cards.length ? esc(d.cards[0].serial.replace(/(.{2})(?=.)/g, '$1 ')) : 'No card yet'}</b><span class="cardp-s">${esc(opts.name || '')}${d.cards && d.cards.length ? ' · issued ' + esc(day(d.cards[0].created_at)) : ''}</span></div>
+    ${d.money ? `<div class="cardp-money"><span><b>${esc(rupees(d.money.balance))}</b><span>owed on the maintenance account</span></span><span><b>${esc(rupees(d.money.credit_used))}</b><span>of ${esc(rupees(d.money.credit_limit || 0))} shop and laundry credit used</span></span></div>` : ''}
+    <div class="cardp-act"><h3>Activity</h3>${(d.activity || []).map(e => `<div class="cardp-row"><span class="ntf-ic">${ic(e.icon)}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(e.text)}</b><span class="muted sm">${esc(stamp(e.at))}${e.payment ? ' · ' + esc(e.payment === 'account' ? 'on account' : e.payment.toUpperCase()) : ''}</span></span>${e.amount != null ? `<b>${esc(rupees(e.amount))}</b>` : ''}</div>`).join('') || '<p class="muted">No activity yet.</p>'}</div></div>`;
   // "⋯" row menu: keeps lists to the person or thing; actions open on demand. Items: { label, icon, act, data:{k:v}, danger }.
   const kebab = (label, items) => `<span class="kb"><button type="button" class="btn btn-ghost kb-btn" data-kb aria-haspopup="menu" aria-expanded="false" aria-label="${esc(label)}" title="More">${ic('dots-three-vertical')}</button>
     <span class="kb-menu" role="menu" hidden>${items.filter(Boolean).map(it => `<button type="button" role="menuitem" class="kb-item${it.danger ? ' danger' : ''}" data-act="${it.act}" ${Object.entries(it.data || {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>${ic(it.icon)}<span>${esc(it.label)}</span></button>`).join('')}</span></span>`;
@@ -295,7 +300,7 @@ window.HP = (() => {
         <span class="ntf-ic">${ic(n.icon)}${n.tone === 'urgent' ? '<i class="ntf-pulse" aria-hidden="true"></i>' : ''}</span><span class="ntf-txt"><b>${esc(n.text)}</b>${n.sub ? `<span>${esc(n.sub)}</span>` : ''}</span><span class="ntf-go">${esc(n.cta || 'Open')}${ic('caret-right')}</span></button>`).join('')}</div>`
     : `<div class="ntf-empty"><span class="ntf-anim" data-lottie="check" data-loop="false"></span><b>${esc(empty)}</b><span class="muted">New things will appear here.</span></div>`}</section>`;
 
-  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, heroStrip, notifier, kebab,
+  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, heroStrip, notifier, kebab, cardPanel,
     STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge,
     POSITION, positionLabel, isGov, PROGRESS, progressLabel, rupees, costTag, updatesList, updatePhotoUrl, TICKET_KINDS, ticketTag, maintBanner, whenText, RAPI };
 })();

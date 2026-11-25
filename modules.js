@@ -25,6 +25,7 @@ const money = v => Math.round(Number(v) * 100) / 100;
 
 module.exports = function mountModules(app, c) {
   const { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk } = c;
+  const canCreate = c.can ? c.can('request.create') : (req, res, next) => next();
   const clock = c.clock || (() => new Date());
   const notifyCommittee = msg => { for (const id of committeeIds()) notify(id, msg); };
   const notifyFlat = (flat, msg) => { for (const u of q("SELECT id FROM users WHERE role='resident' AND status='approved' AND flat=?", flat)) notify(u.id, msg); };
@@ -155,7 +156,14 @@ module.exports = function mountModules(app, c) {
     if (!validDate(due)) return bad(res, 'Choose a due date');
     let flats;
     if (b.flats === 'all' || b.flats == null) flats = flatsWithResidents();
-    else if (Array.isArray(b.flats)) flats = [...new Set(b.flats.map(f => str(f, 20)).filter(Boolean))];
+    else if (Array.isArray(b.flats)) {
+      // Match listed flats to the flats people live in (any case); refuse unknown ones instead of billing nobody.
+      const known = new Map(flatsWithResidents().map(f => [f.toUpperCase(), f]));
+      const want = [...new Set(b.flats.map(f => str(f, 20).toUpperCase()).filter(Boolean))];
+      const unknown = want.filter(f => !known.has(f));
+      if (unknown.length) return bad(res, `No approved resident lives in: ${unknown.join(', ')}`);
+      flats = want.map(f => known.get(f));
+    }
     else return bad(res, "Flats must be 'all' or a list");
     if (!flats.length) return bad(res, 'No flats to bill yet: approve residents first');
     let created = 0, skipped = 0;
@@ -306,7 +314,7 @@ module.exports = function mountModules(app, c) {
     res.json({ from, days, logs: rows, totals: { ...byKind, total, segregated_pct: total ? Math.round(((total - byKind.dry) / total) * 100) : null } });
   });
   // A resident reports a missed pickup: it becomes a normal housekeeping request (same lifecycle, triage and alerts).
-  app.post('/api/waste/missed', auth, resident, (req, res) => {
+  app.post('/api/waste/missed', auth, resident, canCreate, (req, res) => {
     const b = req.body || {};
     if (!WASTE_KINDS.includes(b.kind)) return bad(res, 'Choose which waste was not collected');
     const title = `Missed ${b.kind} waste pickup`, description = str(b.note, 1000);

@@ -1,0 +1,51 @@
+{
+  "machine": "Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz · 8 cores · Node v24.15.0",
+  "seed": {
+    "residents": 2000,
+    "requests": 20000,
+    "audit": 100000,
+    "orders": 5000
+  },
+  "db_mb": 9,
+  "bytes_per_request_row": 75,
+  "login_per_sec": 14,
+  "levels": [
+    {
+      "concurrency": 10,
+      "rps": 202,
+      "p50_ms": 48,
+      "p95_ms": 68,
+      "errors": 0
+    },
+    {
+      "concurrency": 50,
+      "rps": 210,
+      "p50_ms": 244,
+      "p95_ms": 275,
+      "errors": 0
+    },
+    {
+      "concurrency": 100,
+      "rps": 206,
+      "p50_ms": 497,
+      "p95_ms": 598,
+      "errors": 0
+    },
+    {
+      "concurrency": 200,
+      "rps": 212,
+      "p50_ms": 952,
+      "p95_ms": 1072,
+      "errors": 0
+    },
+    {
+      "concurrency": 400,
+      "rps": 242,
+      "p50_ms": 1865,
+      "p95_ms": 3219,
+      "errors": 0
+    }
+  ],
+  "sustained_rps": 210,
+  "active_users_supported": 700
+}

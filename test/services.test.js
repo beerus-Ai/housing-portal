@@ -136,3 +136,40 @@ test('events: committee posts, residents RSVP, cancel tells the guests; summary 
     assert.equal(typeof s.shop_to_prepare, 'number'); assert.equal(typeof s.parcels_waiting, 'number');
   } finally { t.close(); }
 });
+
+test('purchases are linked to the flat finances: delivery or pick-up, cash or UPI on handover, credit becomes a due', async () => {
+  const t = await boot();
+  try {
+    const a = await t.resident('a@x.test', 'A-1'), shop = await t.account('shop', 'shop@x.test'), ln = await t.account('laundry', 'ln@x.test');
+    const rice = (await shop('POST', '/api/shop/items', { name: 'Rice', category: 'groceries', price: 1000, stock: 10 })).body.id;
+    assert.equal((await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 1 }], fulfilment: 'drone' })).status, 400);
+    assert.equal((await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 1 }], payment: 'bitcoin' })).status, 400);
+    // pick-up, cash: owner marks collected (not delivered); payment is recorded at handover
+    const p = (await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 1 }], fulfilment: 'pickup', payment: 'cash' })).body;
+    await shop('POST', `/api/shop/orders/${p.id}/status`, { status: 'ready' });
+    assert.equal((await shop('POST', `/api/shop/orders/${p.id}/status`, { status: 'delivered' })).status, 409, 'pick-up orders are collected');
+    assert.equal((await shop('POST', `/api/shop/orders/${p.id}/status`, { status: 'collected' })).status, 200);
+    assert.equal((await a('GET', '/api/shop/orders')).body.find(o => o.id === p.id).payment_status, 'paid');
+    // on account: a due appears on the flat's maintenance account and counts against the credit limit (default 3000)
+    const c = (await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 2 }], payment: 'account' })).body;
+    const dues = (await a('GET', '/api/dues')).body.dues;
+    const bill = dues.find(d => d.title === `Tuck shop order #${c.id}`);
+    assert.ok(bill && bill.amount === 2000, 'credit purchase is a bill in Maintenance dues');
+    assert.deepEqual((await a('GET', '/api/credit')).body, { limit: 3000, used: 2000 });
+    assert.equal((await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 2 }], payment: 'account' })).status, 409, 'over the credit limit');
+    const lr = (await ln('POST', '/api/laundry/rates', { item: 'Shirt', price: 500 })).body.id;
+    const wash = (await a('POST', '/api/laundry/orders', { pickup_date: '2026-11-26', pickup_slot: 'morning', items: [{ id: lr, qty: 2 }], payment: 'account' })).body;
+    assert.equal(wash.total, 1000);
+    assert.equal((await a('GET', '/api/credit')).body.used, 3000);
+    // cancelling removes the unpaid bill; the committee records a payment on the other one and the order shows paid
+    assert.equal((await a('POST', `/api/shop/orders/${c.id}/status`, { status: 'cancelled' })).status, 200);
+    assert.ok(!(await a('GET', '/api/dues')).body.dues.some(d => d.title === `Tuck shop order #${c.id}`));
+    const wbill = (await t.admin('GET', '/api/dues')).body.dues.find(d => d.title === `Laundry #${wash.id}`);
+    assert.equal((await t.admin('POST', `/api/admin/dues/${wbill.id}/payments`, { amount: 1000, method: 'upi' })).status, 201);
+    assert.equal((await a('GET', '/api/laundry/orders')).body.find(o => o.id === wash.id).payment_status, 'paid');
+    assert.equal((await a('POST', `/api/laundry/orders/${wash.id}/status`, { status: 'cancelled' })).status, 409, 'money already paid');
+    // the committee sets the credit limit; 0 switches credit off
+    assert.equal((await t.admin('PUT', '/api/admin/settings', { credit_limit: 0 })).status, 200);
+    assert.equal((await a('POST', '/api/shop/orders', { items: [{ id: rice, qty: 1 }], payment: 'account' })).status, 409);
+  } finally { t.close(); }
+});

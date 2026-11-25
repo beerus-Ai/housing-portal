@@ -15,13 +15,13 @@ The **tuck shop owner** (account role `shop`) runs the shop and the **laundry se
 | Laundry | `GET/POST /api/laundry/rates`, `PATCH /api/laundry/rates/:id` | read: everyone; write: laundry service | |
 | | `POST /api/laundry/orders` `{pickup_date,pickup_slot,items:[{id,qty}],note?}` | resident | Date today to 14 days ahead (IST); slot morning, afternoon or evening |
 | | `POST /api/laundry/orders/:id/status` `{status}` | laundry service; resident cancels while requested | requested → picked_up → washing → ready → delivered, one step at a time |
-| Parcels | `POST /api/parcels` `{flat,carrier,note?}` | guard, staff, committee | Flat must have an approved resident; the flat is notified |
-| | `GET /api/parcels` | resident (own flat), guard, staff, committee | |
-| | `POST /api/parcels/:id/collect` `{collected_by?}` | guard, staff, committee | 409 if already collected |
+| Parcels | `POST /api/parcels` `{flat,carrier,note?}` | guard, committee | Flat must have an approved resident; the flat is notified |
+| | `GET /api/parcels` | resident (own flat), guard, committee | |
+| | `POST /api/parcels/:id/collect` `{collected_by?}` | guard, committee | 409 if already collected |
 | Events | `GET /api/events` | everyone | Upcoming, with `going` and `me_going` |
 | | `POST /api/events` `{title,starts_at,location?,description?}` | committee | `starts_at` is `YYYY-MM-DDTHH:MM`, in the future; residents are notified |
 | | `POST /api/events/:id/cancel` | committee | Guests are notified |
 | | `POST /api/events/:id/rsvp` `{going}` | resident | 409 on a cancelled event |
-| Dashboards | `GET /api/services/summary` | everyone | Counts for the "For you" list |
+| Dashboards | `GET /api/services/summary` | residents and the committee | Counts for the "For you" list |
 
-Guards may only use the parcel routes (plus their gate routes). Staff may use the parcel routes.
+Guards may only use the parcel routes (plus their gate routes). Staff do not use the parcel desk: they see only their department's work.

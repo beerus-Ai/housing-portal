@@ -2,6 +2,6 @@
   "name": "requirements-docs",
   "private": true,
   "description": "Builds the Word, PDF, PowerPoint and Excel requirements deliverables from docs/requirements.md",
-  "scripts": { "build": "python extract.py && node build.js && python build_xlsx.py" },
+  "scripts": { "build": "python extract.py && python tests_capacity.py 86 53 && node build.js && python build_xlsx.py" },
   "dependencies": { "docx": "^9.0.0", "pptxgenjs": "^3.12.0", "playwright-core": "^1.48.0" }
 }
