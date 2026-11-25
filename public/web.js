@@ -29,27 +29,27 @@
   // Order follows the Requirements Document: the required processes first (on-boarding, raise a request,
   // request lifecycle; committee dashboard, verification, broadcast, reports, monitoring), extras under "More".
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'My requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'], ['household', 'Household', 'users-three'],
-      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    tenant: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'My requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['lease', 'My lease', 'file-text'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    family: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Flat requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Audit trail', 'clock-counter-clockwise'],
+    owner: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'], ['household', 'Household', 'users-three'],
+      ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    tenant: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
+      ['lease', 'My lease', 'file-text'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    family: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track flat requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
+      ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
-      ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['attendance', 'Staff attendance', 'clock-user'], ['settings', 'Settings', 'gear-six'], ['health', 'System health', 'heartbeat'],
-      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'],
-      ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
-      ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
+      ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
+      ['gate', 'Visitor management', 'shield-check'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    staff: [['myjobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    it: [['support', 'Support queue', 'lifebuoy'], ['health', 'System health', 'heartbeat'], ['help', 'Help guides', 'question'], ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
   const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['more', 'More', 'dots-three-circle'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
-    users: 'admin', accounts: 'admin', attendance: 'admin', settings: 'admin', health: 'admin', ai: 'admin',
+    users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
     help: 'help', support: 'help', profile: 'help' };
   const FLAT_GROUPS = ['home', 'core'];
@@ -70,10 +70,10 @@
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
-    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
+    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => flatNav() || allowed(k));
-  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'support' : 'home';
+  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'itoverview' : 'home';
   const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
   // ---------- shell
@@ -322,7 +322,7 @@
 
     async notices() {
       const ns = await API.notices.list();
-      const form = isAdmin() ? `<form id="nform" class="col" style="gap:var(--space-4)"><h2>Post a notice</h2><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150" placeholder="e.g. Diwali lighting in the courtyard"></div>
+      const form = isAdmin() ? `<form id="nform" class="col" style="gap:var(--space-4)"><h2>Broadcast a notice</h2><div class="field"><label for="nt">Headline</label><input class="input" id="nt" name="title" required maxlength="150" placeholder="e.g. Diwali lighting in the courtyard"></div>
         <div class="field"><label for="nb">Details</label><textarea class="input" id="nb" name="body" required maxlength="5000"></textarea></div><div class="row"><button class="btn btn-primary">${ic('megaphone')}Post and notify residents</button><button type="button" class="btn btn-secondary" data-act="draftnotice">${ic('sparkle')}Draft with AI</button></div><span class="muted sm">Type a few rough words in Details, then Draft with AI. Check the text before you post.</span></form>` : '';
       page(isAdmin() ? `<div class="split-eq" style="grid-template-columns:minmax(0,560px) minmax(0,1fr)">${form}<div class="col" style="gap:var(--space-4)"><h6 style="margin:0">On the board</h6>${ns.map(noticeRow).join('') || '<p class="muted">No notices.</p>'}</div></div>`
         : `<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Notice board</h2>${ns.map(n => `<article class="notice-card"><span class="tile lg">${ic(noticeIcon(n))}</span><span class="col" style="gap:4px"><span class="muted sm">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title" style="font-size:22px">${esc(n.title)}</span><span>${esc(n.body)}</span></span></article>`).join('') || '<p class="muted">No notices.</p>'}</div>`);
@@ -387,7 +387,7 @@
     async approvals() {
       const us = (await API.admin.users()).filter(u => u.role !== 'admin');
       const ordered = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 10)];
-      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
+      page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Verification: approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
         <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span></span></span></td>
           <td>${esc(u.flat)}</td><td>${esc(TYPE[u.resident_type] || '')}</td><td>${esc(day(u.created_at))}</td>
           <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
@@ -414,7 +414,7 @@
 
     async audit() {
       const a = await API.admin.audit();
-      page(`<div class="col" style="max-width:none"><h2>Audit trail</h2><p class="muted" style="margin:0">Every state change: who, what, when. Latest 200.</p>${a.map(x => `<div class="hist"><span class="muted">${esc(stamp(x.created_at))}</span><span><strong style="font-weight:600">${esc(x.action.replace('_', ' '))}</strong> · ${esc(x.entity)} ${esc(x.entity_id)} ${esc(x.detail || '')} — ${esc(x.actor || 'system')}</span></div>`).join('')}</div>`);
+      page(`<div class="col" style="max-width:none"><h2>Monitor: audit trail</h2><p class="muted" style="margin:0">Every state change: who, what, when. Latest 200.</p>${a.map(x => `<div class="hist"><span class="muted">${esc(stamp(x.created_at))}</span><span><strong style="font-weight:600">${esc(x.action.replace('_', ' '))}</strong> · ${esc(x.entity)} ${esc(x.entity_id)} ${esc(x.detail || '')} — ${esc(x.actor || 'system')}</span></div>`).join('')}</div>`);
     },
   };
   PAGES.adminNotices = PAGES.notices;

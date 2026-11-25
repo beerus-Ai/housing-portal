@@ -133,7 +133,8 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | --- | --- | --- | --- |
 | FR-RL-11 | Support tickets from every role; IT replies | IT Staff | S |
 | FR-RL-12 | Help guides per role (training) | IT Staff | C |
-| FR-RL-13 | System health, backup download (audited), maintenance notice | IT Staff | S |
+| FR-RL-13 | Upgrades and maintenance: system health, backup download (audited), maintenance notice | IT Staff | S |
+| FR-RL-14 | IT overview home: system status, open support queries, training guides, last backup, maintenance notice and log | IT Staff | S |
 
 ### 3.8 Society modules
 | ID | Requirement | Role | Priority |

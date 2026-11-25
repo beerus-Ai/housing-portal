@@ -306,6 +306,12 @@ module.exports = function mountRoles(app, c) {
       counts: { users: n('SELECT COUNT(*) AS n FROM users'), requests: n('SELECT COUNT(*) AS n FROM requests'), open_requests: n("SELECT COUNT(*) AS n FROM requests WHERE status!='closed'"),
         open_tickets: n("SELECT COUNT(*) AS n FROM support_tickets WHERE status!='resolved'"), audit_rows: n('SELECT COUNT(*) AS n FROM audit'), staff_on_shift: n('SELECT COUNT(*) AS n FROM staff_shifts WHERE punch_out IS NULL') },
       maintenance: getMaintenance(),
+      // IT overview (whiteboard: support queries, training, upgrades/maintenance)
+      tickets: { open: n("SELECT COUNT(*) AS n FROM support_tickets WHERE status='open'"), in_progress: n("SELECT COUNT(*) AS n FROM support_tickets WHERE status='in_progress'"),
+        resolved_30d: n("SELECT COUNT(*) AS n FROM support_tickets WHERE status='resolved' AND updated_at >= datetime('now','-30 days')") },
+      last_backup: (one("SELECT created_at FROM audit WHERE entity='system' AND action='backup' ORDER BY id DESC LIMIT 1") || {}).created_at || null,
+      system_events: q("SELECT a.action,a.detail,a.created_at,u.name AS actor FROM audit a LEFT JOIN users u ON u.id=a.actor_id WHERE a.entity='system' ORDER BY a.id DESC LIMIT 8"),
+      guides: GUIDES.length,
       hosting_note: process.env.RENDER ? 'Render free plan: the database is wiped on sleep and redeploy. Download a backup before upgrades.' : null,
     });
   });

@@ -1,4 +1,5 @@
-// Pages for the review roles (docs/roles-api.md): staff (My jobs, Shift), IT (Support queue, System health),
+// Pages for the review roles (docs/roles-api.md): staff (Assigned work, Punch in and hand-over), IT (IT overview,
+// Support queries, Training guides, Upgrades and maintenance),
 // committee extras (Cost approvals, Reports, Staff attendance, Accounts), and for everyone Help, Support and Profile.
 // Loaded after web.js; registers pages and delegated events on window.HPWeb. No inline handlers (CSP 'self').
 (() => {
@@ -51,9 +52,9 @@
   PAGES.myjobs = async () => {
     const [j, sh] = await Promise.all([RAPI.staff.jobs(), RAPI.staff.shift().catch(() => null)]);
     const open = (j && j.open) || [], recent = (j && j.recent) || [];
-    const shiftChip = sh && sh.current ? `<span class="tag tag-accent">On shift since ${esc(stamp(sh.current.punch_in))}</span><button class="btn btn-secondary" data-act="nav" data-page="shift">${ic('clock-user')}Shift</button>`
+    const shiftChip = sh && sh.current ? `<span class="tag tag-accent">On shift since ${esc(stamp(sh.current.punch_in))}</span><button class="btn btn-secondary" data-act="nav" data-page="shift">${ic('clock-user')}Punch in and hand-over</button>`
       : `<span class="tag tag-neutral">Not on shift</span><button class="btn btn-primary" data-act="rlpunchin">${ic('sign-in')}Punch in</button>`;
-    page(`<div class="rl">${head('My jobs', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
+    page(`<div class="rl">${head('Assigned work', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
       ${open.length ? `<div class="rl-grid">${open.map(jobCard).join('')}</div>` : '<p class="callout" style="margin:0">No open jobs. New jobs from the committee appear here.</p>'}
       <section class="col" style="gap:var(--space-2)"><h2>Closed this week</h2>${table(['Request', 'Flat', 'Category', 'Closed', 'Rating'], recent.map(r => `<tr><td><b>${esc(rid(r))}</b> ${esc(r.title)}</td><td>${esc(r.flat)}</td><td>${esc(catLabel(r.category))}</td><td>${esc(stamp(r.closed_at || r.updated_at))}</td><td>${r.rating ? esc(r.rating) + ' / 5' : '–'}</td></tr>`), 'Nothing closed in the last 7 days.')}</section></div>`);
     if (R.showUps && !R.ups[R.showUps]) loadUps(R.showUps);
@@ -78,7 +79,7 @@
           ${errLine()}<div class="row"><button class="btn btn-primary btn-lg">${ic('sign-out')}Punch out</button></div></form></section>`
       : `<section class="form-card col"><div class="row" style="gap:12px"><span class="tile lg">${ic('clock-user')}</span><span class="col" style="gap:2px"><span class="list-title rl-job-t">Not on shift</span><span class="muted">Punch in when you start work.</span></span></div>
         ${errLine()}<div class="row"><button class="btn btn-primary btn-lg" data-act="rlpunchin">${ic('sign-in')}Punch in</button></div></section>`;
-    page(`<div class="rl">${head('Shift', 'Punch in when you arrive, punch out when you leave.')}${now}
+    page(`<div class="rl">${head('Punch in and hand-over', 'Punch in when you arrive; punch out when you leave and hand open jobs to a colleague.')}${now}
       <section class="col" style="gap:var(--space-2)"><h2>Recent shifts</h2>${table(['In', 'Out', 'Hours', 'Handed over to', 'Note'], (s.recent || []).map(x => `<tr><td>${esc(stamp(x.punch_in))}</td><td>${x.punch_out ? esc(stamp(x.punch_out)) : '<span class="tag tag-accent">On shift</span>'}</td><td>${esc(hrs(x.hours))}</td><td>${esc(x.handover_to_name || '–')}</td><td>${esc(x.handover_note || '')}</td></tr>`), 'No shifts yet.')}</section>
       <section class="col" style="gap:var(--space-2)"><h2>Colleagues</h2><div class="row">${mates.map(c => `<span class="tag ${c.on_shift ? 'tag-accent' : 'tag-neutral'}">${esc(c.name)} · ${c.on_shift ? 'on shift' : 'off'}</span>`).join('') || '<span class="muted">No other staff accounts.</span>'}</div></section></div>`);
   };
@@ -87,7 +88,7 @@
   // ---------- everyone: Help
   PAGES.help = async () => {
     const gs = await RAPI.help.guides();
-    page(`<div class="rl">${head('Help', 'Short how-to guides for what you can do in the portal.', `<button class="btn btn-secondary" data-act="nav" data-page="support">${ic('lifebuoy')}Report a portal problem</button>`)}
+    page(`<div class="rl">${head(isIT() ? 'Training guides' : 'Help', isIT() ? 'How-to guides for every role. Use them to train new users.' : 'Short how-to guides for what you can do in the portal.', `<button class="btn btn-secondary" data-act="nav" data-page="support">${ic('lifebuoy')}Report a portal problem</button>`)}
       <div class="rl-grid">${gs.map(g => `<article class="form-card rl-guide"><h3>${esc(g.title)}</h3><ol class="rl-steps">${(g.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol></article>`).join('') || '<p class="muted">No guides yet.</p>'}</div></div>`);
   };
 
@@ -115,7 +116,7 @@
       ${field('rlnb', 'What happened', '<textarea class="input" id="rlnb" name="body" required maxlength="3000" placeholder="What you were doing, what you saw"></textarea>')}
       ${detail ? '' : errLine()}<div class="row"><button class="btn btn-primary">${ic('paper-plane-tilt')}Send to IT support</button></div></form>`;
     const filter = it ? `<div class="field"><label class="sr" for="rlsf">Status</label><select class="input" id="rlsf" style="width:auto">${[['', 'Any status'], ['open', 'Open'], ['in_progress', 'In progress'], ['resolved', 'Resolved']].map(([k, l]) => `<option value="${k}" ${R.sFilter === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : '';
-    page(`<div class="rl">${head(it ? 'Support queue' : 'Support', it ? `${list.filter(t => t.status !== 'resolved').length} not resolved` : 'Tell IT support about a problem with the portal.', filter)}
+    page(`<div class="rl">${head(it ? 'Support queries' : 'Support', it ? `${list.filter(t => t.status !== 'resolved').length} not resolved` : 'Tell IT support about a problem with the portal.', filter)}
       <div class="split"><div class="col" style="gap:var(--space-1)"><h2 style="margin-bottom:var(--space-2)">${it ? 'Tickets' : 'Your tickets'}</h2>${list.map(ticketRow).join('') || '<p class="muted">No tickets.</p>'}</div>
       <div class="col" style="gap:var(--space-4)">${detail}${create}</div></div></div>`);
   };
@@ -130,7 +131,7 @@
     const h = await RAPI.it.health(), m = (S.settings && S.settings.maintenance) || null;
     const counts = Object.entries(h.counts || {});
     const label = k => k.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
-    page(`<div class="rl">${head('System health', 'How the portal server is doing right now.', `<button class="btn btn-secondary" data-act="rlhealth">${ic('arrows-clockwise')}Refresh</button>`)}
+    page(`<div class="rl">${head('Upgrades and maintenance', 'Server health, backups before upgrades, and the maintenance notice everyone sees.', `<button class="btn btn-secondary" data-act="rlhealth">${ic('arrows-clockwise')}Refresh</button>`)}
       <div class="eg-grid">${stat('clock', uptime(h.uptime_s), 'Up for', 'since the last restart')}${stat('database', mb(h.db_bytes), 'Database size')}${stat('cpu', num(h.memory_mb) + ' MB', 'Memory in use')}${stat('code', num(h.node), 'Node version', [h.version, h.commit && String(h.commit).slice(0, 7)].filter(Boolean).join(' · '))}${h.integrity ? stat('shield-check', h.integrity === 'ok' ? 'OK' : h.integrity, 'Database check') : ''}
         ${counts.map(([k, v]) => stat('list-numbers', num(v), label(k))).join('')}</div>
       ${h.hosting_note ? `<p class="callout" style="margin:0">${ic('info')} ${esc(h.hosting_note)}</p>` : ''}
@@ -142,6 +143,34 @@
         ${errLine()}<div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save notice</button>${m && m.message ? `<button type="button" class="btn btn-secondary" data-act="rlmaintclear">${ic('x')}Remove notice</button>` : ''}</div></form></div></div>`);
   };
   ACT.rlhealth = () => render();
+
+  // ---------- IT: overview (IT home). Whiteboard IT duties: support queries, training, upgrades and maintenance.
+  const EVENT = { backup: 'Backup downloaded', maintenance_set: 'Maintenance notice set', maintenance_cleared: 'Maintenance notice removed' };
+  PAGES.itoverview = async () => {
+    const [h, tickets] = await Promise.all([RAPI.it.health(), RAPI.support.list('').catch(() => [])]);
+    const t = h.tickets || {}, c = h.counts || {}, m = h.maintenance || (S.settings && S.settings.maintenance) || null;
+    const healthy = h.ok && h.integrity === 'ok';
+    const openT = tickets.filter(x => x.status !== 'resolved').slice(0, 5);
+    const duty = (icon, title, sub, pg, n) => `<button type="button" class="eg-card" data-act="nav" data-page="${pg}"><span class="eg-ic">${ic(icon)}</span><span class="eg-n">${esc(n)}</span><span class="eg-l">${esc(title)}</span><span class="eg-s">${esc(sub)}</span></button>`;
+    page(`<div class="rl">${head('IT overview', 'Support queries, training and upgrades for the portal, at a glance.', `<button class="btn btn-secondary" data-act="rlhealth">${ic('arrows-clockwise')}Refresh</button>`)}
+      <section class="form-card it-status"><span class="tile lg">${ic(healthy ? 'check-circle' : 'warning')}</span>
+        <span class="col" style="gap:2px"><span class="list-title rl-job-t">${healthy ? 'All systems normal' : 'Needs a look'}</span>
+        <span class="muted">Database check ${esc(h.integrity || '–')} · up for ${esc(uptime(h.uptime_s))} · ${esc(mb(h.db_bytes))} · version ${esc([h.version, h.commit].filter(Boolean).join(' · '))}</span></span></section>
+      <div class="eg-grid">
+        ${duty('lifebuoy', 'Support queries', `${num(t.in_progress)} in progress · ${num(t.resolved_30d)} resolved in 30 days`, 'support', num(t.open))}
+        ${duty('graduation-cap', 'Training guides', 'How-to guides for every role', 'help', num(h.guides))}
+        ${duty('download-simple', 'Last backup', h.last_backup ? 'Download one before every upgrade' : 'No backup yet: take one now', 'health', h.last_backup ? day(h.last_backup) : 'None')}
+        ${duty('wrench', 'Maintenance notice', m && m.message ? m.message : 'No notice showing', 'health', m && m.message ? 'On' : 'Off')}
+        ${duty('users', 'Accounts', `${num(c.staff_on_shift)} staff on shift`, 'health', num(c.users))}
+        ${duty('list-checks', 'Open repair requests', 'Handled by the committee', 'health', num(c.open_requests))}</div>
+      ${h.hosting_note ? `<p class="callout" style="margin:0">${ic('info')} ${esc(h.hosting_note)}</p>` : ''}
+      <div class="split-eq" style="align-items:start">
+        <section class="col" style="gap:var(--space-2)"><h2>Open support queries</h2>${openT.map(x => ticketRow(x).replace('data-act="rlticket"', 'data-act="rlticketgo"')).join('') || '<p class="callout" style="margin:0">No open queries. New tickets from residents, the committee, staff and guards appear here.</p>'}
+          <div class="row"><button class="btn btn-secondary" data-act="nav" data-page="support">${ic('lifebuoy')}All support queries</button></div></section>
+        <section class="col" style="gap:var(--space-2)"><h2>Upgrades and maintenance log</h2>${table(['When', 'What', 'By'], (h.system_events || []).map(e => `<tr><td>${esc(stamp(e.created_at))}</td><td>${esc(EVENT[e.action] || e.action.replace(/_/g, ' '))}${e.detail && e.action !== 'backup' ? ': ' + esc(e.detail) : ''}</td><td>${esc(e.actor || 'system')}</td></tr>`), 'Nothing yet. Backups and maintenance notices are listed here.')}
+          <div class="row"><button class="btn btn-primary" data-act="nav" data-page="health">${ic('wrench')}Upgrades and maintenance</button></div></section></div></div>`);
+  };
+  ACT.rlticketgo = el => { R.ticket = Number(el.dataset.id); go('support'); };
   ACT.rlmaintclear = async () => { await RAPI.it.maintenance(''); S.settings = await API.settings.public().catch(() => S.settings); toast('Maintenance notice removed'); render(); };
 
   // ---------- committee: Cost approvals

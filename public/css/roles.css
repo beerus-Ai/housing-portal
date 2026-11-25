@@ -52,3 +52,8 @@
   .eg-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
   .table-wrap .table { min-width: 0; }
 }
+
+/* Longer whiteboard names (e.g. "Upgrades and maintenance") wrap to two lines instead of being cut off. */
+.side-shell .side-link { white-space: normal; line-height: 1.2; text-align: left; }
+/* IT overview status banner */
+.it-status { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 14px; }

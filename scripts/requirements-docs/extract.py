@@ -110,7 +110,7 @@ SHORT = {
  "FR-AU-04": "Edit resident permissions", "FR-AU-05": "Feature switches",
  "FR-RL-03": "Staff see only their jobs", "FR-AU-06": "Guards see only the gate",
  "FR-AD-05": "Gate passes and gate log", "FR-RL-11": "Support tickets",
- "FR-RL-12": "Help guides per role", "FR-RL-13": "Health, backup, maintenance notice",
+ "FR-RL-12": "Help guides per role", "FR-RL-13": "Upgrades and maintenance", "FR-RL-14": "IT overview",
  "FR-SM-01": "Set up amenities", "FR-SM-02": "Book and cancel amenity slots",
  "FR-SM-03": "Raise monthly dues", "FR-SM-04": "Record payments",
  "FR-SM-05": "Residents see their dues", "FR-SM-06": "Inventory with reorder alerts",

@@ -164,10 +164,10 @@
     D.reqs = reqs; D.people = Array.isArray(people) ? people : []; D.notices = await API.notices.list().catch(() => []);
     const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id && !r.assignee_id); // staff-assigned work counts as assigned
     // Shortcuts follow the whiteboard committee list: verification, requests, broadcast, reports, monitoring.
-    const chipList = [{ l: 'Approvals', icon: 'user-check', go: 'approvals', n: s.pending_users || '' }, { l: 'Requests', icon: 'list-checks', go: 'requests' },
-      { l: 'Notices', icon: 'megaphone', go: 'notices', show: feat('notices') }, { l: 'Reports', icon: 'chart-line', go: 'reports' }, { l: 'Audit trail', icon: 'clock-counter-clockwise', go: 'audit' },
+    const chipList = [{ l: 'Verification', icon: 'user-check', go: 'approvals', n: s.pending_users || '' }, { l: 'Requests', icon: 'list-checks', go: 'requests' },
+      { l: 'Broadcast', icon: 'megaphone', go: 'notices', show: feat('notices') }, { l: 'Reports', icon: 'chart-line', go: 'reports' }, { l: 'Monitor', icon: 'clock-counter-clockwise', go: 'audit' },
       { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }];
-    const attn = [stat(s.pending_users ? 's-dark ds-glow' : 's-tint', 'user-check', s.pending_users, 'Pending approvals', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
+    const attn = [stat(s.pending_users ? 's-dark ds-glow' : 's-tint', 'user-check', s.pending_users, 'Awaiting verification', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
     if (feat('emergency')) attn.push(stat(em.length ? 's-red ds-glow-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + (e.flat ? ' · ' + e.flat : '')).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
     attn.push(stat(unassigned.length ? 's-dark ds-glow' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
     attn.push(`<div class="ds-stat s-white s-ring${a.overdue ? ' ds-glow-red' : ''}"><span class="ds-ringbox" style="background:${ring(a.pct)}"><span><b>${a.pct}%</b></span></span><span class="ds-stat-l">Within 48h SLA</span><span class="ds-stat-s">${a.overdue} past SLA · oldest ${esc(a.oldest)}</span></div>`);
