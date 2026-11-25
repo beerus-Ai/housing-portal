@@ -26,7 +26,7 @@ CI runs 6 jobs on every pull request (Node, Java H2, Java PostgreSQL 16, React, 
 ## Docs
 | Doc | What it holds |
 | --- | --- |
-| [requirements](docs/requirements.md) | Scope, personas, FR and NFR IDs |
+| [requirements](docs/requirements.md) | **Requirements Document**: Scope, Personas, Functional Requirements, Non-Functional Requirements |
 | [user-stories](docs/user-stories.md) | Stories by role |
 | [architecture](docs/architecture/architecture.md) | System diagrams |
 | [product and technology architecture](docs/architecture/product-and-technology-architecture.md) | Modules and stack from the faculty whiteboard |
