@@ -113,7 +113,7 @@
     const coreItems = core.map(k => all.find(([x]) => x === k)).filter(Boolean);
     const items = all.filter(([k]) => !core.includes(k));
     const topBtn = ([k, label, icon]) => `<button class="btn core-link ${S.page === k ? 'on' : ''} ${extra(k).danger ? 'nav-danger' : ''}" data-act="nav" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span>${esc(label)}</span>${extra(k).h}</button>`;
-    const topbar = `<nav class="core-bar" aria-label="Main">${coreItems.map(topBtn).join('')}<span class="core-sp"></span>${topBtn(['alerts', 'Alerts', 'bell'])}</nav>`;
+    const topbar = `<nav class="core-bar" aria-label="Main">${coreItems.map(topBtn).join('')}<span class="core-sp"></span>${['admin', 'guard', 'staff', 'shop', 'laundry'].includes(S.me.role) ? HP.soundBtn('btn core-link') : ''}${topBtn(['alerts', 'Alerts', 'bell'])}</nav>`;
     let nav;
     if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
     else nav = GROUPS.map(([g, gl, gi]) => {

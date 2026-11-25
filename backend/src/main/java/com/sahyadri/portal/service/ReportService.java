@@ -107,6 +107,13 @@ public class ReportService {
         return String.join("\n", lines);
     }
 
+    /** Sound cues (ids only): newest request for the committee, newest still-active emergency for committee and guards. */
+    public Map<String, Object> alerts(User u) {
+        boolean em = u.isAdmin() || "guard".equals(u.role());
+        return Map.of("rq", u.isAdmin() ? repo.maxId("requests") : 0L, "ru", u.isAdmin() ? repo.maxUrgentRequestId() : 0L,
+                "em", em ? repo.maxActiveEmergencyId() : 0L, "em_on", em ? repo.activeEmergencies() : 0L);
+    }
+
     /** A version string only; clients redraw when it changes. Never returns data. */
     public String pulse(User u) {
         if ("guard".equals(u.role())) return String.valueOf(repo.maxNotificationId(u.id())); // guards only see their own marker
