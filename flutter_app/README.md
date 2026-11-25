@@ -13,8 +13,8 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 - Local server: emulator `http://10.0.2.2:3000`; USB phone `adb reverse tcp:3000 tcp:3000`, then `http://localhost:3000`.
 
 ## What it does
-- Bottom navigation by role: residents (Home, Requests, Services, Gate pass, Profile), committee (Home, Requests, Services, Profile), staff (Home, My jobs, Services, Profile), guard and IT (Home, Profile).
-- Services: amenities (book, cancel), maintenance dues (residents see their flat; committee raises bills and records payments), inventory (committee and staff), waste (schedule; residents report a missed pickup; staff and committee log collections), notices. Home shows a "Society services" row. Setting up amenities and the waste schedule stays on the web.
+- Bottom navigation by role, required items first: residents and committee (Home, Requests, Notices, More, Profile), staff (Home, My jobs, More, Profile), guard and IT (Home, Profile).
+- More: amenities (book, cancel), maintenance dues (residents see their flat; committee raises bills and records payments), inventory (committee and staff), waste (schedule; residents report a missed pickup; staff and committee log collections), gate pass (residents). Home shows a "Society services" row at the bottom. Setting up amenities and the waste schedule stays on the web.
 - Screens: sign in, home, requests, new request with photo, request detail (tracker, messages, history; committee assigns a vendor or staff, then moves it to the next stage), notices, SOS, gate QR, profile.
 
 ## Layout
