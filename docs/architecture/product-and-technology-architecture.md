@@ -1,26 +1,19 @@
 # Product architecture and technology architecture
 
-Source: the faculty whiteboard from the class review on 2026-11-25 (photo below). The board asks for two views of the system:
-
-1. **Product architecture**: who uses the product, which business modules it has, the supporting (ancillary) services, and the outside systems it connects to.
-2. **Technology architecture**: the technology chosen for each tier (front end, back end, database).
+Source: the faculty whiteboard, class review 2026-11-25. It asks for a product view (users, modules, ancillary services, interfaces) and a technology view (one choice per tier). Component diagrams and the data model are in [architecture.md](architecture.md).
 
 ![Faculty whiteboard: product and technology architecture](../images/whiteboard-architecture.jpg)
-
-Some words on the board are hard to read. Where we had to guess a word, the table says so.
 
 ---
 
 ## 1. Product architecture
-
-The board draws the product as four layers, from top to bottom:
 
 | Layer | On the board | What it means for Sahyadri Heights |
 |---|---|---|
 | **Customers** (channels) | Website, Mobile | How residents, the committee, staff and guards reach the product |
 | **Business modules** | On-boarding, Request management, Financial management, User management, Inventory management, Workforce management, Waste management, Visitor management, Amenity management | The society's day-to-day work |
 | **Ancillary** | Notifications, Reports | Services every module uses |
-| **Interfaces** | Payment gateway (plus arrows out to **E-commerce** and a partner the board writes as "Medico", which we read as medical services) | Outside systems |
+| **Interfaces** | Payment gateway, E-commerce, "Medico" (read as medical services; hard to read) | Outside systems |
 
 ```mermaid
 flowchart TB
@@ -61,12 +54,12 @@ flowchart TB
 
 ### Module status in our build
 
-Built = working in the Node API and the web app today. The four modules added on 2026-11-25 (amenities, dues, inventory, waste) are described in [modules-api.md](../modules-api.md); they are not yet ported to Java, React or the Flutter app. Partial = some of it is built. Planned = not built yet.
+Built = working in the Node API and web app. Partial = some of it built. Planned = not built. Amenities, dues, inventory and waste (2026-11-25, [modules-api.md](../modules-api.md)) are not ported to Java, React or Flutter.
 
 | Module | Status | What exists today | Where |
 |---|---|---|---|
 | On-boarding | Built | Self-registration with consent, committee approval, owner adds family and tenants, tenant lease | `app.js` `/api/register`, `/api/household`, `/api/admin/users` |
-| Request management | Built | Raise with photo, AI triage, forward-only lifecycle, vendor or staff assignment, messages, rating, reopen within 7 days, SLA escalation, Telegram and WhatsApp intake, email actions | `app.js` `/api/requests*`, `ai.js`, `email-desk.js` |
+| Request management | Built | Raise with photo, AI triage, forward-only lifecycle, vendor or staff assignment, messages, rating, reopen within 7 days, SLA escalation, Telegram intake (WhatsApp built, not connected), email actions | `app.js` `/api/requests*`, `ai.js`, `email-desk.js` |
 | User management | Built | Roles (resident, committee, guard, staff, IT), committee positions (member, head, admin), access matrix per resident type, suspend and remove | `app.js` `/api/admin/users`, `/api/admin/access`, `roles.js` |
 | Visitor management | Built | Visitor gate passes, the resident's personal QR and NFC gate token, the guard's verify screen, gate log | `app.js` `/api/gate/*` |
 | Workforce management | Partial | Vendors, staff jobs (accept, update, hand over), shifts (punch in and out), society workers register | `roles.js` `/api/staff/*`, `app.js` vendors and workers |
@@ -76,14 +69,12 @@ Built = working in the Node API and the web app today. The four modules added on
 | Amenity management | Built | Committee sets up amenities and hours; residents book time slots (no double booking, 30 days ahead, 2 upcoming per flat) and cancel | `modules.js` `/api/amenities`, `/api/bookings` |
 | Notifications | Built | In-app notifications, Telegram replies, notice broadcast, committee email desk, emergency alerts | `app.js`, `email-desk.js` |
 | Reports | Built | Monthly report, CSV export, weekly AI digest, audit trail | `roles.js` `/api/admin/reports/monthly`, `app.js` |
-| Payment gateway | Planned | Not built. Bills and payment records exist; online payment (for example Razorpay or UPI collect) would add a "Pay now" step on the same records | |
-| E-commerce, medical | Planned | Board arrows only: outside partners such as a vendor marketplace and medical help. Emergency alerts of type "medical" exist today | |
+| Payment gateway | Planned | Not built. Online payment would add a "Pay now" step on the existing bill records | |
+| E-commerce, medical | Planned | Not built. Emergency alerts of type "medical" exist | |
 
 ---
 
 ## 2. Technology architecture
-
-The board lists one technology per tier. The table puts the board's suggestion next to what this project uses, and gives the reason for each difference.
 
 | Tier | On the board | Our build | Why |
 |---|---|---|---|
@@ -92,7 +83,7 @@ The board lists one technology per tier. The table puts the board's suggestion n
 | **BE** (back end) | Node, Node JS | Node.js 22 + Express (default, `app.js`); Java Spring Boot 3.3 (`backend/`, target) | Node as on the board. The Java port follows the same frozen API contract |
 | **DB** | Mongo | SQLite (`node:sqlite`) for the Node app; PostgreSQL 16 for Java and production | Our data is relational (users, flats, requests, approvals, audit) and needs joins and transactions, so we chose SQL. MongoDB would fit if modules like amenity bookings or IoT logs became document-shaped |
 | **Integration** | (not on the board) | n8n cloud workflows, Telegram Bot API, Gmail, LLM (gpt-4o-mini via n8n) | AI-native workflows: request-or-chatter gate, email approvals, digests |
-| **Hosting and CI** | (not on the board) | Render (web service), GitHub Actions (5 jobs), Docker | Free hosting for the demo; CI checks every stack |
+| **Hosting and CI** | (not on the board) | Render (web service), GitHub Actions (6 jobs), Docker | Free hosting for the demo; CI checks every stack |
 
 ```mermaid
 flowchart LR
@@ -125,20 +116,10 @@ flowchart LR
   tg --> node
 ```
 
-### Flutter app (new)
+### Flutter app
 
-- Folder `flutter_app/`, Dart 3, Material 3, the same palette as the web app (accent `#0088B0`; red only for emergencies; pink only for badges).
-- It calls the existing REST API. No new server code was needed: it signs in with `POST /api/login`, keeps the session cookie on the device and sends it on every call. Native apps send no `Origin` header, so the server's cross-origin check does not block them.
-- The bottom navigation bar changes with the role:
-  - Residents: Home, Requests, Notices, Gate pass (QR), Profile.
-  - Committee: Home, Requests (with "Move to next stage" and AI triage), Notices, Profile.
-  - Staff: Home, My jobs, Profile.
-  - Guard and IT: Home (alerts), Profile.
-- Screens: sign in (server address can be changed), home dashboard, raise a request with a camera or gallery photo, request detail (tracker, messages, history), notices, emergency SOS, gate QR, profile.
-- Checked on an Android emulator against a local portal server on 2026-11-25: sign in, home, a new request (created as #4), request detail, gate QR and notices. Not yet tried on a physical phone or iOS.
+`flutter_app/` (Flutter 3.50, Dart 3.14) calls the same REST API with the session cookie from `POST /api/login`; no server change was needed. The bottom navigation depends on the role (resident, committee, staff, guard and IT). Checked on an Android emulator against a local server; not on a physical phone, iOS or the live server. Build, run and open items: [flutter_app/README.md](../../flutter_app/README.md).
 
 | Home | New request | Request detail | Gate pass |
 |---|---|---|---|
 | ![Home](../images/flutter-home.png) | ![New request](../images/flutter-new-request.png) | ![Request detail](../images/flutter-request-detail.png) | ![Gate pass](../images/flutter-gate-pass.png) |
-
-- Tests: `flutter test` (8 tests: API client, cookie handling, multipart upload, network errors, login form). See `flutter_app/README.md` to build and run it.
