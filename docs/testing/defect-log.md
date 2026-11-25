@@ -18,5 +18,6 @@ Severity: C critical, H high, M medium, L low. Fix commits are in the git histor
 | DEF-12 | n8n classifier | Import failed: "Could not get parameter model.value" | M | Model stored as plain string | Saved as resource locator (d789541) | Fixed |
 | DEF-13 | Flutter build | Android build failed on Windows (project and Pub cache on different drives) | H | Kotlin incremental cache bug across drives | `kotlin.incremental=false` (2026-11-25) | Fixed |
 | DEF-14 | Flutter app | Network failure showed raw socket error text | L | Exception text passed to the UI | Friendly message; test in `api_test.dart` (2026-11-25) | Fixed |
-| DEF-15 | Flutter app | Committee cannot assign a vendor or staff in the app | M | Not built yet | Use the web app; add assign screen | Open |
-| DEF-16 | Flutter app | Error toasts are red, against the palette rule (red only for emergencies) | L | Theme default | Change toast colour | Open |
+| DEF-15 | Flutter app | Committee cannot assign a vendor or staff in the app | M | Not built yet | Assign sheet (AI suggestion, matching trade, staff on shift first) | Fixed 2026-11-25 |
+| DEF-16 | Flutter app | Error toasts are red, against the palette rule (red only for emergencies) | L | Theme default | Neutral dark toast and text with an info icon | Fixed 2026-11-25 |
+| DEF-17 | Seeding | Restarting with `SEED_PASSWORD` duplicated demo vendors and contacts | L | `INSERT OR IGNORE` on tables without a unique key | Insert only when missing; `test/seed.test.js` | Fixed 2026-11-25 |

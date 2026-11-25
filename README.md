@@ -16,10 +16,10 @@ A portal for one housing society. Residents register with consent, raise and tra
 ```
 npm install
 npm start          # http://localhost:3000, committee sign-in admin@society.test
-npm test           # Node, 78 tests
+npm test           # Node, 79 tests
 cd backend && ./gradlew test      # Java, 81
 cd frontend && npm test           # React, 67
-cd flutter_app && flutter test    # Flutter, 8
+cd flutter_app && flutter test    # Flutter, 14
 ```
 CI runs 6 jobs on every pull request (Node, Java H2, Java PostgreSQL 16, React, Docker build, Flutter). Environment variables and rules: `CLAUDE.md`. SQLite to PostgreSQL export: `docs/deploy.md`.
 

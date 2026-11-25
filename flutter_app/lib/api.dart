@@ -130,6 +130,16 @@ class Api {
   Future<void> addComment(int id, String body) =>
       post('/api/requests/$id/comments', {'body': body});
 
+  // ---- committee: assignment (vendor or society staff; either lets the request move forward)
+  Future<List<dynamic>> vendors() async => await get('/api/vendors') as List<dynamic>;
+
+  Future<List<dynamic>> staff() async => await get('/api/admin/staff') as List<dynamic>;
+
+  Future<void> assign(int id, {int? vendorId, int? staffId}) {
+    assert((vendorId == null) != (staffId == null), 'assign a vendor or a staff member');
+    return post('/api/requests/$id/assign', staffId != null ? {'staff_id': staffId} : {'vendor_id': vendorId});
+  }
+
   Future<void> setStatus(int id, String status) =>
       post('/api/requests/$id/status', {'status': status});
 
