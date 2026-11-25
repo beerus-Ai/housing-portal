@@ -1,33 +1,45 @@
 # Sahyadri Heights: Housing Society Portal
 
-A web app and an installable mobile app (PWA) for a housing society. Residents raise work requests with photos, track them and rate the work. The committee approves residents, assigns vendors, posts notices, manages tenant leases and sees live dashboards. Built for the BPA "Using AI" assignment. It starts empty: no demo data ships with it.
+A portal for one housing society. Residents register with consent, raise and track work requests (portal, phone app or Telegram), book amenities, see their dues and rate the work. The committee approves residents, assigns vendors or staff, posts notices, raises bills, runs inventory and waste schedules, and sees dashboards and an audit trail. AI only suggests; a person confirms. Built for the MBA BPA "Using AI" assignment. It starts empty: no demo data ships with it.
 
-- **Web app:** `/` (desktop-first, responsive). **Mobile app:** `/m/` (bottom tab bar, installable, offline shell).
-- **Stack:** Node 22.5+, Express, `node:sqlite`, vanilla JS (no build step, strict CSP), self-hosted fonts and icons.
-- **Roles:** owner, tenant, family member, committee, guard. Access is checked on every route.
-- **Other ways in:** residents can report problems on **Telegram** (@SahyandriHeightsBot) or WhatsApp; an AI gate (free n8n LLM, or rules) decides whether a message is a real request.
-- **Committee by email:** when nobody has the dashboard open, each new complaint, registration, message to check and emergency is emailed to the committee with buttons that drive the request through its stages (assign, start, resolve). See `email-desk.js` and `n8n/README.md`.
-- **Live:** https://sahyadri-heights.onrender.com (Render free plan: sleeps when idle, and its database resets on sleep or redeploy).
+**Live:** https://sahyadri-heights.onrender.com (Render free plan: first request after sleep takes about 50 s, and the database resets on sleep or redeploy).
 
-## Run
+## Clients and stacks
+| Client | Stack | Status |
+| --- | --- | --- |
+| Web app `/` and PWA `/m/` | Node 22.5+, Express, `node:sqlite`, vanilla JS | Default, system of record, live |
+| Java API + React app (`backend/`, `frontend/`) | Spring Boot 3.3, PostgreSQL 16 / H2, React 18 + TypeScript | Strangler migration (ADR 0001), not cut over; no Telegram, email desk, roles or society modules yet |
+| Android wrapper (`mobile/`) | Capacitor, native NFC + ML Kit QR | Not tested on a device |
+| Flutter app (`flutter_app/`) | Flutter 3.50 / Dart 3.14, same API | Checked on an Android emulator only |
+
+## Run and test
 ```
 npm install
-npm start                # http://localhost:3000
-npm test
+npm start          # http://localhost:3000, committee sign-in admin@society.test
+npm test           # Node, 78 tests
+cd backend && ./gradlew test      # Java, 81
+cd frontend && npm test           # React, 67
+cd flutter_app && flutter test    # Flutter, 8
 ```
-Committee sign-in: `admin@society.test` (password from `ADMIN_PASSWORD`, default in `db.js`). Residents register themselves and the committee approves them. Enter only the minimum data when testing. Change `ADMIN_PASSWORD` and set `SESSION_SECRET` for anything beyond local use.
+CI runs 6 jobs on every pull request (Node, Java H2, Java PostgreSQL 16, React, Docker build, Flutter). Environment variables and rules: `CLAUDE.md`. SQLite to PostgreSQL export: `docs/deploy.md`.
 
-See `CLAUDE.md` for the rules, layout and every environment variable, `docs/` for the submission documents, and `PROMPT_LOG.md` for the AI-use log.
-
-Tests: Node 65 (`npm test`), Java 81 (`cd backend && ./gradlew test`), React 67 (`cd frontend && npm test`). CI runs all three plus a PostgreSQL job and a Docker image build on every pull request.
-
-## Migrating the SQLite data to PostgreSQL (Java backend)
-`scripts/export-sqlite-to-postgres.js` is dependency-free (Node 22.5+). It opens the SQLite file read-only and writes `import.sql`
-(single transaction, `INSERT ... ON CONFLICT DO NOTHING`, timestamps normalised to UTC, identity sequences reset to `MAX(id)+1`).
-
-```
-node scripts/export-sqlite-to-postgres.js portal.db --dry-run        # print row counts only
-node scripts/export-sqlite-to-postgres.js portal.db --out import.sql
-psql -v ON_ERROR_STOP=1 -f import.sql "postgresql://portal@host/portal"
-```
-The target database must already have the Flyway schema (start the Java backend once). Uploaded files in `uploads/` are not in the database. See `docs/deploy.md`.
+## Docs
+| Doc | What it holds |
+| --- | --- |
+| [requirements](docs/requirements.md) | Scope, personas, FR and NFR IDs |
+| [user-stories](docs/user-stories.md) | Stories by role |
+| [architecture](docs/architecture/architecture.md) | System diagrams |
+| [product and technology architecture](docs/architecture/product-and-technology-architecture.md) | Modules and stack from the faculty whiteboard |
+| [ADR 0001](docs/architecture/adr-0001-java-react.md) | Java/React migration decision |
+| [roles-api](docs/roles-api.md) | Roles API contract |
+| [modules-api](docs/modules-api.md) | Society modules API contract |
+| [deploy](docs/deploy.md) | Hosting, Docker, database export |
+| [test plan](docs/testing/test-plan.md), [test cases](docs/testing/test-cases.md), [results](docs/testing/test-results.md), [defects](docs/testing/defect-log.md), [acceptance](docs/testing/acceptance-plan.md) | Testing |
+| [process-flows](docs/process-flows/README.md) | BPMN for Signavio |
+| [demo-script](docs/demo-script.md) | Demo walk-through |
+| [privacy-and-consent](docs/privacy-and-consent.md) | DPDP notes |
+| [milestones](docs/milestones.md) | Plan and progress |
+| [contribution-matrix](docs/contribution-matrix.md) | Team contributions |
+| [jira](docs/jira/sprints.md) | Sprints and backlog CSVs |
+| [CLAUDE.md](CLAUDE.md) | Rules, layout, environment variables |
+| [PROMPT_LOG.md](PROMPT_LOG.md) | AI-use log |

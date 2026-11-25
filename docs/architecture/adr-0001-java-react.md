@@ -1,6 +1,6 @@
 # ADR 0001: Move to Java (Spring Boot) and React, side by side
 
-Status: accepted (user decision, 2026-11-04). Replaces the Node/Express + vanilla JS stack **gradually** (strangler pattern). The Node server keeps serving everything until the Java backend passes parity.
+Status: accepted (user decision, 2026-11-04). Replaces the Node/Express + vanilla JS stack gradually (strangler pattern); Node serves everything until Java reaches parity.
 
 ## Target stack
 - **Backend** (`backend/`): Java 17+ (runs on 17 and 21), Spring Boot 3.3, Gradle (wrapper, 8.11.1), Spring Web, Spring Security (session cookie), Spring Data JPA, Flyway, Bean Validation, Actuator, springdoc-openapi. Local DB: H2 in PostgreSQL mode (no Docker needed); prod DB: PostgreSQL 16. Passwords: BCrypt (existing bcryptjs `$2a$` hashes are compatible).
@@ -20,14 +20,5 @@ role checks on every route; parameterised queries only; every state change write
 3. Emergencies, contacts, gate passes + guards.
 4. Cutover: Dockerfiles, Compose, GitHub Actions, switch the proxy to Java, retire Node.
 
-## Status
-Updated 2026-11-04.
-
-| Phase | State |
-| --- | --- |
-| 1 Skeletons (backend auth/settings/access/admin users/audit/notifications; frontend scaffold, login, shell, Home, Settings) | Implemented in `backend/` and `frontend/` |
-| 2 Requests, notices, household, vendors, lease, stats/audit/export | In progress on separate branches |
-| 3 Emergencies, contacts, gate passes + guards | Not started |
-| 4 Cutover infrastructure | Files added: `backend/Dockerfile`, `frontend/Dockerfile` (+ nginx config), `docker-compose.yml`, `.env.example`, `.github/workflows/ci.yml`, `scripts/export-sqlite-to-postgres.js`, `docs/deploy.md`. Not yet exercised on a machine with Docker; the cutover itself has not happened |
-
-The Node app remains the system of record and serves production until phases 2 and 3 reach parity. See `docs/deploy.md` for the cutover checklist and rollback.
+## Status (2026-11-25)
+Ported to Java and React: everything up to the AI workflows of 2026-11-04 (Java 81 tests, React 67, CI green). Not ported (Node only): Telegram intake, email desk, review roles (`roles.js`) and society modules (`modules.js`). Cutover has not happened; Node remains the system of record and serves production. Docker Compose has not been run end to end. Cutover checklist and rollback: [deploy.md](../deploy.md).

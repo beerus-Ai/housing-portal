@@ -1,6 +1,6 @@
 # Test cases
 
-Automated file column names the test file that covers the case; Java equivalents are in `backend/src/test/java/com/sahyadri/portal/` and React ones in `frontend/src/test/`. "Manual" means the case is covered by the walk-through recorded in `test-results.md`. Requirement IDs refer to `docs/requirements.md`.
+Requirement IDs: `docs/requirements.md`; society module rules: `docs/modules-api.md`. Java tests: `backend/src/test/java/com/sahyadri/portal/`; React tests: `frontend/src/test/`. "Manual" cases are recorded in `test-results.md`.
 
 | ID | Story area | Steps | Expected | Automated test |
 | --- | --- | --- | --- | --- |
@@ -61,7 +61,17 @@ Automated file column names the test file that covers the case; Java equivalents
 | TC-RL-06 | Reports FR-RL-09 | Monthly report after assign, close, rate; empty month; resident calls it | Counts, by-staff row, member activity; zeros; 403 | `test/roles.test.js` (monthly report) |
 | TC-RL-07 | IT FR-RL-11/12/13 | Tickets from resident and guard; IT reply and resolve; requester reply; guides per role; health, backup, maintenance | Notifications both ways; reopen on reply; role-filtered guides; integrity ok; file starts "SQLite format 3"; banner in public settings, then cleared | `test/roles.test.js` (IT) |
 | TC-RL-08 | Broadcast FR-RL-10 | Post a notice with one Telegram-linked resident | `telegram_sent` 1, one outbound Telegram message | `test/roles.test.js` (broadcast) |
+| TC-SM-01 | Amenities (FR-SM-01, 02) | Resident creates an amenity; bad hours; duplicate name; book a past slot, an off-grid time, >30 days ahead; two flats book the same slot; third upcoming booking; other flat cancels; owner cancels; amenity closed | 403; 400; 409; 400 x3; second gets 409 and sees "taken" without the flat; 409; 404; freed slot rebookable, audited; hidden and 404 | `test/modules.test.js` (amenities) |
+| TC-SM-02 | Dues (FR-SM-03..05) | Resident bills; bad period; bill every flat twice; overdue bill; other flat reads a bill; resident records a payment; overpay; bad method; part then full payment | 403; 400; one bill per flat, then all skipped; overdue; 404; 403; 400; 400; partial then paid, totals correct, resident notified | `test/modules.test.js` (dues) |
+| TC-SM-03 | Inventory (FR-SM-06) | Resident lists stock; duplicate item; staff adds item or stock; staff takes more than in stock; staff takes out to the reorder level; committee restocks | 403; 409; 403; 409; low-stock alert to committee; history in order | `test/modules.test.js` (inventory) |
+| TC-SM-04 | Waste (FR-SM-07..09) | Resident edits schedule; duplicate day/kind; resident logs collection; staff logs; future date; resident reports a missed pickup | 403; 409; 403; 201, segregated % correct; 400; housekeeping request opened | `test/modules.test.js` (waste) |
+| TC-SM-05 | Society services summary (FR-SM-10) | Booking, overdue bill and empty item exist; committee and resident open the summary | Committee counts correct; resident sees own balance and next booking | `test/modules.test.js` (summary) |
+| TC-SM-06 | Manual web | Committee sets up modules; resident books a slot and sees dues; "Society services" row and menu | Works on a local server | Manual, see `test-results.md` (2026-11-25) |
+| TC-FL-01 | Flutter API client | Server URL normalised; session cookie parsed, stored and resent | https added, slashes trimmed; cookie sent on later calls | `flutter_app/test/api_test.dart` |
+| TC-FL-02 | Flutter errors | Server error; network failure | Server message and status shown; readable message, not raw socket text | `flutter_app/test/api_test.dart` |
+| TC-FL-03 | Flutter new request | Create a request with a photo | Multipart with category, title and image type | `flutter_app/test/api_test.dart` |
+| TC-FL-04 | Flutter sign-in and dates | Tap sign in with empty fields; parse SQLite dates and labels | "Enter your email and password", no server call; UTC dates, readable labels | `flutter_app/test/widget_test.dart` |
+| TC-FL-05 | Manual Flutter | On an Android emulator against a local server: sign in by role, raise a request with photo, open detail, committee moves it to the next stage, notices, SOS, gate QR, profile | Screens load and actions succeed | Manual, see `test-results.md` (2026-11-25) |
 | TC-UI-01 | Manual React | Raise request, vehicle, gate pass, worker, parking, notice, contact, household, emergency, lease, rating, gate verify | Forms submit and show result | Manual, see `test-results.md` (2026-11-04) |
 | TC-UI-02 | Manual phone | Request row, top bar, estate grid at phone width | No overlap or wrapping | Manual; Vitest `nav.test.tsx`, `phase3.test.tsx` |
 
-Links name test titles inside the file; run `npm test` to see each by name.

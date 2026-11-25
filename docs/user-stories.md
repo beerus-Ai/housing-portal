@@ -1,101 +1,103 @@
 # User Stories by Role: Sahyadri Heights Housing Society Portal
 
-Source: the faculty review of 21 November 2026 (whiteboard). It asked for the requirements to be restated as user stories in the form **As a <Role>, I want <Requirement>, so that <Why>**, grouped by six roles and organised around a process list. This document does that. The detailed functional requirements (FR-* IDs) stay in `requirements.md`; each story points to them.
-
-Status key: **Built** = built and tested. Items marked 2026-11-21 are built in the Node app and web UI from this review; they are not yet ported to the Java/React stack. **Partly** = some of it is built; the gap is stated. **New** = asked for in the review, not built yet.
+Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026-11-21; society modules from the whiteboard, 2026-11-25). FR IDs are in `requirements.md`. All stories are built in the Node app and web UI; review-role and society-module stories are not yet ported to Java/React (modules also not in Flutter).
 
 ## 1. Roles
-The review listed six roles. The table maps them to the roles the portal has today.
-
-| # | Role (review) | Role in the portal today | Change needed |
-| --- | --- | --- | --- |
-| 1 | Resident | Owner, Tenant, Family member (three sub-types of resident) | None. Keep the three sub-types under one "Resident" heading |
-| 2 | Committee Member | Committee | None |
-| 3 | Head of Committee | Committee account with position `head` | Built: final cost approval, settings, access rules, accounts |
-| 4 | Staff | Staff login (`staff`), plus Guard at the gate | Built: own jobs, take up, update, punch in/out, hand-over |
-| 5 | Admin | Committee account with position `sysadmin` | Built: accounts, settings, flags, channels; ordinary members can no longer change these |
-| 6 | IT Staff | IT login (`it`) | Built: support queue, guides, health, backup, maintenance notice |
+| # | Role (review) | Role in the portal |
+| --- | --- | --- |
+| 1 | Resident | Owner, tenant, family member |
+| 2 | Committee member | Committee, position `member` |
+| 3 | Head of committee | Committee, position `head` |
+| 4 | Staff | `staff` login; guards at the gate |
+| 5 | Admin | Committee, position `sysadmin` |
+| 6 | IT staff | `it` login |
 
 ![Figure 1. The six roles and what each can do](images/roles-overview.png)
 
 ## 2. Process list
-The review set out three processes. Process 3 is the lifecycle of a resident request in four steps.
-
-| # | Process | Main roles | Portal today |
-| --- | --- | --- | --- |
-| 1 | User onboarding and verification | Resident, Committee Member, Admin | Built (register, consent, committee approval) |
-| 2 | Raise a request | Resident | Built (portal, phone app, Telegram) |
-| 3 | Lifecycle of a resident request | All | Built |
-| 3.1 | Request allocation | Committee Member, Head of Committee | Built (AI suggests a vendor; a committee member assigns a vendor or staff; costs over the limit wait for the head) |
-| 3.2 | Track | Resident, Committee Member | Built (stage tracker Open > Assigned > In progress > Resolved, replies in chat, email) |
-| 3.3 | Execution | Staff | Built (staff take up and update their own jobs; the committee confirms closing) |
-| 3.4 | Feedback | Resident | Built (1-5 rating, reopen within 7 days) |
+| # | Process | Main roles |
+| --- | --- | --- |
+| 1 | Onboarding and verification | Resident, committee, admin |
+| 2 | Raise a request | Resident |
+| 3.1 | Allocation | Committee, head |
+| 3.2 | Track | Resident, committee |
+| 3.3 | Execution | Staff |
+| 3.4 | Feedback | Resident |
 
 ![Figure 2. Process list across roles: onboarding, raise a request, lifecycle 3.1 to 3.4](images/process-lifecycle.png)
 
-## 3. User stories
+## 3. Stories
 
 ### 3.1 Resident
-| ID | As a Resident, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-RES-01 | to register with my flat, phone and consent | the committee can verify that I live in the society | 1 | FR-ON-01 | Built |
-| US-RES-02 | to know whether my account is approved, and why I cannot sign in if it is not | I am not left waiting without an answer | 1 | FR-ON-02 | Built |
-| US-RES-03 | as an owner, to add my family members and tenants to my flat | they can use the portal without the committee typing their details | 1 | FR-ON-04 | Built |
-| US-RES-04 | to raise a request with a category, a description and a photo | the committee understands the problem first time | 2 | FR-WR-01 | Built |
-| US-RES-05 | to report a problem by sending a Telegram message | I do not have to open the portal | 2 | FR-WR-13 | Built (WhatsApp blocked by Meta, see assumptions) |
-| US-RES-06 | to see the stage of my request and who is assigned | I do not have to phone the committee to ask | 3.2 | FR-WR-02, FR-WR-03, FR-WR-11 | Built |
-| US-RES-07 | to be told when my request changes stage | I know when to expect the work | 3.2 | FR-NO-01 | Built |
-| US-RES-08 | to rate the work once it is closed | the committee knows which vendors and staff do good work | 3.4 | FR-WR-05 | Built |
-| US-RES-09 | to raise an emergency (fire, medical, lift) with one action or one message | help comes at once | 2 | FR-NO-06, FR-NO-07 | Built |
-| US-RES-10 | to read the society's notices | I do not miss announcements | - | FR-NO-02 | Built |
-| US-RES-11 | to reopen a request if the problem comes back within a set number of days | I do not have to raise it again from the start | 3.4 | - | Built (2026-11-21) |
+| ID | As a Resident, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-RES-01 | to register with my flat, phone and consent | the committee can verify me | FR-ON-01 |
+| US-RES-02 | to know whether I am approved, and why not | I am not left waiting | FR-ON-02 |
+| US-RES-03 | as an owner, to add family and tenants | they get access without the committee typing it | FR-ON-04 |
+| US-RES-04 | to raise a request with a category, description and photo | the problem is clear first time | FR-WR-01 |
+| US-RES-05 | to report a problem by Telegram message | I need not open the portal | FR-WR-13 |
+| US-RES-06 | to see my request's stage and who is assigned | I need not phone anyone | FR-WR-02, FR-WR-03 |
+| US-RES-07 | to be told when it changes stage | I know when to expect the work | FR-NO-01 |
+| US-RES-08 | to rate closed work | good vendors and staff are known | FR-WR-05 |
+| US-RES-09 | to raise an emergency in one action or one message | help comes at once | FR-NO-06, FR-NO-07 |
+| US-RES-10 | to read notices | I do not miss announcements | FR-NO-02 |
+| US-RES-11 | to reopen a request within 7 days | I need not start again | FR-RL-08 |
+| US-RES-12 | to book a free amenity slot and cancel it | I can use shared facilities without clashes | FR-SM-02 |
+| US-RES-13 | to see my flat's dues, payments and balance | I know what I owe (online payment: planned) | FR-SM-05 |
+| US-RES-14 | to see the waste pickup schedule | I put the right bin out on the right day | FR-SM-07 |
+| US-RES-15 | to report a missed pickup | it is followed up like any request | FR-SM-09 |
 
 ![Figure 3. Resident registration (Join): owner, tenant or family, with consent](images/join-form.jpg)
 
 ![Figure 4. Resident request: stage tracker, rating, and Reopen within 7 days](images/resident-reopen.jpg)
 
-### 3.2 Committee Member
-| ID | As a Committee Member, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-COM-01 | a dashboard of what needs my attention (approvals, unassigned, overdue, emergencies, messages) | I act on the most urgent work first | 3 | FR-AD-01 | Built |
-| US-COM-02 | to verify and approve or reject new residents | only real residents get access | 1 | FR-ON-02, FR-ON-03 | Built |
-| US-COM-03 | the system to suggest the right vendor or staff member for each request | allocation is quick and consistent | 3.1 | FR-WR-08, FR-WR-15 | Built (suggestion only; a person confirms) |
-| US-COM-04 | to assign a request to a vendor or a staff member | someone is clearly accountable for it | 3.1 | FR-WR-02 | Built (2026-11-21): vendors or staff |
-| US-COM-05 | to move a request through its stages from the dashboard or from an email | I can act when I am away from the portal | 3.2 | FR-WR-16 | Built |
-| US-COM-06 | overdue requests to be escalated to me automatically | nothing waits longer than 48 hours unnoticed | 3.2 | FR-WR-10 | Built |
-| US-COM-07 | reports: requests by category, status and age, vendor ratings, weekly volume, and a CSV export | I can report to the society's general body | - | FR-AD-01, FR-AD-04, FR-NO-05 | Built (2026-11-21): monthly report with print, CSV, weekly digest |
-| US-COM-08 | to broadcast a notice to all residents, with AI help to draft it | everyone gets the same message at the same time | - | FR-NO-02, FR-NO-04 | Built (2026-11-21): portal and Telegram |
-| US-COM-09 | to monitor every change in an audit trail | there is accountability for every decision | - | FR-AD-03 | Built |
-| US-COM-10 | to review messages the AI was unsure about | real problems are not missed and chatter is ignored | 2 | FR-WR-12 | Built |
+### 3.2 Committee member
+| ID | As a Committee Member, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-COM-01 | a dashboard of what needs attention | I act on urgent work first | FR-AD-01 |
+| US-COM-02 | to approve or reject new residents | only real residents get access | FR-ON-02, FR-ON-03 |
+| US-COM-03 | a suggested vendor or staff member per request | allocation is quick (a person confirms) | FR-WR-08, FR-WR-15 |
+| US-COM-04 | to assign a request to a vendor or staff member | someone is accountable | FR-WR-02, FR-RL-04 |
+| US-COM-05 | to move requests from the dashboard or email | I can act away from the portal | FR-WR-16 |
+| US-COM-06 | overdue requests escalated to me | nothing waits over 48 h unnoticed | FR-WR-10 |
+| US-COM-07 | a monthly report, CSV export and weekly digest | I can report to the general body | FR-AD-04, FR-NO-05, FR-RL-09 |
+| US-COM-08 | to send notices, with an AI draft | everyone gets the same message | FR-NO-02, FR-NO-04 |
+| US-COM-09 | an audit trail of every change | every decision is accountable | FR-AD-03 |
+| US-COM-10 | to review messages the AI was unsure about | real problems are not missed | FR-WR-12 |
+| US-COM-11 | to set up amenities with hours and slot length | residents can book them | FR-SM-01 |
+| US-COM-12 | to raise monthly bills for all or listed flats | dues are tracked per flat | FR-SM-03 |
+| US-COM-13 | to record payments, including part payments | balances and overdue flats are correct | FR-SM-04 |
+| US-COM-14 | to manage inventory with reorder levels | stock does not run out unnoticed | FR-SM-06 |
+| US-COM-15 | to set the weekly waste schedule and see collection totals | pickups and segregation are tracked | FR-SM-07, FR-SM-08 |
 
 ![Figure 5. Committee verifies new residents in the approval queue](images/approvals-queue.jpg)
 
 ![Figure 6. Monthly report (printable)](images/monthly-report.jpg)
 
-### 3.3 Head of Committee
-| ID | As the Head of Committee, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-HOC-01 | a separate role with everything a committee member has | my extra rights are clear | - | - | Built (2026-11-21) |
-| US-HOC-02 | to give final approval on requests above a set cost or of a set type | spending is controlled | 3.1 | - | Built (2026-11-21): limit set in Settings (default Rs 10,000) |
-| US-HOC-03 | to see a summary of committee performance (time to assign, time to close, ratings) | I can hold the committee and vendors to account | - | FR-AD-01 | Built (2026-11-21): per-member activity in the monthly report |
-| US-HOC-04 | to approve changes to access rules and feature flags | no single member changes who can do what | - | FR-AU-04, FR-AU-05 | Built (2026-11-21): head or admin only |
-| US-HOC-05 | to be told of every emergency and every escalated request | I can step in on serious issues | 3.2 | FR-NO-07, FR-WR-10 | Built (sent to all committee members) |
+### 3.3 Head of committee
+| ID | As the Head of Committee, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-HOC-01 | everything a member has, plus clear extra rights | my role is clear | FR-RL-01 |
+| US-HOC-02 | final approval of costs above the limit | spending is controlled | FR-RL-07 |
+| US-HOC-03 | per-member activity and performance | I can hold people to account | FR-RL-09 |
+| US-HOC-04 | to control access rules and feature flags | no single member changes who can do what | FR-AU-04, FR-AU-05 |
+| US-HOC-05 | to hear of every emergency and escalation | I can step in | FR-NO-07, FR-WR-10 |
 
 ![Figure 7. Head of committee: cost approvals above the limit](images/cost-approvals.jpg)
 
 ![Figure 8. Access control: what each resident type can do (head or admin only)](images/access-control.jpg)
 
 ### 3.4 Staff
-Staff are the society's own maintenance staff and guards, and can include vendor technicians.
-
-| ID | As Staff, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-STF-01 | to sign in and see only the work assigned to me | I know what to do today | 3.3 | - | Built (2026-11-21) |
-| US-STF-02 | to take up (accept) an assigned job | the committee knows the work has started | 3.3 | - | Built (2026-11-21) |
-| US-STF-03 | to update a job with notes, photos and a status (started, waiting for parts, done) | the resident and committee can follow progress | 3.3 | FR-WR-03 | Built (2026-11-21): notes, photo, status |
-| US-STF-04 | to punch in and out of my shift | attendance is recorded without a paper register | 3.3 | - | Built (2026-11-21) |
-| US-STF-05 | to hand over open jobs to the next person (Person A to Person B) at the end of a shift | no work is lost between shifts | 3.3 | - | Built (2026-11-21) |
-| US-STF-06 | as a guard, to verify visitor passes and resident tokens at the gate | only expected people enter | - | FR-AD-05, FR-AU-06 | Built |
+| ID | As Staff, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-STF-01 | to see only my assigned work | I know what to do today | FR-RL-03 |
+| US-STF-02 | to take up a job | the committee knows it started | FR-RL-05 |
+| US-STF-03 | to post notes, photos and status | progress is visible | FR-RL-05 |
+| US-STF-04 | to punch in and out | attendance needs no paper register | FR-RL-06 |
+| US-STF-05 | to hand open jobs to a colleague at shift end | no work is lost | FR-RL-06 |
+| US-STF-06 | as a guard, to verify passes and resident tokens | only expected people enter | FR-AD-05, FR-AU-06 |
+| US-STF-07 | to record stock I take out | inventory stays correct | FR-SM-06 |
+| US-STF-08 | to log waste collections in kg | collection and segregation are tracked | FR-SM-08 |
 
 ![Figure 9. Staff: My jobs (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
 
@@ -104,49 +106,30 @@ Staff are the society's own maintenance staff and guards, and can include vendor
 ![Figure 11. Cost approval and shift hand-over flows](images/cost-and-shift.png)
 
 ### 3.5 Admin
-| ID | As the Admin, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-ADM-01 | to create, suspend and remove accounts and reset passwords | access stays correct when people move in or out | 1 | FR-AU-07, FR-ON-02 | Built (2026-11-21): Accounts page for every role |
-| US-ADM-02 | to set which role can do what | each role sees only what it needs | - | FR-AU-02, FR-AU-04 | Built |
-| US-ADM-03 | to manage master data: flats, vendors, staff, categories, parking | the rest of the system works from correct records | - | FR-WR-06, FR-AD-05 | Partly (vendors, staff, parking, workers built; categories are still fixed in code) |
-| US-ADM-04 | to switch features on and off | the society adopts features at its own pace | - | FR-AU-05 | Built |
-| US-ADM-05 | to configure the message channels (Telegram, WhatsApp, email desk) | residents and committee are reached where they are | - | FR-WR-13, FR-WR-16 | Built |
+| ID | As the Admin, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-ADM-01 | to create, suspend and remove accounts and reset passwords | access stays correct | FR-RL-02, FR-AU-07 |
+| US-ADM-02 | to set which role can do what | each role sees only what it needs | FR-AU-02, FR-AU-04 |
+| US-ADM-03 | to manage master data (vendors, staff, parking, categories) | records are correct. Partly: categories are fixed in code | FR-WR-06, FR-AD-05 |
+| US-ADM-04 | to switch features on and off | the society adopts at its own pace | FR-AU-05 |
+| US-ADM-05 | to configure Telegram, WhatsApp and the email desk | people are reached where they are | FR-WR-13, FR-WR-16 |
 
 ![Figure 12. Admin: accounts for committee, head, admin, staff, IT and guards](images/accounts.jpg)
 
-### 3.6 IT Staff
-| ID | As IT Staff, I want... | so that... | Process | Source | Status |
-| --- | --- | --- | --- | --- | --- |
-| US-IT-01 | a support queue where any user can raise a problem with the portal itself, kept as a backlog | portal problems are tracked separately from building repairs | - | - | Built (2026-11-21): support tickets from every role |
-| US-IT-02 | short training guides and a demo for each role | new residents, committee members and staff can start without help | - | `demo-script.md` | Built (2026-11-21): in-app guides per role |
-| US-IT-03 | to apply upgrades and maintenance with backups and a health check | the portal stays available and no data is lost | - | NFR-04, NFR-14 | Built (2026-11-21): backup download, maintenance notice, health; free hosting still loses data without a paid disk |
-| US-IT-04 | to see errors and service health | I find problems before users report them | - | NFR-04 | Built (2026-11-21): health page (uptime, size, integrity, counts) |
+### 3.6 IT staff
+| ID | As IT Staff, I want... | so that... | Source |
+| --- | --- | --- | --- |
+| US-IT-01 | a support queue for portal problems | they are tracked apart from repairs | FR-RL-11 |
+| US-IT-02 | guides per role and a demo | people start without help | FR-RL-12 |
+| US-IT-03 | backups, a health check and a maintenance notice | no data is lost during upgrades (free hosting still resets) | FR-RL-13, NFR-14 |
+| US-IT-04 | a health page | I see problems before users do | FR-RL-13, NFR-04 |
 
 ![Figure 13. IT: support queue](images/it-support-queue.jpg)
 
 ![Figure 14. IT: system health, backup and maintenance notice (banner shown to everyone)](images/it-system-health.jpg)
 
-## 4. What the review added (built 2026-11-21)
-1. Head of Committee role with final approval (US-HOC-01, 02, 04).
-2. Staff login: take up, update, punch in/out, hand over (US-STF-01 to 05). Allocation must then allow staff as well as vendors (US-COM-04).
-3. Admin separated from committee work (US-ADM-*).
-4. IT Staff role with a support backlog, training material and maintenance (US-IT-*).
-5. Reports for the general body and per-member performance (US-COM-07, US-HOC-03).
-6. Reopen a request after closure (US-RES-11).
-
-## 5. What each role can do now
-| Role | Functions |
-| --- | --- |
-| Resident (owner, tenant, family) | Register with consent; add household (owner); raise requests in the portal, phone app or Telegram; track stages and staff updates; rate; reopen within 7 days; emergencies; notices; gate passes, vehicles, parking; help guides and support tickets |
-| Committee member | Dashboard; verify residents; assign requests to vendors or staff; move stages (dashboard or email); add cost estimates; review unsure messages; notices with AI draft (portal and Telegram); monthly report; staff attendance; audit trail |
-| Head of committee | Everything a member does; approve or reject costs above the limit; settings, feature switches, access rules; accounts for every role; per-member activity in the monthly report |
-| Staff | Own jobs only; take up; progress updates with note and photo; cost estimate; mark work done; punch in/out; hand over open jobs to a colleague; help and support |
-| Admin | Everything a member does; accounts for every role; settings, approval limit, feature switches, access rules, Telegram webhook; IT tools; approves costs only when no head account exists |
-| IT staff | Support queue (reply, set status); system health; database backup; maintenance notice shown to everyone; guides for every role |
-| Guard (staff at the gate) | Verify visitor passes and resident tokens; gate log; help and support |
-
-## 6. To confirm with faculty
-- Top right of the whiteboard: the words read as "Pre-Journey" and "Post-Journey" with a mapping between them. If this means as-is and to-be journey maps per role, they can be added next to the BPMN flows in `process-flows/`.
-- Staff item 3 reads "Punch in / Handover?". Stories US-STF-04 and US-STF-05 take it as shift attendance and shift handover.
-- Committee item 5 is unclear (possibly "Monitor"); US-COM-09 takes it as monitoring through the audit trail.
-- Whether Staff includes outside vendors who would need a login, or only the society's own staff.
+## 4. To confirm with faculty
+- "Pre-Journey / Post-Journey" on the whiteboard: as-is and to-be journey maps per role?
+- "Punch in / Handover?" is taken as shift attendance and hand-over (US-STF-04, 05).
+- Committee item 5 (possibly "Monitor") is taken as the audit trail (US-COM-09).
+- Whether outside vendors need a staff login.
