@@ -69,8 +69,16 @@ for ln in (DOCS / "testing" / "test-cases.md").read_text(encoding="utf-8").split
     if not m:
         continue
     tc, area_txt = m.group(1), m.group(2)
-    for prefix, nums in re.findall(r"(FR-[A-Z]{2}-|NFR-)(\d+(?:/\d+)*)", area_txt):
-        for n in nums.split("/"):
+    # "FR-AU-01/03", "FR-SM-01, 02" and "FR-SM-03..05" all name several requirements.
+    for prefix, first, rest in re.findall(r"(FR-[A-Z]{2}-|NFR-)(\d+)((?:(?:/|, ?|\.\.)\d+)*)", area_txt):
+        nums, prev = [first], int(first)
+        for sep, n in re.findall(r"(/|, ?|\.\.)(\d+)", rest):
+            if sep == "..":
+                nums += [f"{i:02d}" for i in range(prev + 1, int(n) + 1)]
+            else:
+                nums.append(n)
+            prev = int(n)
+        for n in nums:
             tests.setdefault(prefix + n, []).append(tc)
 
 
