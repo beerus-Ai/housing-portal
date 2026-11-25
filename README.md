@@ -23,10 +23,13 @@ cd flutter_app && flutter test    # Flutter, 18
 ```
 CI runs 6 jobs on every pull request (Node, Java H2, Java PostgreSQL 16, React, Docker build, Flutter). Environment variables and rules: `CLAUDE.md`. SQLite to PostgreSQL export: `docs/deploy.md`.
 
-## Docs
+## Requirements Documents (for people)
+Word, PDF, PowerPoint and Excel versions of the requirements are in [`Requirements Documents/`](Requirements%20Documents/): `Requirements Document.docx` / `.pdf`, `Requirements Presentation.pptx` and `Requirements Register.xlsx`. They are generated from the Markdown below by `scripts/requirements-docs`.
+
+## Docs (Markdown)
 | Doc | What it holds |
 | --- | --- |
-| [requirements](docs/requirements.md) | Scope, personas, FR and NFR IDs |
+| [requirements](docs/requirements.md) | **Requirements Document**: Scope, Personas, Functional Requirements, Non-Functional Requirements |
 | [user-stories](docs/user-stories.md) | Stories by role |
 | [architecture](docs/architecture/architecture.md) | System diagrams |
 | [product and technology architecture](docs/architecture/product-and-technology-architecture.md) | Modules and stack from the faculty whiteboard |

@@ -58,25 +58,16 @@
     D.reqs = reqs; D.notices = notices; D.people = hh;
     const { toRate } = residentSummary(reqs, S.me, notices);
     const open = reqs.filter(isOpen).length;
-    const chipList = [
-      { l: 'Requests', icon: 'list-checks', go: 'requests', n: toRate.length || '' }, { l: 'Raise', icon: 'plus-circle', go: 'raise', show: allowed('raise') },
-      { l: 'Emergency', icon: 'siren', go: 'emergency', show: allowed('emergency') }, { l: 'Gate pass', icon: 'qr-code', go: 'gatepass', show: gateOn },
-      { l: 'Vehicles', icon: 'car', go: 'vehicles', show: allowed('vehicles') }, { l: 'Parking', icon: 'garage', go: 'parking', show: allowed('parking') },
-      { l: 'Household', icon: 'users-three', go: 'household', show: allowed('household') && t === 'owner' }, { l: 'Contacts', icon: 'phone-call', go: 'contacts', show: allowed('contacts') },
-      { l: 'Notices', icon: 'megaphone', go: 'notices', show: allowed('notices') }, { l: 'Alerts', icon: 'bell', go: 'alerts' }];
-    const activePasses = passes.filter(p => p.status === 'active').length;
+    // Shortcuts to the required processes only; extras (gate pass, vehicles, parking, contacts) are under More in the menu.
+    const chipList = [{ l: 'Raise', icon: 'plus-circle', go: 'raise', show: allowed('raise') }, { l: 'My requests', icon: 'list-checks', go: 'requests', n: toRate.length || '' },
+      { l: 'Notices', icon: 'megaphone', go: 'notices', show: allowed('notices') }, { l: 'Alerts', icon: 'bell', go: 'alerts' },
+      { l: 'Emergency', icon: 'siren', go: 'emergency', show: allowed('emergency') }, { l: 'Household', icon: 'users-three', go: 'household', show: allowed('household') && t === 'owner' }];
     const attn = [stat(open ? 's-dark' : 's-tint', 'list-checks', open, 'Open requests', open ? 'Being worked on' : 'Nothing pending', 'requests'), stat(toRate.length ? 's-dark' : 's-tint', 'star', toRate.length, 'To rate', toRate.length ? 'Rate the finished work' : 'All rated', 'requests')];
-    if (gateOn) attn.push(stat('s-white', 'qr-code', activePasses, 'Active passes', activePasses ? 'Visitors can walk in' : 'No visitor passes', 'gatepass'));
     if (feat('emergency') && allowed('emergency')) attn.push(stat('s-white', 'siren', '', 'Emergency', 'Raise an alert', 'emergency'));
     const rcards = sorted.slice(0, 12).map(reqCard);
     if (allowed('raise')) rcards.push(ctaCard('plus-circle', rcards.length ? 'Raise another' : 'Raise your first request', 'Takes a minute', 'raise'));
     const parts = [section('Your requests', carousel(rcards.length ? rcards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">No requests yet</span><span class="ds-meta">Nothing raised for your flat.</span></span></div>'], 'Your requests'), 'requests')];
     if (feat('notices') && allowed('notices') !== false && notices.length) parts.push(section('Notices', carousel(notices.slice(0, 10).map(noticeCard), 'Notices'), 'notices'));
-    if (gateOn) {
-      const pc = passes.slice(0, 8).map(p => `<button type="button" class="ds-card" data-act="dpass" data-id="${p.id}">${art('qr-code', 'tint')}<span class="ds-body"><span class="ds-meta">${esc(stamp(p.valid_from))}</span><span class="ds-title">${esc(p.visitor_name)}</span><span class="ds-foot"><span class="tag ${p.status === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc(p.status)}</span></span></span></button>`);
-      pc.unshift(ctaCard('qr-code', 'New visitor pass', 'Share a QR or code', 'gatepass'));
-      parts.push(section('Visitors and passes', carousel(pc, 'Visitors and passes'), 'gatepass'));
-    }
     const hc = [];
     if (t === 'tenant') { const li = leaseInfo(lease); hc.push(ctaCard('file-text', li ? `${li.left} days left` : 'Your lease', li ? 'Ends ' + li.ends : 'Not on file yet', 'lease')); }
     else {
@@ -84,6 +75,11 @@
       if (allowed('household') && t === 'owner') hc.push(ctaCard('user-plus', 'Add someone', 'Family or tenant', 'household'));
     }
     if (hc.length) parts.push(section('Your household', carousel(hc, 'Your household'), allowed('household') && t === 'owner' ? 'household' : ''));
+    if (gateOn) {
+      const pc = passes.slice(0, 8).map(p => `<button type="button" class="ds-card" data-act="dpass" data-id="${p.id}">${art('qr-code', 'tint')}<span class="ds-body"><span class="ds-meta">${esc(stamp(p.valid_from))}</span><span class="ds-title">${esc(p.visitor_name)}</span><span class="ds-foot"><span class="tag ${p.status === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc(p.status)}</span></span></span></button>`);
+      pc.unshift(ctaCard('qr-code', 'New visitor pass', 'Share a QR or code', 'gatepass'));
+      parts.push(section('Visitors and passes', carousel(pc, 'Visitors and passes'), 'gatepass'));
+    }
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">Flat ${esc(S.me.flat)} · ${esc(todayLabel())}</p></div>
         <div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${open} open${toRate.length ? ' · ' + toRate.length + ' to rate' : ''}</span></div></header>
@@ -167,10 +163,10 @@
     const people = await API.admin.allUsers().catch(() => []);
     D.reqs = reqs; D.people = Array.isArray(people) ? people : []; D.notices = await API.notices.list().catch(() => []);
     const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id && !r.assignee_id); // staff-assigned work counts as assigned
+    // Shortcuts follow the whiteboard committee list: verification, requests, broadcast, reports, monitoring.
     const chipList = [{ l: 'Approvals', icon: 'user-check', go: 'approvals', n: s.pending_users || '' }, { l: 'Requests', icon: 'list-checks', go: 'requests' },
-      { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }, { l: 'Notices', icon: 'megaphone', go: 'notices', show: feat('notices') },
-      { l: 'Vehicles', icon: 'car', go: 'vehicles', show: allowed('vehicles') }, { l: 'Parking', icon: 'garage', go: 'parking', show: allowed('parking') }, { l: 'Workers', icon: 'hard-hat', go: 'workers' },
-      { l: 'Vendors', icon: 'toolbox', go: 'vendors' }, { l: 'Gate', icon: 'shield-check', go: 'gate', show: feat('gate') }, { l: 'Guards', icon: 'identification-card', go: 'guards' }, { l: 'Settings', icon: 'gear-six', go: 'settings' }];
+      { l: 'Notices', icon: 'megaphone', go: 'notices', show: feat('notices') }, { l: 'Reports', icon: 'chart-line', go: 'reports' }, { l: 'Audit trail', icon: 'clock-counter-clockwise', go: 'audit' },
+      { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }];
     const attn = [stat(s.pending_users ? 's-dark ds-glow' : 's-tint', 'user-check', s.pending_users, 'Pending approvals', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
     if (feat('emergency')) attn.push(stat(em.length ? 's-red ds-glow-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + (e.flat ? ' · ' + e.flat : '')).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
     attn.push(stat(unassigned.length ? 's-dark ds-glow' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
@@ -193,11 +189,11 @@
     const act = audit.slice(0, 8).map(x => `<div class="ds-act"><span class="muted sm">${esc(stamp(x.created_at))}</span><span><b>${esc(x.action.replace('_', ' '))}</b> · ${esc(x.entity)} ${esc(x.entity_id)} <span class="muted">by ${esc(x.actor || 'system')}</span></span></div>`).join('');
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">${esc(todayLabel())}</p></div><div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${a.open.length} open requests</span></div></header>
-      ${search('Search requests, notices and residents')}
+      ${search('Search requests, notices and residents')}${chips(chipList)}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
-      ${glance(ov)}
       ${section('Open requests', carousel(openCards.length ? openCards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">All clear</span><span class="ds-meta">No open requests.</span></span></div>'], 'Open requests'), 'requests')}
-      ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}</div>`);
+      ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}
+      ${glance(ov)}</div>`);
     announceNew(reqs);
   };
 })();

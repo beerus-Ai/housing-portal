@@ -1,10 +1,10 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
-import 'gate_pass.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'requests.dart';
+import 'notices.dart';
 import 'services.dart';
 
 typedef _Tab = ({String label, IconData icon, IconData selected, Widget page});
@@ -32,12 +32,13 @@ class _ShellState extends State<Shell> {
         page: const RequestsScreen()
       ));
     }
-    // Amenities, dues, inventory, waste and notices live under one tab (the bar holds at most 5).
-    if (role == 'resident' || role == 'admin' || role == 'staff') {
-      tabs.add((label: 'Services', icon: Icons.storefront_outlined, selected: Icons.storefront, page: const ServicesScreen()));
+    // Required items get their own tab (requests, notices); extras (amenities, dues, inventory, waste,
+    // gate pass) sit under More, as in the Requirements Document. The bar holds at most 5 tabs.
+    if (role == 'resident' || role == 'admin') {
+      tabs.add((label: 'Notices', icon: Icons.campaign_outlined, selected: Icons.campaign, page: const NoticesScreen()));
     }
-    if (role == 'resident') {
-      tabs.add((label: 'Gate pass', icon: Icons.qr_code_2_outlined, selected: Icons.qr_code_2, page: const GatePassScreen()));
+    if (role == 'resident' || role == 'admin' || role == 'staff') {
+      tabs.add((label: 'More', icon: Icons.apps_outlined, selected: Icons.apps, page: const ServicesScreen()));
     }
     tabs.add((label: 'Profile', icon: Icons.person_outline, selected: Icons.person, page: const ProfileScreen()));
     return tabs;

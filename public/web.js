@@ -26,30 +26,39 @@
   const isAdmin = () => S.me.role === 'admin';
   // Everyone (residents, committee, guards, staff) gets Help and the portal-problem form.
   const HELP = [['help', 'Help', 'question'], ['support', 'Support', 'lifebuoy']];
+  // Order follows the Requirements Document: the required processes first (on-boarding, raise a request,
+  // request lifecycle; committee dashboard, verification, broadcast, reports, monitoring), extras under "More".
   const NAV = {
-    owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['household', 'Household', 'users-three'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
-    tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
-    family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
-    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['gate', 'Gate', 'shield-check'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
+    owner: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'My requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'], ['household', 'Household', 'users-three'],
+      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    tenant: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'My requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
+      ['lease', 'My lease', 'file-text'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    family: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Flat requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
+      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Gate pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+    admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['approvals', 'Approvals', 'user-check'], ['notices', 'Notices', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Audit trail', 'clock-counter-clockwise'],
+      ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
+      ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['attendance', 'Staff attendance', 'clock-user'], ['settings', 'Settings', 'gear-six'], ['health', 'System health', 'heartbeat'],
       ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'],
-      ['approvals', 'Approvals', 'user-check'], ['costs', 'Cost approvals', 'currency-inr'], ['reports', 'Reports', 'chart-line'], ['attendance', 'Staff attendance', 'clock-user'], ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'],
-      ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six'], ['health', 'System health', 'heartbeat'], ...HELP],
+      ['gate', 'Gate', 'shield-check'], ['guards', 'Guards', 'identification-card'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
+      ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ...HELP, ['profile', 'Profile', 'user-circle']],
     staff: [['myjobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
     it: [['support', 'Support queue', 'lifebuoy'], ['health', 'System health', 'heartbeat'], ['help', 'Help guides', 'question'], ['profile', 'Profile', 'user-circle']],
   };
-  // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
-  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['services', 'Society services', 'storefront'], ['admin', 'Administration', 'gear-six'], ['help', 'Help and support', 'question']];
-  const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
-    vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', ai: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin',
-    amenities: 'services', dues: 'services', inventory: 'services', waste: 'services', costs: 'admin', reports: 'admin', attendance: 'admin', accounts: 'admin', health: 'admin', help: 'help', support: 'help', profile: 'help' };
-  const COLKEY = 'hp.navc';
-  const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
-  const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
+  // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
+  // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
+  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['more', 'More', 'dots-three-circle'], ['help', 'Help and support', 'question']];
+  const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
+    users: 'admin', accounts: 'admin', attendance: 'admin', settings: 'admin', health: 'admin', ai: 'admin',
+    lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
+    help: 'help', support: 'help', profile: 'help' };
+  const FLAT_GROUPS = ['home', 'core'];
+  const COLKEY = 'hp.navc2';
+  // Stores the groups whose state differs from the default ("More" and Help start collapsed, the rest open).
+  const DEFAULT_COLLAPSED = ['more', 'help'];
+  const loadToggled = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+  const loadCollapsed = () => { const t = loadToggled(); return GROUPS.map(([g]) => g).filter(g => DEFAULT_COLLAPSED.includes(g) !== t.includes(g)); };
+  const saveCollapsed = (g, on) => { try { const v = loadToggled().filter(x => x !== g); if (on !== DEFAULT_COLLAPSED.includes(g)) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
   const isGuard = () => S.me.role === 'guard';
   const isStaff = () => S.me.role === 'staff', isIT = () => S.me.role === 'it';
   const isGov = () => HP.isGov(S.me);
@@ -89,8 +98,8 @@
     if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
     else nav = GROUPS.map(([g, gl, gi]) => {
       const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
-      if (g === 'home') return its.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
-      const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), c = col.includes(g), on = its.some(([k]) => k === S.page);
+      if (FLAT_GROUPS.includes(g)) return its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('');
+      const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), on = its.some(([k]) => k === S.page), c = col.includes(g) && !on;
       return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
         <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('')}</div></div>`;
     }).join('');

@@ -229,11 +229,8 @@
   const insertRow = html => {
     const host = $('#page .ds') || $('#page'); if (!host) return;
     const old = host.querySelector('.md-svc'); if (old) old.remove();
-    // After "Needs your attention" when there is one (urgent things stay first), else after the greeting.
-    const attn = host.querySelector('.ds-attn');
-    let after = attn ? attn.closest('section') || attn : host.querySelector('.ds-hello');
-    if (after && after.parentElement !== host) after = [...host.children].find(ch => ch.contains(after)) || after;
-    if (after) after.insertAdjacentHTML('afterend', html); else host.insertAdjacentHTML('afterbegin', html);
+    // Extras come last: the required work (attention, requests, notices) stays at the top of the page.
+    host.insertAdjacentHTML('beforeend', html);
   };
   const wrap = (name, build) => {
     const orig = PAGES[name]; if (!orig) return;
