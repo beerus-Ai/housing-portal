@@ -28,24 +28,25 @@
   const HELP = [['help', 'Help', 'question'], ['support', 'Support', 'lifebuoy']];
   const NAV = {
     owner: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'], ['household', 'Household', 'users-three'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
     tenant: [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['lease', 'My lease', 'file-text'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
     family: [['home', 'Home', 'house'], ['requests', 'Flat requests', 'list-checks'], ['raise', 'Raise a request', 'plus-circle'], ['emergency', 'Emergency', 'siren'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
-      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ...HELP],
+      ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['gatepass', 'Gate pass', 'qr-code'], ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ...HELP],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergencies', 'Emergencies', 'siren'], ['gate', 'Gate', 'shield-check'], ['notices', 'Notices', 'megaphone'], ['contacts', 'Contacts', 'phone-call'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'],
+      ['amenities', 'Amenities', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'],
       ['approvals', 'Approvals', 'user-check'], ['costs', 'Cost approvals', 'currency-inr'], ['reports', 'Reports', 'chart-line'], ['attendance', 'Staff attendance', 'clock-user'], ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'],
       ['workers', 'Workers', 'hard-hat'], ['vendors', 'Vendors', 'toolbox'], ['guards', 'Guards', 'identification-card'], ['audit', 'Audit trail', 'clock-counter-clockwise'], ['settings', 'Settings', 'gear-six'], ['health', 'System health', 'heartbeat'], ...HELP],
     guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    staff: [['myjobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
     it: [['support', 'Support queue', 'lifebuoy'], ['health', 'System health', 'heartbeat'], ['help', 'Help guides', 'question'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home is a plain link; the others get a heading (collapsible in the side menu, a dropdown in the top bar).
-  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['admin', 'Administration', 'gear-six'], ['help', 'Help and support', 'question']];
+  const GROUPS = [['home', 'Home', 'house'], ['safety', 'Requests and safety', 'lifebuoy'], ['community', 'Community', 'users-three'], ['property', 'Property', 'buildings'], ['services', 'Society services', 'storefront'], ['admin', 'Administration', 'gear-six'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', requests: 'safety', raise: 'safety', emergency: 'safety', emergencies: 'safety', gate: 'safety', notices: 'community', contacts: 'community', household: 'community',
     vehicles: 'property', parking: 'property', leases: 'property', lease: 'property', gatepass: 'property', approvals: 'admin', users: 'admin', ai: 'admin', workers: 'admin', vendors: 'admin', guards: 'admin', audit: 'admin', settings: 'admin',
-    costs: 'admin', reports: 'admin', attendance: 'admin', accounts: 'admin', health: 'admin', help: 'help', support: 'help', profile: 'help' };
+    amenities: 'services', dues: 'services', inventory: 'services', waste: 'services', costs: 'admin', reports: 'admin', attendance: 'admin', accounts: 'admin', health: 'admin', help: 'help', support: 'help', profile: 'help' };
   const COLKEY = 'hp.navc';
   const loadCollapsed = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
   const saveCollapsed = (g, on) => { try { const v = loadCollapsed().filter(x => x !== g); if (on) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
@@ -60,7 +61,7 @@
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
-    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin() };
+    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => flatNav() || allowed(k));
   const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'support' : 'home';

@@ -61,7 +61,7 @@ flowchart TB
 
 ### Module status in our build
 
-Built = working in the Node API and the web app today. Partial = some of it is built. Planned = not built yet.
+Built = working in the Node API and the web app today. The four modules added on 2026-11-25 (amenities, dues, inventory, waste) are described in [modules-api.md](../modules-api.md); they are not yet ported to Java, React or the Flutter app. Partial = some of it is built. Planned = not built yet.
 
 | Module | Status | What exists today | Where |
 |---|---|---|---|
@@ -70,13 +70,13 @@ Built = working in the Node API and the web app today. Partial = some of it is b
 | User management | Built | Roles (resident, committee, guard, staff, IT), committee positions (member, head, admin), access matrix per resident type, suspend and remove | `app.js` `/api/admin/users`, `/api/admin/access`, `roles.js` |
 | Visitor management | Built | Visitor gate passes, the resident's personal QR and NFC gate token, the guard's verify screen, gate log | `app.js` `/api/gate/*` |
 | Workforce management | Partial | Vendors, staff jobs (accept, update, hand over), shifts (punch in and out), society workers register | `roles.js` `/api/staff/*`, `app.js` vendors and workers |
-| Financial management | Partial | Cost estimates on requests; costs over the approval limit need the head of committee. No maintenance bills or dues yet | `roles.js` cost approval |
-| Inventory management | Planned | Not built. Parking slots and vehicles are the only asset registers so far | (vehicles and parking in `app.js`) |
-| Waste management | Planned | Not built. Housekeeping requests are the nearest thing | |
-| Amenity management | Planned | Not built (clubhouse or hall booking) | |
+| Financial management | Built | Maintenance bills per flat, recorded payments (cash, UPI, bank, cheque), part payments, overdue tracking, collection totals; cost estimates over the approval limit need the head of committee | `modules.js` `/api/dues`, `roles.js` cost approval |
+| Inventory management | Built | Items with reorder levels, stock in and out (staff take stock out for a job), movement history, low-stock alerts | `modules.js` `/api/inventory` |
+| Waste management | Built | Weekly pickup schedule by waste type, collection log with weights and segregation share, residents report a missed pickup as a housekeeping request | `modules.js` `/api/waste/*` |
+| Amenity management | Built | Committee sets up amenities and hours; residents book time slots (no double booking, 30 days ahead, 2 upcoming per flat) and cancel | `modules.js` `/api/amenities`, `/api/bookings` |
 | Notifications | Built | In-app notifications, Telegram replies, notice broadcast, committee email desk, emergency alerts | `app.js`, `email-desk.js` |
 | Reports | Built | Monthly report, CSV export, weekly AI digest, audit trail | `roles.js` `/api/admin/reports/monthly`, `app.js` |
-| Payment gateway | Planned | Not built. It would go with bills and dues (for example Razorpay or UPI) | |
+| Payment gateway | Planned | Not built. Bills and payment records exist; online payment (for example Razorpay or UPI collect) would add a "Pay now" step on the same records | |
 | E-commerce, medical | Planned | Board arrows only: outside partners such as a vendor marketplace and medical help. Emergency alerts of type "medical" exist today | |
 
 ---
