@@ -21,3 +21,5 @@ Severity: C critical, H high, M medium, L low. Fix commits are in the git histor
 | DEF-15 | Flutter app | Committee cannot assign a vendor or staff in the app | M | Not built yet | Assign sheet (AI suggestion, matching trade, staff on shift first) | Fixed 2026-11-25 |
 | DEF-16 | Flutter app | Error toasts are red, against the palette rule (red only for emergencies) | L | Theme default | Neutral dark toast and text with an info icon | Fixed 2026-11-25 |
 | DEF-17 | Seeding | Restarting with `SEED_PASSWORD` duplicated demo vendors and contacts | L | `INSERT OR IGNORE` on tables without a unique key | Insert only when missing; `test/seed.test.js` | Fixed 2026-11-25 |
+| DEF-18 | Web app | AI "assign vendor" suggestion stayed after a staff member was assigned | L | Card ignored the current assignee | Hidden once a vendor or staff member is assigned | Fixed |
+| DEF-19 | Web app | IT login opened on an empty ticket list | M | No IT home page | IT overview page (FR-RL-14) | Fixed |

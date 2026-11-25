@@ -57,7 +57,7 @@ Committee accounts (`role='admin'`) carry `users.position`:
 - `GET /api/support/:id` -> ticket with `body` and `replies:[{author,role,body,created_at}]`.
 - `POST /api/support/:id/reply {body, status?}` requester or IT; IT may set status `open|in_progress|resolved`.
 - `GET /api/help/guides` -> `[{id,title,roles,steps:[..]}]` filtered to the caller's role (IT and sysadmin see all).
-- `GET /api/it/health` -> `{ok,uptime_s,node,db_bytes,memory_mb,version,commit,integrity,counts:{users,requests,open_requests,open_tickets,audit_rows,staff_on_shift},maintenance,hosting_note}`.
+- `GET /api/it/health` -> `{ok,uptime_s,node,db_bytes,memory_mb,version,commit,integrity,counts:{users,requests,open_requests,open_tickets,audit_rows,staff_on_shift},tickets:{open,in_progress,resolved_30d},last_backup,system_events:[{action,detail,created_at,actor}],guides,maintenance,hosting_note}`.
 - `GET /api/it/backup` -> downloads a consistent copy of the database (`portal-backup-<date>.db`), audited.
 - `PUT /api/it/maintenance {message, until?}` (empty message clears) -> shown to everyone as `maintenance` in `GET /api/settings`; everyone is notified.
 
