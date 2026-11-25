@@ -2,7 +2,8 @@
 // gate checks them in, the next tap checks them out, with timestamps. For staff, the tap also starts or ends the shift.
 // Cards are read by Web NFC (Chrome on Android) or a USB reader that types the card number. Every change is audited.
 
-const normSerial = s => String(s || '').toUpperCase().replace(/[^0-9A-F]/g, '');
+// Separators (space : - .) are dropped; anything else that is not hex makes the number invalid (no silent collisions).
+const normSerial = s => { const v = String(s || '').toUpperCase().replace(/[\s:.\-]/g, ''); return /^[0-9A-F]*$/.test(v) ? v : ''; };
 
 module.exports = function mountNfc(app, c) {
   const { q, one, run, log, notify, auth, str } = c;
@@ -27,6 +28,7 @@ module.exports = function mountNfc(app, c) {
     if (!u) return res.status(400).json({ error: 'Choose the person who will carry this card' });
     const taken = one('SELECT g.id, u.name FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1', serial);
     if (taken) return res.status(409).json({ error: `This card already belongs to ${taken.name}` });
+    run('UPDATE gate_cards SET active=0 WHERE user_id=? AND active=1', u.id); // one active card per person
     run('DELETE FROM gate_cards WHERE serial=? AND active=0', serial);
     const r = run('INSERT INTO gate_cards(serial,user_id,label,created_by) VALUES(?,?,?,?)', serial, u.id, str(b.label, 60) || null, req.user.id);
     log(req.user.id, 'gate_card', r.lastInsertRowid, 'registered', `${serial} for ${u.name}`);
@@ -44,7 +46,12 @@ module.exports = function mountNfc(app, c) {
   // A tap toggles in/out for the card holder.
   app.post('/api/gate/tap', auth, desk, (req, res) => {
     const serial = normSerial((req.body || {}).serial);
-    const g = serial && one(`SELECT g.id AS card_id, ${PERSON} FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1`, serial);
+    const g = serial && one(`SELECT g.id AS card_id, u.status, ${PERSON} FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1`, serial);
+    // Only approved people get in: a suspended, removed or not-yet-approved holder is refused and logged.
+    if (g && g.status !== 'approved') {
+      run("INSERT INTO gate_log(kind,subject,flat,result,reason,guard_id) VALUES('card',?,?,'denied',?,?)", g.name, g.flat || null, g.status === 'pending' ? 'Not yet approved' : 'Account ' + g.status, req.user.id);
+      return res.status(403).json({ error: `${g.name}'s account is ${g.status === 'pending' ? 'not approved yet' : g.status}. Do not let them in on this card.`, serial });
+    }
     if (!g) {
       run("INSERT INTO gate_log(kind,subject,result,reason,guard_id) VALUES('card',?,'denied','Unknown card',?)", serial || '-', req.user.id);
       return res.status(404).json({ error: 'Unknown card. Register it first.', serial });
@@ -123,6 +130,13 @@ module.exports = function mountNfc(app, c) {
     res.json({ name: h.name, flat: h.flat, credit_used: m.credit_used, credit_limit: m.credit_limit });
   });
   app.locals.cardHolder = holder;
+  // Called when someone is removed: their cards stop working and they are no longer counted inside.
+  app.locals.retireCards = (userId, byId) => {
+    const n = run('UPDATE gate_cards SET active=0 WHERE user_id=? AND active=1', userId).changes;
+    const last = one('SELECT direction FROM gate_presence WHERE user_id=? ORDER BY id DESC LIMIT 1', userId);
+    if (last && last.direction === 'in') run("INSERT INTO gate_presence(user_id,direction,guard_id) VALUES(?,'out',?)", userId, byId);
+    if (n) log(byId, 'gate_card', null, 'deactivated', `cards of removed user ${userId}`);
+  };
 
   // Who is inside now, and the latest taps.
   app.get('/api/gate/presence', auth, desk, (req, res) => {

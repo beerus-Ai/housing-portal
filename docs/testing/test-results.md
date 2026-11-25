@@ -32,6 +32,8 @@ AI tests run with no API key, so they prove the rule-based path, not LLM output.
 | 2026-11-25 | Live site after PR #32 deploy: new top bar code served | Pass (sign-in on the live site not done by Claude) |
 | 2026-11-25 | Local server, `SEED_PASSWORD=test123`: resident home (calm dashboard with parcel and event), tuck shop order, committee dashboard "For you", laundry and events pages | Pass |
 | 2026-11-25 | Local server: dashboards for head, admin, member, cleaner and maintenance; guard registers a card and taps in then out (times shown, shift started and ended) | Pass. Web NFC on a phone not tried yet (USB/typed number path checked) |
+| 2026-11-25 | Agent integration testing: 6 testers wrote 53 cross-module tests (onboarding/cards/gate, request lifecycle, money, access matrix of 12 roles x ~90 routes, dashboards, web wiring); 19 bugs confirmed by independent skeptic agents and fixed (DEF-20 to DEF-29), 5 claims refuted | Pass: 139 Node tests, 0 failing |
+| 2026-11-25 | Capacity test (`scripts/load-test/load.js`): about 210 requests/s sustained, roughly 700 people at the same moment; 9 MB for 2,000 residents and 125,000 records | Pass. Not run against the live free plan (0.1 CPU) |
 
 ## Not verified
 Not verified: camera QR scan and native NFC on a device; Flutter on a physical phone, iOS or the live server; Telegram, email desk, roles and modules on Java/React; Docker Compose end to end; HTTPS/HSTS on a real domain; Java cutover; real WhatsApp delivery; LLM quality; the full Telegram -> email -> resolve loop in one run; accessibility, load and penetration tests; BPMN import into Signavio; acceptance with residents.

@@ -24,7 +24,7 @@ module.exports = function mountServices(app, c) {
   const role = r => (req, res, next) => (r.includes(req.user.role) ? next() : res.status(403).json({ error: 'Not allowed for this account' }));
   const shopOwner = role(['shop']);
   const laundryOp = role(['laundry']);
-  const desk = role(['admin', 'staff', 'guard']);
+  const desk = role(['admin', 'guard']); // the parcel desk is the guards' (the committee can help)
   const committee = role(['admin']);
   const resident = (req, res, next) => (req.user.role === 'resident' && req.user.flat ? next() : res.status(403).json({ error: 'Residents with a flat only' }));
   // New orders go to the provider who fulfils them (not the committee, which only sees the state).
@@ -32,15 +32,20 @@ module.exports = function mountServices(app, c) {
   const notifyFlat = (flat, msg) => { for (const u of q("SELECT id FROM users WHERE role='resident' AND status='approved' AND flat=?", flat)) notify(u.id, msg); };
   // ---------- money: purchases on credit become bills on the flat's maintenance account (Financial management)
   const dueBalance = id => { const d = one('SELECT amount, (SELECT COALESCE(SUM(amount),0) FROM due_payments WHERE due_id=dues.id) AS paid FROM dues WHERE id=?', id); return d ? money(d.amount - d.paid) : 0; };
-  const creditUsed = flat => money(q("SELECT id FROM dues WHERE flat=? AND (title LIKE 'Tuck shop order #%' OR title LIKE 'Laundry #%')", flat).reduce((t, d) => t + Math.max(0, dueBalance(d.id)), 0));
+  // Credit = unpaid bills that belong to the flat's shop and laundry orders (linked by due_id, never by title).
+  const creditUsed = flat => money(q('SELECT due_id FROM shop_orders WHERE flat=? AND due_id IS NOT NULL UNION SELECT due_id FROM laundry_orders WHERE flat=? AND due_id IS NOT NULL', flat, flat).reduce((t, d) => t + Math.max(0, dueBalance(d.due_id)), 0));
+  // Several writes that must all happen or none (order, bill, lines, stock).
+  const atomic = fn => { run('BEGIN'); try { const v = fn(); run('COMMIT'); return v; } catch (e) { run('ROLLBACK'); throw e; } };
   const chargeAccount = (flat, title, amount, userId) => {
     const n = istNow(clock()), period = n.date.slice(0, 7), dueDate = istNow(new Date(clock().getTime() + 15 * 864e5)).date;
-    const r = run('INSERT INTO dues(flat,period,title,amount,due_date,created_by) VALUES(?,?,?,?,?,?)', flat, period, title, money(amount), dueDate, userId);
+    // A committee bill could already use this title for the period: keep both by marking ours as a purchase.
+    const taken = one('SELECT id FROM dues WHERE flat=? AND period=? AND title=?', flat, period, title);
+    const r = run('INSERT INTO dues(flat,period,title,amount,due_date,created_by) VALUES(?,?,?,?,?,?)', flat, period, taken ? `${title} (purchase)` : title, money(amount), dueDate, userId);
     return Number(r.lastInsertRowid);
   };
   // Cancelling removes the bill if nothing was paid on it yet; returns false when money was already paid.
   const voidCharge = dueId => { if (!dueId) return true; if (one('SELECT COUNT(*) AS n FROM due_payments WHERE due_id=?', dueId).n) return false; run('DELETE FROM dues WHERE id=?', dueId); return true; };
-  const payState = o => o.payment === 'account' ? (o.due_id && dueBalance(o.due_id) <= 0 ? 'paid' : 'on_account') : o.paid_at ? 'paid' : 'unpaid';
+  const payState = o => o.status === 'cancelled' ? 'cancelled' : o.payment === 'account' ? (o.due_id && dueBalance(o.due_id) <= 0 ? 'paid' : 'on_account') : o.paid_at ? 'paid' : 'unpaid';
   const creditCheck = (flat, total) => { const lim = creditLimit(), used = creditUsed(flat); return lim <= 0 ? 'Credit is switched off. Pay by cash or UPI.' : used + total > lim ? `Credit limit is ₹${lim}; ₹${used} is already on the account. Pay by cash or UPI, or settle the account first.` : null; };
   app.get('/api/credit', auth, (req, res) => (req.user.role === 'resident' && req.user.flat ? res.json({ limit: creditLimit(), used: creditUsed(req.user.flat) }) : res.status(403).json({ error: 'Residents with a flat only' })));
   const linesOk = (lines, max = 30) => Array.isArray(lines) && lines.length && lines.length <= max && lines.every(l => Number.isInteger(Number(l.id)) && Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 50);
@@ -101,13 +106,16 @@ module.exports = function mountServices(app, c) {
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(req.user.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const r = run('INSERT INTO shop_orders(user_id,flat,total,note,fulfilment,payment) VALUES(?,?,?,?,?,?)', req.user.id, req.user.flat, total, str(b.note, 300) || null, fulfilment, payment);
-    const id = Number(r.lastInsertRowid);
-    if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Tuck shop order #${id}`, total, req.user.id), id);
-    for (const l of lines) {
-      run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty);
-      run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id);
-    }
+    const id = atomic(() => {
+      const r = run('INSERT INTO shop_orders(user_id,flat,total,note,fulfilment,payment) VALUES(?,?,?,?,?,?)', req.user.id, req.user.flat, total, str(b.note, 300) || null, fulfilment, payment);
+      const id = Number(r.lastInsertRowid);
+      if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Tuck shop order #${id}`, total, req.user.id), id);
+      for (const l of lines) {
+        run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty);
+        run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id);
+      }
+      return id;
+    });
     log(req.user.id, 'shop_order', id, 'placed', `flat ${req.user.flat}: ${lines.length} items, ${total}, ${fulfilment}, ${payment}`);
     notifyRole('shop', `New tuck shop order #${id} from flat ${req.user.flat} (₹${total}, ${fulfilment === 'pickup' ? 'pick-up' : 'deliver to door'}, ${payment === 'account' ? 'on account' : payment.toUpperCase() + ' on ' + (fulfilment === 'pickup' ? 'pick-up' : 'delivery')})`);
     res.status(201).json({ id, total, fulfilment, payment });
@@ -122,15 +130,19 @@ module.exports = function mountServices(app, c) {
     for (const l of b.items) {
       const it = one('SELECT * FROM shop_items WHERE id=? AND active=1', Number(l.id));
       if (!it) return bad(res, 'One of the items is no longer sold');
-      if (Number(l.qty) > it.stock) return res.status(409).json({ error: `Only ${it.stock} ${it.name} left` });
+      const qty = Number(l.qty) + lines.filter(x => x.id === it.id).reduce((t, x) => t + x.qty, 0);
+      if (qty > it.stock) return res.status(409).json({ error: `Only ${it.stock} ${it.name} left` });
       lines.push({ id: it.id, name: it.name, price: it.price, qty: Number(l.qty) });
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(h.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const r = run("INSERT INTO shop_orders(user_id,flat,total,fulfilment,payment,status,paid_at) VALUES(?,?,?,'counter',?,'collected',?)", h.id, h.flat, total, payment, payment === 'account' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '));
-    const id = Number(r.lastInsertRowid);
-    for (const l of lines) { run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty); run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id); }
-    if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(h.flat, `Tuck shop order #${id}`, total, req.user.id), id);
+    const id = atomic(() => {
+      const r = run("INSERT INTO shop_orders(user_id,flat,total,fulfilment,payment,status,paid_at) VALUES(?,?,?,'counter',?,'collected',?)", h.id, h.flat, total, payment, payment === 'account' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '));
+      const id = Number(r.lastInsertRowid);
+      for (const l of lines) { run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty); run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id); }
+      if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(h.flat, `Tuck shop order #${id}`, total, req.user.id), id);
+      return id;
+    });
     log(req.user.id, 'shop_order', id, 'counter_sale', `card of ${h.name} (${h.flat}): ${total}, ${payment}`);
     notifyFlat(h.flat, `Tuck shop: ₹${total} bought with ${h.name}'s card${payment === 'account' ? ', added to your maintenance account' : ' (' + payment.toUpperCase() + ')'}`);
     res.status(201).json({ id, total, payment, name: h.name, flat: h.flat });
@@ -200,10 +212,13 @@ module.exports = function mountServices(app, c) {
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(req.user.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const r = run('INSERT INTO laundry_orders(user_id,flat,pickup_date,pickup_slot,total,note,payment) VALUES(?,?,?,?,?,?,?)', req.user.id, req.user.flat, b.pickup_date, b.pickup_slot, total, str(b.note, 300) || null, payment);
-    const id = Number(r.lastInsertRowid);
-    if (payment === 'account') run('UPDATE laundry_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Laundry #${id}`, total, req.user.id), id);
-    for (const l of lines) run('INSERT INTO laundry_lines(order_id,rate_id,item,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.item, l.price, l.qty);
+    const id = atomic(() => {
+      const r = run('INSERT INTO laundry_orders(user_id,flat,pickup_date,pickup_slot,total,note,payment) VALUES(?,?,?,?,?,?,?)', req.user.id, req.user.flat, b.pickup_date, b.pickup_slot, total, str(b.note, 300) || null, payment);
+      const id = Number(r.lastInsertRowid);
+      if (payment === 'account') run('UPDATE laundry_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Laundry #${id}`, total, req.user.id), id);
+      for (const l of lines) run('INSERT INTO laundry_lines(order_id,rate_id,item,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.item, l.price, l.qty);
+      return id;
+    });
     log(req.user.id, 'laundry_order', id, 'requested', `flat ${req.user.flat}: ${b.pickup_date} ${b.pickup_slot}, ${total}`);
     notifyRole('laundry', `Laundry pickup #${id} for flat ${req.user.flat} on ${b.pickup_date} (${b.pickup_slot})`);
     res.status(201).json({ id, total });

@@ -125,6 +125,22 @@ module.exports = function html(d) {
   .nf p { margin: 2px 0 0; font-size: 8.8pt }
   .gap { color: #${C.coral}; font-weight: 700 }
   [data-panel] { background: #fff }
+  .capchart { display: flex; align-items: flex-end; gap: 14px; height: 190px; padding: 8px 12px; background: #EEECE3; border-radius: 10px; }
+  .capcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 8.5pt; }
+  .capbar { width: 100%; max-width: 60px; background: #00B5C3; border-radius: 6px 6px 0 0; }
+  .capv { font: 700 9pt Arial; color: #2E3A87 } .capp { font: 700 8pt Arial }
+  .ladder { display: flex; flex-direction: column; gap: 8px; }
+  .rung { display: flex; gap: 12px; align-items: flex-start; background: #EEECE3; border-radius: 10px; padding: 10px 12px; margin-left: calc(var(--n) * 28px); }
+  .rung b { font: 700 10pt Arial; color: #2E3A87 } .rung p { margin: 2px 0 4px; font-size: 9pt }
+  .stk { display: flex; flex-direction: column; gap: 6px; }
+  .stk-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stk-box { border: 2px solid; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
+  .stk-box b { font: 700 10pt Arial } .stk-box span { font-size: 8.5pt; color: #555 }
+  .stk-api { grid-column: 1 / -1; background: #2E3A87; color: #fff; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .stk-api b { font: 700 13pt Arial } .stk-api span { font-size: 9pt; color: #cfd3f0 }
+  .stk-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px } .stk-chips i { font-style: normal; background: rgba(255,255,255,.14); border-radius: 99px; padding: 2px 8px; font-size: 8pt; color: #fff }
+  .stk-arrow { text-align: center; font: 700 8.5pt Arial; color: #0F7F7A; padding: 2px 0 } .stk-arrow::before { content: '▼  '; } 
+  .stk-flow { margin: 0; padding-left: 18px; font-size: 9.5pt } .stk-flow li { margin: 2px 0 }
   `;
 
   const cover = `<section class="page cover">
@@ -200,6 +216,11 @@ module.exports = function html(d) {
     <div class="grid3" data-panel="personas-a" style="margin-bottom:10px">${d.personas.slice(0, 3).map((p, i) => personaCard(p, i)).join('')}</div>
     <div class="grid3" data-panel="personas-b">${d.personas.slice(3).map((p, i) => personaCard(p, i + 3)).join('')}</div>
   `);
+  const roles = page(`
+    <div data-panel="roles"><h1 style="margin-bottom:4px">Owner, tenant, family and committee</h1><p class="lead" style="margin-bottom:12px">Who can do what. Defaults; the committee can change resident access in Settings.</p>
+    <table class="fr roles"><tr><th></th>${d.roles.cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr>${d.roles.rows.map(r => `<tr><td class="id" style="width:120px">${esc(r[0])}</td>${r.slice(1).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table>
+    <p class="card" style="margin-top:10px;font-size:9.5pt">${esc(d.roles.note)}</p></div>
+  `);
 
   const flowColors = [C.navy, C.navy, C.teal, C.teal, C.teal, C.teal];
   const flow = `<div data-panel="flow"><div class="flow">${d.process.map((s, i) => `<div class="step" style="background:#${flowColors[i]}"><div class="sn">${s.n}</div><div class="st">${s.name}</div><div class="sr">${s.roles}</div></div>`).join('')}</div>
@@ -247,6 +268,36 @@ module.exports = function html(d) {
     <p style="font-size:9pt;color:#666;margin-top:10px">Items in <span class="gap">coral</span> are open gaps: a target still has to be agreed or the control is not built yet.</p>
   `);
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Requirements Document</title><style>${css}</style></head><body>${cover}${glance}${scope}${personas}${moscow}${frHtml}${nfr}
+  const box = (t, sub, color) => `<div class="stk-box" style="border-color:#${color}"><b style="color:#${color}">${t}</b><span>${sub}</span></div>`;
+  const stack = page(`
+    ${head(5, 'Technology stack and API connections', 'How the front end and the back-end APIs are connected.')}
+    <div data-panel="stack" class="stk">
+      <div class="stk-row">${box('Web app', 'vanilla JS at /', C.teal)}${box('Phone app', 'PWA at /m/ · Android', C.teal)}${box('Flutter app', 'Dart, same API', C.teal)}${box('React app', 'TypeScript (migration)', C.teal)}</div>
+      <div class="stk-arrow">HTTPS + JSON · session cookie after POST /api/login</div>
+      <div class="stk-row"><div class="stk-api"><b>REST API</b><span>Node 22 + Express (system of record) · Java Spring Boot (same URLs, later)</span><span class="stk-chips">${['role check on every route', 'strict allow-lists', 'CSRF origin check', 'audit trail', 'notifications', '/api/pulse live refresh'].map(x => `<i>${x}</i>`).join('')}</span></div></div>
+      <div class="stk-arrow">reads and writes · sends</div>
+      <div class="stk-row">${box('Database', 'SQLite now · PostgreSQL 16', C.navy)}${box('Messaging', 'Telegram · n8n LLM gate', C.coral)}${box('Email desk', 'n8n + Gmail, signed links', C.coral)}${box('Cards', 'Web NFC · USB reader', C.dteal)}</div>
+    </div>
+    <h2>How a screen gets its data</h2><ol class="stk-flow">${d.stack.flow.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <h2>API map</h2><table class="fr"><tr><th>Area</th><th>Main routes</th><th>Used by</th><th>Contract</th></tr>${d.stack.apis.map(a => `<tr><td class="id" style="width:140px">${esc(a[0])}</td><td style="font-family:Consolas,monospace;font-size:8pt">${esc(a[1])}</td><td class="ro">${esc(a[2])}</td><td style="width:90px">${esc(a[3])}</td></tr>`).join('')}</table>
+  `);
+  const T = d.tests, K = d.capacity;
+  const maxT = T ? Math.max(...T.suites.map(x => x[1])) : 1;
+  const testsPage = !T ? '' : page(`
+    ${head(6, 'Tests done', 'What has been tested, automatically and by hand.')}
+    <div data-panel="tests"><div class="stats" style="grid-template-columns:repeat(4,1fr)">${T.other.map(([l, v]) => `<div class="stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>
+    <h2>Automated test suites</h2>${T.suites.map(([n, c, w]) => `<div class="hbar" style="grid-template-columns:210px 1fr 40px"><span>${esc(n)}</span><div class="track"><div style="width:${c / maxT * 100}%;background:#${C.teal}"></div></div><b>${c}</b></div><div class="muted" style="font-size:8.5pt;margin:-2px 0 6px 218px">${esc(w)}</div>`).join('')}</div>
+    <p class="card" style="margin-top:12px">${esc(T.manual)}</p>
+  `);
+  const maxR = K ? Math.max(...K.levels.map(l => l.rps)) : 1;
+  const capPage = !K ? '' : page(`
+    ${head(7, 'Capacity and scaling', 'How many people the portal can serve, and what to change to grow.')}
+    <div data-panel="capacity"><div class="stats" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><div class="v">${K.users.toLocaleString('en-IN')}</div><div class="l">people using it at the same moment</div></div><div class="stat"><div class="v">${K.sustained_rps}</div><div class="l">requests per second</div></div><div class="stat"><div class="v">${K.login_per_sec}/s</div><div class="l">sign-ins</div></div><div class="stat"><div class="v">${K.db_mb} MB</div><div class="l">test database</div></div></div>
+    <h2>Load test: throughput and response time</h2><div class="capchart">${K.levels.map(l => `<div class="capcol"><span class="capv">${l.rps}/s</span><div class="capbar" style="height:${Math.max(6, l.rps / maxR * 120)}px"></div><span class="capp" style="color:${l.p95_ms < 500 && !l.errors ? '#' + C.dteal : '#' + C.coral}">p95 ${l.p95_ms} ms</span><b>${l.concurrency} in flight</b></div>`).join('')}</div>
+    <p class="muted" style="font-size:8.5pt;margin:4px 0 0">${esc(K.model)} Machine: ${esc(K.machine)}.</p></div>
+    <div data-panel="scale"><h2>To scale</h2><div class="ladder">${K.scale.map(([w, c, t], i) => `<div class="rung" style="--n:${i}"><span class="num" style="width:30px;height:30px;font-size:12pt">${i + 1}</span><div><b>${esc(w)}</b><p>${esc(c)}</p><span class="tag">${esc(t)}</span></div></div>`).join('')}</div>
+    <table class="fr" style="margin-top:10px"><tr><th>Database</th><th></th></tr>${K.db.map(([a, b]) => `<tr><td class="id" style="width:110px">${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</table></div>
+  `);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Requirements Document</title><style>${css}</style></head><body>${cover}${glance}${scope}${personas}${roles}${moscow}${frHtml}${nfr}${stack}${testsPage}${capPage}
   <script>document.querySelectorAll('.page:not(.cover) .pn').forEach((e,i)=>e.textContent=i+2)</script></body></html>`;
 };

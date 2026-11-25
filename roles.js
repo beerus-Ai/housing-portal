@@ -65,7 +65,8 @@ module.exports = function mountRoles(app, c) {
     if (u.id === req.user.id) return res.status(409).json({ error: 'You cannot remove your own account' });
     if (losesGov(u, null, 'removed')) return res.status(409).json({ error: 'Keep at least one head of committee or admin account' });
     run("UPDATE users SET status='removed' WHERE id=?", u.id);
-    if (u.role === 'staff') run("UPDATE staff_shifts SET punch_out=datetime('now') WHERE user_id=? AND punch_out IS NULL", u.id);
+    if (['staff', 'shop', 'laundry'].includes(u.role)) run("UPDATE staff_shifts SET punch_out=datetime('now') WHERE user_id=? AND punch_out IS NULL", u.id);
+    if (app.locals.retireCards) app.locals.retireCards(u.id, req.user.id);
     log(req.user.id, 'user', u.id, 'account_removed', `${u.role}: ${u.email}`);
     res.json({ ok: true });
   });
@@ -172,7 +173,7 @@ module.exports = function mountRoles(app, c) {
   app.get('/api/staff/shift', auth, staffOnly, (req, res) => res.json({
     current: one('SELECT * FROM staff_shifts WHERE user_id=? AND punch_out IS NULL', req.user.id) || null,
     recent: q(`SELECT s.*, h.name AS handover_to_name FROM staff_shifts s LEFT JOIN users h ON h.id=s.handover_to WHERE s.user_id=? ORDER BY s.id DESC LIMIT 10`, req.user.id),
-    colleagues: q("SELECT id,name FROM users WHERE role='staff' AND status='approved' AND id!=? ORDER BY name", req.user.id).map(x => ({ ...x, on_shift: onShift(x.id) })),
+    colleagues: q("SELECT id,name FROM users WHERE role='staff' AND status='approved' AND id!=? AND COALESCE(department,'maintenance')=? ORDER BY name", req.user.id, req.user.department || 'maintenance').map(x => ({ ...x, on_shift: onShift(x.id) })),
   }));
   app.post('/api/staff/punch-in', auth, staffOnly, (req, res) => {
     if (onShift(req.user.id)) return res.status(409).json({ error: 'You are already on shift' });
@@ -186,8 +187,9 @@ module.exports = function mountRoles(app, c) {
     const note = str(req.body.note, 500);
     let to = null, moved = [];
     if (req.body.handover_to != null && req.body.handover_to !== '') {
-      to = one("SELECT id,name FROM users WHERE id=? AND role='staff' AND status='approved'", req.body.handover_to);
+      to = one("SELECT id,name,department FROM users WHERE id=? AND role='staff' AND status='approved'", req.body.handover_to);
       if (!to || to.id === req.user.id) return res.status(400).json({ error: 'Choose another staff member to hand over to' });
+      if ((to.department || 'maintenance') !== (req.user.department || 'maintenance')) return res.status(400).json({ error: `Hand over to someone in ${req.user.department || 'maintenance'}` });
       moved = q("SELECT id,title FROM requests WHERE assignee_id=? AND status!='closed'", req.user.id);
       for (const j of moved) {
         run("UPDATE requests SET assignee_id=?, accepted_at=NULL, updated_at=datetime('now') WHERE id=?", to.id, j.id);

@@ -23,3 +23,13 @@ Severity: C critical, H high, M medium, L low. Fix commits are in the git histor
 | DEF-17 | Seeding | Restarting with `SEED_PASSWORD` duplicated demo vendors and contacts | L | `INSERT OR IGNORE` on tables without a unique key | Insert only when missing; `test/seed.test.js` | Fixed 2026-11-25 |
 | DEF-18 | Web app | AI "assign vendor" suggestion stayed after a staff member was assigned | L | Card ignored the current assignee | Hidden once a vendor or staff member is assigned | Fixed |
 | DEF-19 | Web app | IT login opened on an empty ticket list | M | No IT home page | IT overview page (FR-RL-14) | Fixed |
+| DEF-20 | Gate cards | Suspended, removed or pending people could check in with their card (and start a staff shift) | H | Tap ignored account status | Tap refuses non-approved holders and logs why | Fixed |
+| DEF-21 | Gate cards | Removing someone left their card active and them 'inside' | H | Removal did not touch cards | Removal deactivates cards and checks them out | Fixed |
+| DEF-22 | Gate cards | Card numbers with stray characters collided; guards could give a second card | L | Non-hex stripped; guard route skipped one-card rule | Only separators stripped, other input refused; one active card per person | Fixed |
+| DEF-23 | Requests | A cleaner could be assigned a repair job; hand-over crossed departments | M | Department not checked | Assignment and hand-over follow the department | Fixed |
+| DEF-24 | Requests | 'Unassigned' counted staff-assigned work; missed pickup skipped request.create | L | Query ignored assignee; route lacked permission check | Query fixed; permission applied | Fixed |
+| DEF-25 | Notifications | Alerts went to suspended committee accounts | L | Loops read every admin | All alerts use approved committee members only | Fixed |
+| DEF-26 | Money | Counter sale ignored repeated lines (negative stock); credit read bills by title; a clash left a half-made order; cancelled orders showed 'on account' | M | Per-line stock check; title matching; no transaction | Totals per item; credit linked by bill id; one transaction per order; cancelled state | Fixed |
+| DEF-27 | Money | Bills for listed flats accepted unknown or mis-cased flat codes | L | No match to real flats | Matched case-insensitively; unknown flats refused | Fixed |
+| DEF-28 | Access | A committee member could reset a guard's password | M | No governance check | Head or admin only | Fixed |
+| DEF-29 | Access / web | Resident list showed staff and service accounts; three button handlers had no buttons | L | Filter and dashboard redesign | List filtered; category and channel filters back on the Requests page | Fixed |

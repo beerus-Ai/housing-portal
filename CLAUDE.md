@@ -22,7 +22,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 
 ## Run
 - `npm start` -> http://localhost:3000. The database starts empty except for the committee admin (`admin@society.test`; set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, required and 12+ characters in production). There is no demo data: register residents through the UI and enter only the minimum data when testing.
-- `npm test` -> Node API tests (`node:test`, 84 including `test/modules.test.js`, `test/roles.test.js`, `test/ai.test.js`, `test/telegram.test.js`, `test/email-desk.test.js`). Every story ships with a test; testing leads sign off.
+- `npm test` -> Node API tests (`node:test`, 139 incl. 53 cross-module `test/integration-*.test.js` including `test/modules.test.js`, `test/roles.test.js`, `test/ai.test.js`, `test/telegram.test.js`, `test/email-desk.test.js`). Every story ships with a test; testing leads sign off.
 - Java: `cd backend && ./gradlew test` (JUnit, 81 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
 - React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 67), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android). Flutter: `cd flutter_app && flutter pub get && flutter test && flutter run` (see `flutter_app/README.md`).

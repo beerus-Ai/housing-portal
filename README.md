@@ -16,7 +16,8 @@ A portal for one housing society. Residents register with consent, raise and tra
 ```
 npm install
 npm start          # http://localhost:3000, committee sign-in admin@society.test
-npm test           # Node, 84 tests
+npm test           # Node, 139 tests (incl. 53 cross-module integration)
+node scripts/load-test/load.js   # capacity test
 cd backend && ./gradlew test      # Java, 81
 cd frontend && npm test           # React, 67
 cd flutter_app && flutter test    # Flutter, 18

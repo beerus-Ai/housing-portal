@@ -135,6 +135,7 @@ module.exports = async function buildDocx(d, panels, outFile) {
   kids.push(...heading(2, 'Personas', 'The six roles on the faculty whiteboard. Names are illustrative; no real resident data is used.'));
   kids.push(img(panels['personas-a']));
   kids.push(img(panels['personas-b']));
+  if (panels.roles) { kids.push(new Paragraph({ children: [new PageBreak()] })); kids.push(img(panels.roles)); }
   kids.push(new Paragraph({ children: [new PageBreak()] }));
 
   // 3 Functional
@@ -178,6 +179,31 @@ module.exports = async function buildDocx(d, panels, outFile) {
     ],
   }));
   kids.push(p(t('Items in coral are open gaps: a target still has to be agreed or the control is not built yet.', { size: 18, color: '666666' }), { before: 120 }));
+
+  // 5 Technology stack and API connections
+  kids.push(new Paragraph({ children: [new PageBreak()] }));
+  kids.push(...heading(5, 'Technology stack and API connections', 'How the front end and the back-end APIs are connected.'));
+  if (panels.stack) kids.push(img(panels.stack));
+  kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, children: [new TextRun({ text: 'How a screen gets its data', font: HFONT })] }));
+  d.stack.flow.forEach((x, i) => kids.push(p(t(`${i + 1}. ${x}`, { size: 19 }), { after: 40 })));
+  kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, children: [new TextRun({ text: 'API map', font: HFONT })] }));
+  const ac = [2000, 3900, 2246, 1600];
+  kids.push(new Table({ width: { size: W, type: WidthType.DXA }, columnWidths: ac, layout: TableLayoutType.FIXED,
+    borders: { top: thin, bottom: thin, left: none, right: none, insideHorizontal: thin, insideVertical: none },
+    rows: [new TableRow({ tableHeader: true, children: ['Area', 'Main routes', 'Used by', 'Contract'].map((h, i) => cell(p(t(h, { bold: true, color: C.white, size: 17, font: HFONT }), { after: 0 }), { w: ac[i], fill: C.navy })) }),
+      ...d.stack.apis.map(a => new TableRow({ cantSplit: true, children: [cell(p(t(a[0], { bold: true, color: C.navy, size: 17, font: HFONT }), { after: 0 }), { w: ac[0] }), cell(p(t(a[1], { size: 15, font: 'Consolas' }), { after: 0 }), { w: ac[1] }), cell(p(t(a[2], { size: 17 }), { after: 0 }), { w: ac[2] }), cell(p(t(a[3], { size: 17 }), { after: 0 }), { w: ac[3] })] }))] }));
+
+  // 6 Tests done, 7 Capacity and scaling (pictures of the designed panels plus the numbers as tables)
+  if (d.tests && panels.tests) {
+    kids.push(new Paragraph({ children: [new PageBreak()] }));
+    kids.push(...heading(6, 'Tests done', 'What has been tested, automatically and by hand.'));
+    kids.push(img(panels.tests)); kids.push(p(t(d.tests.manual, { size: 19 })));
+  }
+  if (d.capacity && panels.capacity) {
+    kids.push(new Paragraph({ children: [new PageBreak()] }));
+    kids.push(...heading(7, 'Capacity and scaling', 'How many people the portal can serve, and what to change to grow.'));
+    kids.push(img(panels.capacity)); if (panels.scale) kids.push(img(panels.scale));
+  }
 
   const doc = new Document({
     creator: 'Sahyadri Heights project team',
