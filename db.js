@@ -174,6 +174,12 @@ function openDb(file) {
   if (!db.prepare('PRAGMA table_info(shop_items)').all().some(c => c.name === 'image')) db.exec('ALTER TABLE shop_items ADD COLUMN image TEXT');
   // Staff department (cleaning | maintenance) decides what a staff member sees; NFC gate cards and check-in/out.
   if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'department')) db.exec('ALTER TABLE users ADD COLUMN department TEXT');
+  // Purchases are connected to the flat's finances: how the order is received, how it is paid, and the bill when on credit.
+  for (const [t, cols] of [['shop_orders', [['fulfilment', "TEXT NOT NULL DEFAULT 'delivery'"], ['payment', "TEXT NOT NULL DEFAULT 'cash'"], ['paid_at', 'TEXT'], ['due_id', 'INTEGER']]],
+    ['laundry_orders', [['payment', "TEXT NOT NULL DEFAULT 'cash'"], ['paid_at', 'TEXT'], ['due_id', 'INTEGER']]]]) {
+    const have = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
+    for (const [name, type] of cols) if (!have.includes(name)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${name} ${type}`);
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS gate_cards(
     id INTEGER PRIMARY KEY, serial TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), label TEXT, active INTEGER NOT NULL DEFAULT 1,
     created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));

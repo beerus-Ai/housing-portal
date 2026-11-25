@@ -13,7 +13,7 @@ const CATEGORIES = ['plumbing', 'electrical', 'lift', 'security', 'housekeeping'
 const STATUSES = ['open', 'assigned', 'in_progress', 'closed'];
 const RESIDENT_TYPES = ['owner', 'tenant', 'family'];
 const FEATURES = ['emergency', 'gate', 'contacts', 'notices', 'parking'];
-const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '', approval_limit: '10000', maintenance: '' };
+const SETTING_DEFAULTS = { society_name: 'Sahyadri Heights', society_kind: 'Co-operative Housing Society', google_client_id: '', approval_limit: '10000', credit_limit: '3000', maintenance: '' };
 const REOPEN_DAYS = Number(process.env.REOPEN_DAYS) || 7;
 const CSP_BASE = {
   'default-src': ["'self'"], 'img-src': ["'self'", 'data:'], 'style-src': ["'self'", "'unsafe-inline'"], 'script-src': ["'self'"],
@@ -39,6 +39,7 @@ function createApp(opts = {}) {
   };
   const getMaintenance = () => { try { const m = JSON.parse(getSetting('maintenance') || 'null'); return m && m.message ? m : null; } catch { return null; } };
   const approvalLimit = () => Number(getSetting('approval_limit')) || 0;
+  const creditLimit = () => { const v = Number(getSetting('credit_limit')); return Number.isFinite(v) ? v : 3000; };
   const publicSettings = () => ({ society_name: getSetting('society_name'), society_kind: getSetting('society_kind'), google_client_id: getSetting('google_client_id'), features: getFeatures(), maintenance: getMaintenance() });
   const cspHeader = () => {
     const d = Object.fromEntries(Object.entries(CSP_BASE).map(([k, v]) => [k, [...v]]));
@@ -135,7 +136,7 @@ function createApp(opts = {}) {
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
-  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -360,7 +361,7 @@ function createApp(opts = {}) {
   });
 
   // ---- admin: settings & access control
-  app.get('/api/admin/settings', auth, admin, (req, res) => res.json({ ...publicSettings(), approval_limit: approvalLimit() }));
+  app.get('/api/admin/settings', auth, admin, (req, res) => res.json({ ...publicSettings(), approval_limit: approvalLimit(), credit_limit: creditLimit() }));
   app.put('/api/admin/settings', auth, admin, governance, (req, res) => {
     const b = req.body || {}, cur = publicSettings(), next = { ...cur, features: { ...cur.features } };
     for (const k of ['society_name', 'society_kind']) if (k in b) {
@@ -372,6 +373,11 @@ function createApp(opts = {}) {
       const v = typeof b.google_client_id === 'string' ? b.google_client_id.trim() : null;
       if (v === null || !/^[A-Za-z0-9._-]{0,200}$/.test(v)) return res.status(400).json({ error: 'Google client ID has invalid characters' });
       next.google_client_id = v;
+    }
+    if ('credit_limit' in b) {
+      const v = Number(b.credit_limit);
+      if (b.credit_limit === '' || b.credit_limit === null || !Number.isFinite(v) || v < 0 || v > 1e7) return res.status(400).json({ error: 'Credit limit must be a number of rupees (0 turns credit off)' });
+      if (v !== creditLimit()) { log(req.user.id, 'settings', null, 'updated', 'credit_limit: ' + creditLimit() + ' -> ' + v); db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('credit_limit', String(v)); }
     }
     if ('approval_limit' in b) {
       const v = Number(b.approval_limit);
@@ -393,7 +399,7 @@ function createApp(opts = {}) {
     }
     for (const k of FEATURES) if (next.features[k] !== cur.features[k]) log(req.user.id, 'settings', null, 'feature_' + (next.features[k] ? 'on' : 'off'), k);
     put.run('features', JSON.stringify(next.features));
-    res.json({ ...publicSettings(), approval_limit: approvalLimit() });
+    res.json({ ...publicSettings(), approval_limit: approvalLimit(), credit_limit: creditLimit() });
   });
   const accessMatrix = () => {
     const m = Object.fromEntries(ACCESS_ROLES.map(r => [r, Object.fromEntries(PERMISSIONS.map(p => [p.key, false]))]));
@@ -1413,8 +1419,8 @@ function createApp(opts = {}) {
 
   require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
   require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, clock: opts.clock });
-  require('./nfc')(app, { q, one, run, log, notify, auth, str });
-  require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./nfc')(app, { q, one, run, log, notify, auth, str, creditLimit });
+  require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));

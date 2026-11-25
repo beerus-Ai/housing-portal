@@ -61,3 +61,50 @@ test('gate cards: guard registers a card, taps toggle in and out, staff shifts f
     assert.ok((await admin('GET', '/api/admin/audit')).body.some(a => a.action === 'checked_out'));
   } finally { server.close(); }
 });
+
+test('community card: issued at onboarding, tied to money and activity, used at the tuck shop counter', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portal-card-'));
+  const app = createApp({ dbFile: path.join(dir, 'c.db'), uploadDir: path.join(dir, 'up'), noTimers: true });
+  const server = await new Promise(r => { const s = app.listen(0, () => r(s)); });
+  const base = `http://localhost:${server.address().port}`;
+  const client = () => { let cookie = ''; return async (method, url, body) => {
+    const res = await fetch(base + url, { method, headers: { cookie, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const sc = res.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
+    return { status: res.status, body: await res.json() };
+  }; };
+  try {
+    const admin = client(); await admin('POST', '/api/login', ADMIN);
+    const mk = async (kind, email) => { await admin('POST', '/api/admin/accounts', { name: kind, email, password: PW, kind }); const c = client(); await c('POST', '/api/login', { email, password: PW }); return c; };
+    const shop = await mk('shop', 's@x.test'), cleaner = await mk('cleaner', 'cl@x.test');
+    // onboarding: approve the resident and issue a card in the same step
+    assert.equal((await client()('POST', '/api/register', { name: 'Asha', email: 'a@x.test', flat: 'A-1', resident_type: 'owner', password: PW, consent: true })).status, 201);
+    const asha = (await admin('GET', '/api/admin/users?status=pending')).body.find(u => u.email === 'a@x.test');
+    await admin('POST', `/api/admin/users/${asha.id}/approve`);
+    assert.equal((await admin('POST', `/api/admin/users/${asha.id}/card`, { serial: 'AA:BB:CC:01' })).status, 201);
+    assert.equal((await shop('POST', `/api/admin/users/${asha.id}/card`, { serial: 'AA:BB:CC:02' })).status, 403, 'only the committee issues cards');
+    const res = client(); await res('POST', '/api/login', { email: 'a@x.test', password: PW });
+    let me = (await res('GET', '/api/me/card')).body;
+    assert.equal(me.cards[0].serial, 'AABBCC01');
+    assert.ok((await res('GET', '/api/notifications')).body.some(n => /community card is ready/.test(n.message)));
+    // a new card replaces the old one
+    assert.equal((await admin('POST', `/api/admin/users/${asha.id}/card`, { serial: 'AABBCC03' })).status, 201);
+    assert.equal((await res('GET', '/api/me/card')).body.cards.length, 1);
+    // staff card: issued to the cleaner, and the cleaner sees their own card
+    const cl = (await admin('GET', '/api/admin/accounts')).body.find(a => a.email === 'cl@x.test');
+    assert.equal((await admin('POST', `/api/admin/users/${cl.id}/card`, { serial: 'CC01' })).status, 201);
+    assert.equal((await cleaner('GET', '/api/me/card')).body.cards[0].serial, 'CC01');
+    // tuck shop counter: tap the resident card, see who it is, charge the maintenance account
+    const rice = (await shop('POST', '/api/shop/items', { name: 'Rice', category: 'groceries', price: 350, stock: 5 })).body.id;
+    assert.equal((await shop('POST', '/api/shop/card', { serial: 'AABBCC01' })).status, 404, 'the replaced card no longer works');
+    const who = (await shop('POST', '/api/shop/card', { serial: 'aa bb cc 03' })).body;
+    assert.equal(who.flat, 'A-1'); assert.equal(who.credit_used, 0);
+    const sale = await shop('POST', '/api/shop/counter', { serial: 'AABBCC03', items: [{ id: rice, qty: 2 }], payment: 'account' });
+    assert.equal(sale.status, 201); assert.equal(sale.body.total, 700);
+    assert.ok((await res('GET', '/api/dues')).body.dues.some(d => d.title === `Tuck shop order #${sale.body.id}` && d.amount === 700));
+    me = (await res('GET', '/api/me/card')).body;
+    assert.equal(me.money.credit_used, 700); assert.ok(me.money.balance >= 700);
+    assert.ok(me.activity.some(e => e.kind === 'shop' && /at the counter/.test(e.text)));
+    // the committee sees the same card timeline
+    assert.equal((await admin('GET', `/api/admin/users/${asha.id}/card`)).body.money.credit_used, 700);
+  } finally { server.close(); }
+});

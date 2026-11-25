@@ -409,7 +409,7 @@
       page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Verification: approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
         <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span></span></span></td>
           <td>${esc(u.flat)}</td><td>${esc(TYPE[u.resident_type] || '')}</td><td>${esc(day(u.created_at))}</td>
-          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
+          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end;flex-wrap:nowrap"><label class="sr" for="card${u.id}">Card number for ${esc(u.name)}</label><input class="input" id="card${u.id}" placeholder="Card number (tap or type)" style="width:190px" autocomplete="off"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
     },
 
     async leases() {
@@ -572,7 +572,13 @@
     gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message, 'error'); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
-    decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
+    decide: async el => {
+      const card = el.dataset.d === 'approve' && document.getElementById('card' + el.dataset.id) ? document.getElementById('card' + el.dataset.id).value.trim() : '';
+      await API.admin.decide(el.dataset.id, el.dataset.d);
+      if (card) { try { await HP.api('POST', `/api/admin/users/${el.dataset.id}/card`, { serial: card }); toast('Approved and community card issued'); } catch (x) { toast('Approved, but the card was not issued: ' + x.message, 'error'); } }
+      else toast(el.dataset.d === 'approve' ? 'Approved. Issue a card from Residents when you have one.' : 'Rejected');
+      render();
+    },
   };
   document.addEventListener('click', guard(async e => { const el = e.target.closest('[data-act]'); if (el && ACT[el.dataset.act]) { e.preventDefault(); await ACT[el.dataset.act](el); } }));
   document.addEventListener('change', guard(async e => {
