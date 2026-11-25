@@ -29,30 +29,12 @@
       actions: [allowed('raise') ? ['Raise a request', 'plus-circle', 'raise', true] : null, ['Track my requests', 'list-checks', 'requests']].filter(Boolean) })}
       ${HP.notifier(items.slice(0, 4))}</div>`);
   };
-  // ---------- new-request alert: a short chime + a 3s pop-up, then the matching card flashes
-  let actx;
-  function chime(urgent) {
-    try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      if (actx.state === 'suspended') actx.resume();
-      const t0 = actx.currentTime;
-      // Emergency: a harsh, loud, repeating two-tone alarm. Normal: a soft, gentle two-note.
-      const notes = urgent ? [988, 740, 988, 740, 988, 740] : [587, 784];
-      notes.forEach((f, i) => {
-        const o = actx.createOscillator(), g = actx.createGain(), t = t0 + i * (urgent ? 0.17 : 0.15);
-        o.type = urgent ? 'square' : 'sine'; o.frequency.value = f;
-        const peak = urgent ? 0.32 : 0.09, tail = urgent ? 0.15 : 0.32;
-        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
-        o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + tail + 0.02);
-      });
-    } catch {}
-  }
+  // ---------- new-request alert: a 3s pop-up, then the matching card flashes (the sound comes from HP.sound, driven by the pulse)
   function requestPop(r) {
     const urgent = r.category === 'security' || (r.ai && r.ai.priority === 'urgent');
     const destLabel = urgent ? 'Emergencies' : catLabel(r.category);
     const destSel = urgent ? '.ds-stat[data-page="emergencies"]' : `.ds-catcard[data-c="${r.category}"]`;
     const channel = r.source === 'telegram' ? 'Telegram' : r.source === 'whatsapp' ? 'WhatsApp' : 'the app';
-    chime(urgent);
     const el = document.createElement('div');
     el.className = 'rq-pop' + (urgent ? ' rq-pop-urgent' : '');
     el.setAttribute('role', 'alert');

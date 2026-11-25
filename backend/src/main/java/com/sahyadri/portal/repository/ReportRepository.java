@@ -22,6 +22,18 @@ public class ReportRepository {
         return db.list("SELECT category, COUNT(*) AS n FROM requests WHERE status!='closed' GROUP BY category ORDER BY category");
     }
 
+    public long maxActiveEmergencyId() {
+        return db.count("SELECT COALESCE(MAX(id),0) FROM emergencies WHERE status='active'");
+    }
+
+    public long maxUrgentRequestId() {
+        return db.count("SELECT COALESCE(MAX(id),0) FROM requests WHERE category='security' OR ai_priority='urgent'");
+    }
+
+    public long activeEmergencies() {
+        return db.count("SELECT COUNT(*) FROM emergencies WHERE status='active'");
+    }
+
     public long pendingUsers() {
         return db.count("SELECT COUNT(*) FROM users WHERE status='pending'");
     }

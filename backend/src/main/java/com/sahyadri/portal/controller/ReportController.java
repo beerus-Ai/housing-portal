@@ -37,7 +37,7 @@ public class ReportController {
     }
 
     @GetMapping("/api/pulse")
-    public Map<String, String> pulse(@AuthenticationPrincipal User user) {
-        return Map.of("v", service.pulse(user));
+    public Map<String, Object> pulse(@AuthenticationPrincipal User user) {
+        return Map.of("v", service.pulse(user), "a", service.alerts(user));
     }
 }

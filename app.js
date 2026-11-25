@@ -746,17 +746,28 @@ function createApp(opts = {}) {
     WHERE u.resident_type='tenant' AND u.status='approved' ORDER BY (l.end_date IS NOT NULL), l.end_date, u.name`)));
 
   // ---- live updates: clients poll this and only redraw when the token changes (no data is returned, just a version string)
+  // Sound cues for the live dashboard (ids only, never data): the newest request or order this person should hear about,
+  // and the newest still-active emergency. The browser chimes when `rq` grows and sounds a siren while `em` is active.
+  const alertsFor = u => {
+    const em = ['admin', 'guard'].includes(u.role) ? one("SELECT COALESCE(MAX(id),0) AS m, COUNT(*) AS n FROM emergencies WHERE status='active'") : null;
+    const rq = u.role === 'admin' ? one('SELECT COALESCE(MAX(id),0) AS m FROM requests').m
+      : u.role === 'staff' ? one('SELECT COALESCE(MAX(id),0) AS m FROM requests WHERE assignee_id=?', u.id).m
+      : u.role === 'shop' ? one('SELECT COALESCE(MAX(id),0) AS m FROM shop_orders').m
+      : u.role === 'laundry' ? one('SELECT COALESCE(MAX(id),0) AS m FROM laundry_orders').m : 0;
+    const ru = u.role === 'admin' ? one("SELECT COALESCE(MAX(id),0) AS m FROM requests WHERE category='security' OR ai_priority='urgent'").m : 0; // urgent requests sound the alarm too
+    return { rq, ru, em: em ? em.m : 0, em_on: em ? em.n : 0 };
+  };
   app.get('/api/pulse', auth, (req, res) => {
     const u = req.user;
-    if (u.role === 'staff') return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM requests WHERE assignee_id=?", u.id).m, one('SELECT COUNT(*) AS n FROM job_updates WHERE user_id=?', u.id).n, one('SELECT COALESCE(MAX(id),0) AS m FROM staff_shifts WHERE user_id=?', u.id).m].join('|') });
-    if (u.role === 'it') return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM support_tickets").m, one('SELECT COUNT(*) AS n FROM support_replies').n].join('|') });
-    if (u.role === 'guard') return res.json({ v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
+    if (u.role === 'staff') return res.json({ a: alertsFor(u), v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM requests WHERE assignee_id=?", u.id).m, one('SELECT COUNT(*) AS n FROM job_updates WHERE user_id=?', u.id).n, one('SELECT COALESCE(MAX(id),0) AS m FROM staff_shifts WHERE user_id=?', u.id).m].join('|') });
+    if (u.role === 'it') return res.json({ a: alertsFor(u), v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM support_tickets").m, one('SELECT COUNT(*) AS n FROM support_replies').n].join('|') });
+    if (u.role === 'guard') return res.json({ a: alertsFor(u), v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
     if (u.role === 'admin') {
       desk.seen();
-      return res.json({ v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
+      return res.json({ a: alertsFor(u), v: [one('SELECT COALESCE(MAX(id),0) AS m FROM audit').m, one("SELECT COUNT(*) AS n FROM users WHERE status='pending'").n, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m].join('|') });
     }
     const r = one(`SELECT COUNT(*) AS n, COALESCE(MAX(r.updated_at),'') AS m, COALESCE(SUM(r.rating IS NOT NULL),0) AS rated FROM requests r JOIN users x ON x.id=r.user_id WHERE r.user_id=? OR x.flat=?`, u.id, u.flat || '');
-    res.json({ v: [r.n, r.m, r.rated, one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m,
+    res.json({ a: alertsFor(u), v: [r.n, r.m, r.rated, one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one('SELECT COALESCE(MAX(id),0) AS m FROM notices').m,
       one("SELECT COUNT(*) AS n FROM users WHERE flat=? AND status='approved'", u.flat || '').n].join('|') });
   });
 

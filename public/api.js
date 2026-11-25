@@ -11,7 +11,7 @@ window.API = (() => {
       login: (email, password) => call('POST', '/api/login', { email, password }),
       logout: () => call('POST', '/api/logout'),
       register: body => call('POST', '/api/register', body),
-      pulse: () => call('GET', '/api/pulse'),
+      pulse: () => call('GET', '/api/pulse'), // { v: version string, a: { rq, ru, em, em_on } } sound cues: newest request/order id, newest urgent or security request id, newest active emergency id, active emergency count
       google: credential => call('POST', '/api/auth/google', { credential }), // Google Identity Services ID token; signs in an EXISTING approved account matched by verified email
     },
     profile: {

@@ -121,6 +121,59 @@ window.HP = (() => {
         ['shield-check', 'Police verification', l.police_verified_on ? 'Verified on ' + dateLong(l.police_verified_on) : 'Pending'], ['file-text', 'Rent agreement', l.agreement || 'Not recorded'], ['car', 'Parking', l.parking || 'None allotted']] };
   }
 
+  // ---------- sound alerts (chime for a new request or order, siren for an emergency). Tones are made with Web Audio,
+  // so there are no sound files and the CSP stays 'self'. Browsers only allow sound after the first click or key press.
+  const sound = (() => {
+    let ctx = null, last = null, silenced = 0, sirenAt = 0, banner = null;
+    const on = () => localStorage.getItem('hp.sound') !== 'off';
+    const audio = () => { try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ctx = null; } return ctx; };
+    const unlock = () => { const c = audio(); if (c && c.state === 'suspended') c.resume(); };
+    ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, unlock, { capture: true, passive: true }));
+    function tone(c, t0, f0, f1, dur, type, vol) {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); if (f1 !== f0) o.frequency.linearRampToValueAtTime(f1, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    }
+    function play(kind) {
+      if (!on()) return;
+      const c = audio(); if (!c) return;
+      if (c.state === 'suspended') { c.resume(); if (c.state === 'suspended') { toast('Click anywhere to turn on sound alerts'); return; } }
+      const t = c.currentTime + 0.05;
+      if (kind === 'siren') for (let i = 0; i < 3; i++) { tone(c, t + i * 0.9, 650, 1250, 0.45, 'sawtooth', 0.18); tone(c, t + i * 0.9 + 0.45, 1250, 650, 0.45, 'sawtooth', 0.18); }
+      else { tone(c, t, 880, 880, 0.18, 'sine', 0.25); tone(c, t + 0.2, 1320, 1320, 0.32, 'sine', 0.25); }
+    }
+    function showBanner(n) {
+      if (banner) { banner.querySelector('b').textContent = n > 1 ? n + ' active emergencies' : 'Active emergency'; return; }
+      banner = document.createElement('div'); banner.className = 'em-alarm'; banner.setAttribute('role', 'alert');
+      banner.innerHTML = `<span class="em-alarm-ic">${ic('siren')}</span><span class="em-alarm-t"><b>${n > 1 ? n + ' active emergencies' : 'Active emergency'}</b><span>Open Emergencies to respond. The alarm repeats until it is resolved or silenced.</span></span><button type="button" class="btn" data-em-silence>Silence</button>`;
+      banner.querySelector('[data-em-silence]').addEventListener('click', () => { silenced = last ? last.em : 0; hideBanner(); });
+      document.body.appendChild(banner);
+    }
+    const hideBanner = () => { if (banner) { banner.remove(); banner = null; } };
+    // Called with every pulse. The first pulse only sets the baseline, so opening the page never plays old alerts,
+    // except an emergency that is still active: that is announced at once.
+    function check(a) {
+      if (!a) return;
+      const first = last === null; const prev = last || { rq: a.rq, ru: a.ru, em: 0 }; last = a;
+      if (a.em_on > 0 && a.em > silenced) {
+        showBanner(a.em_on);
+        if (a.em > prev.em || first || Date.now() - sirenAt > 20000) { sirenAt = Date.now(); play('siren'); }
+      } else hideBanner();
+      if (!first && (a.ru || 0) > (prev.ru || 0) && !(a.em > prev.em)) play('siren'); // urgent or security request: alarm once
+      else if (!first && a.rq > prev.rq && !(a.em > prev.em)) play('chime');
+    }
+    function toggle() { localStorage.setItem('hp.sound', on() ? 'off' : 'on'); if (on()) { unlock(); play('chime'); } return on(); }
+    return { check, play, toggle, on };
+  })();
+  // Any element with data-sound-toggle switches sound alerts on or off and shows the state.
+  const soundLabel = () => sound.on() ? 'Sound on' : 'Sound off';
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-sound-toggle]'); if (!b) return;
+    sound.toggle(); b.innerHTML = `${ic(sound.on() ? 'speaker-high' : 'speaker-slash')}<span>${soundLabel()}</span>`; toast(sound.on() ? 'Sound alerts on' : 'Sound alerts off');
+  });
+  const soundBtn = (cls = 'top-btn') => `<button type="button" class="${cls}" data-sound-toggle title="Play a sound for new requests and emergencies">${ic(sound.on() ? 'speaker-high' : 'speaker-slash')}<span>${soundLabel()}</span></button>`;
+
   // Live updates: poll /api/pulse and call redraw() only when something changed and the user is not typing.
   function live(redraw, { every = 5000 } = {}) {
     let last = null, busy = false;
@@ -134,6 +187,7 @@ window.HP = (() => {
       if (busy || document.hidden) return; busy = true;
       try {
         const p = await API.auth.pulse();
+        sound.check(p.a);
         if (last !== null && p.v !== last && !editing()) { await redraw(); }
         if (last === null || !editing()) last = p.v;
         mark();
@@ -300,7 +354,7 @@ window.HP = (() => {
         <span class="ntf-ic">${ic(n.icon)}${n.tone === 'urgent' ? '<i class="ntf-pulse" aria-hidden="true"></i>' : ''}</span><span class="ntf-txt"><b>${esc(n.text)}</b>${n.sub ? `<span>${esc(n.sub)}</span>` : ''}</span><span class="ntf-go">${esc(n.cta || 'Open')}${ic('caret-right')}</span></button>`).join('')}</div>`
     : `<div class="ntf-empty"><span class="ntf-anim" data-lottie="check" data-loop="false"></span><b>${esc(empty)}</b><span class="muted">New things will appear here.</span></div>`}</section>`;
 
-  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, heroStrip, notifier, kebab, cardPanel,
+  return { sound, soundBtn, $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, heroStrip, notifier, kebab, cardPanel,
     STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge,
     POSITION, positionLabel, isGov, PROGRESS, progressLabel, rupees, costTag, updatesList, updatePhotoUrl, TICKET_KINDS, ticketTag, maintBanner, whenText, RAPI };
 })();
