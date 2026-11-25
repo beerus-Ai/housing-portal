@@ -71,6 +71,7 @@ Requirement IDs: `docs/requirements.md`; society module rules: `docs/modules-api
 | TC-FL-02 | Flutter errors | Server error; network failure | Server message and status shown; readable message, not raw socket text | `flutter_app/test/api_test.dart` |
 | TC-FL-03 | Flutter new request | Create a request with a photo | Multipart with category, title and image type | `flutter_app/test/api_test.dart` |
 | TC-FL-04 | Flutter sign-in and dates | Tap sign in with empty fields; parse SQLite dates and labels | "Enter your email and password", no server call; UTC dates, readable labels | `flutter_app/test/widget_test.dart` |
+| TC-FL-06 | Flutter assign and error colour | Committee assigns a vendor or staff from the sheet; error shown | Sends `vendor_id` or `staff_id`; AI suggestion and matching trade first; staff on shift first; errors neutral, not red | `flutter_app/test/assign_test.dart`, `api_test.dart` |
 | TC-FL-05 | Manual Flutter | On an Android emulator against a local server: sign in by role, raise a request with photo, open detail, committee moves it to the next stage, notices, SOS, gate QR, profile | Screens load and actions succeed | Manual, see `test-results.md` (2026-11-25) |
 | TC-UI-01 | Manual React | Raise request, vehicle, gate pass, worker, parking, notice, contact, household, emergency, lease, rating, gate verify | Forms submit and show result | Manual, see `test-results.md` (2026-11-04) |
 | TC-UI-02 | Manual phone | Request row, top bar, estate grid at phone width | No overlap or wrapping | Manual; Vitest `nav.test.tsx`, `phase3.test.tsx` |

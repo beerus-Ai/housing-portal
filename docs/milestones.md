@@ -21,6 +21,7 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
 | 11-25 | Flutter app; product and technology architecture doc | PR #23, `flutter_app/`, `docs/architecture/product-and-technology-architecture.md` | HSP-65, HSP-68 |
 | 11-25 | Society modules on web (amenities, dues, inventory, waste); deployed live | PR #24, `docs/modules-api.md`; Node 78 tests, CI 6/6 | HSP-59..64 |
 | 11-25 | Documentation refresh | `docs/`, PR #25 | – |
+| 11-25 | Flutter: committee assign and neutral error colour; seed duplicates fixed | Flutter 14, Node 79 tests | HSP-69 |
 
 ## Open
 - Port Telegram, email desk, roles and society modules to Java/React.

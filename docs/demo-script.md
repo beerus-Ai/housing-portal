@@ -20,6 +20,6 @@ Society modules setup: as committee add a Clubhouse (08:00-20:00, 2-hour slots),
 | 8:00 | Staff takes stock out to the reorder level; committee sees low-stock alert; show the waste schedule and today's pickups | Staff, committee | Alert and schedule shown |
 | 8:40 | Flutter app on the Android emulator (or APK): sign in, see requests (20 s) | Presenter | Same API, same data |
 | 9:00 | Access control: committee turns off a permission; resident of that type is refused | Committee | Matrix takes effect |
-| 9:30 | Close: architecture (`docs/architecture/`), tests Node 78, Java 81, React 67, Flutter 8, CI 6/6 green; what is not verified | Presenter | Honest status |
+| 9:30 | Close: architecture (`docs/architecture/`), tests Node 79, Java 81, React 67, Flutter 14, CI 6/6 green; what is not verified | Presenter | Honest status |
 
 Fallbacks: if Telegram, n8n or Gmail is down, use the simulator and rule-based gate and say so. If the live URL is down, demo locally and show test output.

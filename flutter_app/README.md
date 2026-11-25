@@ -5,7 +5,7 @@ Flutter 3.50 / Dart 3.14 client for the portal API. It uses the same URLs, sessi
 ## Run
 ```bash
 flutter pub get
-flutter test                 # 8 tests: API client, cookie, multipart upload, network errors, login form
+flutter test                 # 14 tests: API client, assign, ordering, error colour, login form
 flutter run                  # phone or emulator
 flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 ```
@@ -14,7 +14,7 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 
 ## What it does
 - Bottom navigation by role: residents (Home, Requests, Notices, Gate pass, Profile), committee (Home, Requests, Notices, Profile), staff (Home, My jobs, Profile), guard and IT (Home, Profile).
-- Screens: sign in, home, requests, new request with photo, request detail (tracker, messages, history; committee "Move to next stage"), notices, SOS, gate QR, profile.
+- Screens: sign in, home, requests, new request with photo, request detail (tracker, messages, history; committee assigns a vendor or staff, then moves it to the next stage), notices, SOS, gate QR, profile.
 
 ## Layout
 - `lib/api.dart`: REST client (keeps the `connect.sid` cookie; multipart photo upload).
@@ -25,4 +25,4 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 ## Status
 Checked on an Android emulator against a local server. Not verified: physical phone, iOS, the live server.
 
-Open: no vendor or staff assignment in the app yet; error toasts are red (the palette keeps red for emergencies). Society modules (amenities, dues, inventory, waste) are not in the app. Jira: HSP-68 (done), HSP-69, HSP-70.
+Errors are neutral (red only for emergencies). Open: society modules (amenities, dues, inventory, waste) are not in the app. Jira: HSP-68, HSP-69 (done), HSP-70.
