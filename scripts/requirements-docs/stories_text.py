@@ -55,6 +55,7 @@ S = {
  "FR-RL-11": ("user", "to raise a support ticket that IT answers", "portal problems are tracked apart from repairs"),
  "FR-RL-12": ("IT staff member", "help guides for each role", "people start without training calls"),
  "FR-RL-13": ("IT staff member", "a health page, backups and a maintenance notice", "no data is lost during upgrades"),
+ "FR-RL-14": ("IT staff member", "one overview of support queries, training, backups and maintenance", "I know what needs me first"),
  "FR-SM-01": ("committee member", "to set up amenities with hours and slot length", "residents can book them"),
  "FR-SM-02": ("resident", "to book and cancel a free amenity slot", "I use shared facilities without clashes"),
  "FR-SM-03": ("committee member", "to raise monthly dues for all or listed flats", "every flat is billed once"),

@@ -297,6 +297,11 @@ test('IT: support tickets, guides per role, health, backup, maintenance notice',
     assert.equal(bk.status, 200);
     assert.equal(bk.body.subarray(0, 15).toString('latin1'), 'SQLite format 3');
     assert.equal((await t.admin('GET', '/api/it/health')).status, 200);
+    // IT overview data: ticket breakdown, last backup and recent system events
+    const ov = (await it('GET', '/api/it/health')).body;
+    assert.equal(typeof ov.tickets.open, 'number'); assert.equal(typeof ov.tickets.resolved_30d, 'number');
+    assert.ok(ov.last_backup, 'the backup above is recorded'); assert.ok(ov.system_events.some(e => e.action === 'backup'));
+    assert.ok(ov.guides >= 10);
     assert.equal((await it('PUT', '/api/it/maintenance', { message: 'Upgrade on Sunday 10pm', until: '23:00' })).body.maintenance.message, 'Upgrade on Sunday 10pm');
     assert.equal((await t.client()('GET', '/api/settings')).body.maintenance.until, '23:00');
     assert.ok((await owner('GET', '/api/notifications')).body.some(n => /Planned maintenance/.test(n.message)));

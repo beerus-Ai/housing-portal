@@ -123,6 +123,7 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-IT-02 | guides per role and a demo | people start without help | FR-RL-12 |
 | US-IT-03 | backups, a health check and a maintenance notice | no data is lost during upgrades (free hosting still resets) | FR-RL-13, NFR-14 |
 | US-IT-04 | a health page | I see problems before users do | FR-RL-13, NFR-04 |
+| US-IT-05 | one overview of support queries, training, backups and maintenance | I know what needs me first | FR-RL-14 |
 
 ![Figure 13. IT: support queue](images/it-support-queue.jpg)
 
