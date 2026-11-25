@@ -57,3 +57,16 @@
 .side-shell .side-link { white-space: normal; line-height: 1.2; text-align: left; }
 /* IT overview status banner */
 .it-status { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 14px; }
+
+/* Top bar: the required items for each role (Requirements Document). The sidebar holds only the extras. */
+.web.core-shell { grid-template-rows: auto minmax(0, 1fr); }
+.core-shell .sidebar { grid-row: 1 / span 2; }
+.core-shell > .page { grid-column: 2; grid-row: 2; }
+.core-bar { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 6px; padding: 10px clamp(16px, 3vw, 56px); overflow-x: auto; background: var(--color-surface, #fff); border-bottom: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent); scrollbar-width: thin; }
+.core-link { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; border: 0; background: transparent; color: var(--color-text); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.core-link:hover { background: color-mix(in srgb, var(--color-accent, #0088b0) 10%, transparent); }
+.core-link.on { background: var(--color-accent-700, #0a303e); color: #fff; }
+.core-link .tag { margin-left: 2px; }
+.core-sp { flex: 1; }
+.side-cap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted, #6b6b6b); padding: 0 14px; }
+@media (max-width: 760px) { .core-bar { grid-column: 1 / -1; } }
