@@ -118,7 +118,7 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | ID | Requirement | Role | Priority |
 | --- | --- | --- | --- |
 | FR-RL-01 | Only the head or admin change settings, access rules and accounts | Head of Committee, Admin | M |
-| FR-RL-02 | Create and manage accounts for every role; nobody suspends or demotes themselves; one head or admin always remains | Admin | M |
+| FR-RL-02 | Create and manage accounts for every role (incl. tuck shop owner and laundry service); lists show the person only, actions sit behind a ⋯ menu; nobody suspends or demotes themselves; one head or admin always remains | Admin | M |
 | FR-AU-04 | Edit what owners, tenants and family may do | Admin | S |
 | FR-AU-05 | Switch features on and off | Admin | C |
 
@@ -128,6 +128,9 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | FR-RL-03 | Staff see only their own jobs | Staff | M |
 | FR-AU-06 | Guards reach only the gate screens | Staff (guard) | M |
 | FR-AD-05 | Gate passes (QR and 6-digit code), resident token, guard check, gate log | Resident, Staff (guard) | C |
+| FR-GT-01 | The guard registers an NFC card to a resident or staff member (phone NFC or USB reader) | Staff (guard) | S |
+| FR-GT-02 | Tapping a card checks the holder in, the next tap checks them out, with timestamps; for staff the tap starts or ends the shift | Staff (guard) | S |
+| FR-RL-15 | Staff see only their department: cleaning (cleaning jobs, waste), maintenance (repair jobs, inventory), tuck shop, laundry | Staff | M |
 
 ### 3.7 IT Staff: support, training, upkeep
 | ID | Requirement | Role | Priority |
@@ -150,14 +153,15 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | FR-SM-08 | Log collections in kg; show segregated share | Staff | C |
 | FR-SM-09 | Report a missed pickup; it becomes a request | Resident | C |
 | FR-SM-10 | Calm dashboard for every role: greeting, one status line, and a short "For you" list of what needs the person now | Resident, Committee Member | S |
+| FR-SM-11 | Each role has its own dashboard look (illustration, colours, content); head of committee (governance), admin (system) and committee member (operations) are strictly different, including their top bars | All | S |
 
 ### 3.9 Resident services
 | ID | Requirement | Role | Priority |
 | --- | --- | --- | --- |
 | FR-SV-01 | Tuck shop: the committee lists items with price and stock; residents order for delivery; stock never goes below 0 | Resident, Committee Member | C |
-| FR-SV-02 | Shop orders move placed, ready, delivered; residents cancel until ready; cancelling puts stock back | Staff, Resident | C |
+| FR-SV-02 | The tuck shop owner gets new orders and moves them placed, ready, delivered; residents cancel until ready (stock goes back); the committee only sees the state | Tuck shop owner, Resident | C |
 | FR-SV-03 | Laundry: the committee sets prices; residents book a pickup (date and time slot) with items | Resident, Committee Member | C |
-| FR-SV-04 | Laundry moves requested, picked up, washing, ready, delivered, one step at a time; the flat is told at each step | Staff | C |
+| FR-SV-04 | The laundry service moves laundry requested, picked up, washing, ready, delivered, one step at a time; the flat is told at each step; the committee only sees the state | Laundry service | C |
 | FR-SV-05 | Parcel desk: the guard logs a delivery for a flat, the flat is told, the guard marks it collected | Staff (guard), Resident | S |
 | FR-SV-06 | Community events: the committee posts and cancels events; residents say they are going | Committee Member, Resident | C |
 

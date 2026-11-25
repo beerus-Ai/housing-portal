@@ -118,6 +118,8 @@ SHORT = {
  "FR-SM-09": "Report a missed pickup", "FR-SM-10": "Calm dashboard with a For you list",
  "FR-SV-01": "Tuck shop ordering", "FR-SV-02": "Shop order flow", "FR-SV-03": "Book a laundry pickup", "FR-SV-04": "Laundry progress",
  "FR-SV-05": "Parcel desk at the gate", "FR-SV-06": "Community events",
+ "FR-GT-01": "Register NFC gate cards", "FR-GT-02": "Card taps check in and out", "FR-RL-15": "Staff see only their department",
+ "FR-SM-11": "A dashboard per role",
 }
 NFR_SHORT = {
  "NFR-01": "Hashed passwords, role checks, safe SQL, CSP", "NFR-02": "Consent, minimum data, synthetic test data",

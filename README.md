@@ -16,7 +16,7 @@ A portal for one housing society. Residents register with consent, raise and tra
 ```
 npm install
 npm start          # http://localhost:3000, committee sign-in admin@society.test
-npm test           # Node, 83 tests
+npm test           # Node, 84 tests
 cd backend && ./gradlew test      # Java, 81
 cd frontend && npm test           # React, 67
 cd flutter_app && flutter test    # Flutter, 18
@@ -37,6 +37,7 @@ Word, PDF, PowerPoint and Excel versions of the requirements are in [`Requiremen
 | [roles-api](docs/roles-api.md) | Roles API contract |
 | [modules-api](docs/modules-api.md) | Society modules API contract |
 | [services-api](docs/services-api.md) | Tuck shop, laundry, parcels, events API |
+| [nfc-api](docs/nfc-api.md) | NFC gate cards and staff departments |
 | [deploy](docs/deploy.md) | Hosting, Docker, database export |
 | [test plan](docs/testing/test-plan.md), [test cases](docs/testing/test-cases.md), [results](docs/testing/test-results.md), [defects](docs/testing/defect-log.md), [acceptance](docs/testing/acceptance-plan.md) | Testing |
 | [process-flows](docs/process-flows/README.md) | BPMN for Signavio |

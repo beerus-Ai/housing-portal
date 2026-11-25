@@ -149,7 +149,7 @@ function openDb(file) {
   -- Resident services (services.js): tuck shop, laundry, parcel desk, community events.
   CREATE TABLE IF NOT EXISTS shop_items(
     id INTEGER PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL DEFAULT 0, unit TEXT,
-    active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    image TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   CREATE TABLE IF NOT EXISTS shop_orders(
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), flat TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'placed',
     total REAL NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
@@ -171,6 +171,16 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS event_rsvps(
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY(event_id, user_id));`);
+  if (!db.prepare('PRAGMA table_info(shop_items)').all().some(c => c.name === 'image')) db.exec('ALTER TABLE shop_items ADD COLUMN image TEXT');
+  // Staff department (cleaning | maintenance) decides what a staff member sees; NFC gate cards and check-in/out.
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'department')) db.exec('ALTER TABLE users ADD COLUMN department TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS gate_cards(
+    id INTEGER PRIMARY KEY, serial TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), label TEXT, active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE UNIQUE INDEX IF NOT EXISTS gate_cards_active ON gate_cards(serial) WHERE active=1;
+  CREATE TABLE IF NOT EXISTS gate_presence(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), card_id INTEGER, direction TEXT NOT NULL, guard_id INTEGER,
+    at TEXT NOT NULL DEFAULT (datetime('now')));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
@@ -200,9 +210,14 @@ function seedDemoAccounts(db) {
   add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
   add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
   add.run('Staff One', 'staff1@sahyadri.test', null, null, hash, 'staff');
+  add.run('Cleaner One', 'cleaner1@sahyadri.test', null, null, hash, 'staff');
   add.run('IT Support', 'it1@sahyadri.test', null, null, hash, 'it');
   add.run('Committee Member', 'member1@sahyadri.test', null, null, hash, 'admin');
   add.run('Committee Head', 'head1@sahyadri.test', null, null, hash, 'admin');
+  add.run('Tuck Shop', 'shop1@sahyadri.test', null, null, hash, 'shop');
+  add.run('Laundry Service', 'laundry1@sahyadri.test', null, null, hash, 'laundry');
+  db.prepare("UPDATE users SET department='maintenance' WHERE email='staff1@sahyadri.test' AND department IS NULL").run();
+  db.prepare("UPDATE users SET department='cleaning' WHERE email='cleaner1@sahyadri.test' AND department IS NULL").run();
   db.prepare("UPDATE users SET position='member' WHERE email='member1@sahyadri.test' AND position IS NULL").run();
   db.prepare("UPDATE users SET position='head' WHERE email='head1@sahyadri.test' AND position IS NULL").run();
   // Optional Telegram test resident (flat T-101). The free hosting plan wipes the database on sleep and redeploy,
@@ -234,9 +249,10 @@ function seedDemoAccounts(db) {
   }
   // A small tuck shop range and laundry price list so the services can be tried straight away.
   if (db.prepare('SELECT COUNT(*) AS n FROM shop_items').get().n === 0) {
-    const si = db.prepare('INSERT INTO shop_items(name,category,price,stock,unit) VALUES(?,?,?,?,?)');
+    // Photos: public/img/shop (Wikimedia Commons, credited in CREDITS.md there).
+    const si = db.prepare('INSERT INTO shop_items(name,category,price,stock,unit,image) VALUES(?,?,?,?,?,?)');
     for (const r of [['Milk', 'dairy', 30, 40, '500 ml'], ['Bread', 'groceries', 45, 20, 'loaf'], ['Eggs', 'dairy', 90, 15, 'dozen'], ['Rice', 'groceries', 350, 10, '5 kg'],
-      ['Tea', 'groceries', 140, 12, '250 g'], ['Biscuits', 'snacks', 30, 30, 'pack'], ['Detergent', 'household', 180, 8, '1 kg'], ['Soap', 'personal care', 45, 25, 'bar']]) si.run(...r);
+      ['Tea', 'groceries', 140, 12, '250 g'], ['Biscuits', 'snacks', 30, 30, 'pack'], ['Detergent', 'household', 180, 8, '1 kg'], ['Soap', 'personal care', 45, 25, 'bar']]) si.run(...r, `/img/shop/${r[0].toLowerCase()}.jpg`);
   }
   if (db.prepare('SELECT COUNT(*) AS n FROM laundry_rates').get().n === 0) {
     const lr = db.prepare('INSERT INTO laundry_rates(item,price) VALUES(?,?)');

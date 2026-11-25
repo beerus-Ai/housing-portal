@@ -131,7 +131,7 @@ function createApp(opts = {}) {
   };
   if (!opts.noTimers) setInterval(() => { try { escalateOverdue(); } catch { /* db closed */ } }, 10 * 60e3).unref();
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, position: u.role === 'admin' ? (u.position || 'sysadmin') : null, status: u.status };
+  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, position: u.role === 'admin' ? (u.position || 'sysadmin') : null, department: u.role === 'staff' ? (u.department || 'maintenance') : null, status: u.status };
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
@@ -146,14 +146,22 @@ function createApp(opts = {}) {
       const p = req.path, m = req.method;
       const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
         (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/') ||
-        p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p);
+        p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) ||
+        ['/api/gate/people', '/api/gate/cards', '/api/gate/tap', '/api/gate/presence'].includes(p) || /^\/api\/gate\/cards\/\d+$/.test(p);
       if (!okGuard && !COMMON_PATH(p, m)) return res.status(403).json({ error: 'Not allowed for guard accounts' });
+    }
+    // Service providers: the tuck shop owner and the laundry service see only their own shop or laundry.
+    if (u.role === 'shop' || u.role === 'laundry') {
+      const p = req.path, mine = u.role === 'shop' ? '/api/shop/' : '/api/laundry/';
+      if (!COMMON_PATH(p, req.method) && !p.startsWith(mine)) return res.status(403).json({ error: 'Not allowed for this account' });
     }
     // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
     if (u.role === 'staff' || u.role === 'it') {
       const p = req.path;
-      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || p === '/api/inventory' || p.startsWith('/api/inventory/') || p === '/api/waste/logs' || p === '/api/waste/schedule' ||
-        p === '/api/shop/items' || p === '/api/laundry/rates' || /^\/api\/(shop|laundry)\/orders(\/\d+\/status)?$/.test(p) || p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) || p === '/api/services/summary' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
+      // Department decides the rest: maintenance gets inventory, cleaning gets waste. Nothing else.
+      const dept = u.department || 'maintenance';
+      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') ||
+        (dept === 'maintenance' && (p === '/api/inventory' || p.startsWith('/api/inventory/'))) || (dept === 'cleaning' && (p === '/api/waste/logs' || p === '/api/waste/schedule')) || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
         (u.role === 'it' && p.startsWith('/api/it/'));
       if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
       if (u.role === 'staff' && p === '/api/requests' && req.method !== 'GET') return res.status(403).json({ error: 'Not allowed for this account' });
@@ -1405,6 +1413,7 @@ function createApp(opts = {}) {
 
   require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
   require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, clock: opts.clock });
+  require('./nfc')(app, { q, one, run, log, notify, auth, str });
   require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, istNow: require('./modules').istNow, clock: opts.clock });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);

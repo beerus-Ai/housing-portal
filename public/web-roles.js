@@ -22,7 +22,8 @@
   const hrs = h => (h == null || h === '' ? '–' : `${Math.round(Number(h) * 10) / 10} h`);
   const num = v => (v == null || v === '' ? '–' : v);
   const errLine = () => `<p class="err" id="rlerr" role="alert">${esc(R.err)}</p>`;
-  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard' };
+  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', maintenance: 'Staff · Maintenance', cleaner: 'Staff · Cleaning', shop: 'Staff · Tuck shop', laundry: 'Staff · Laundry', it: 'IT support', guard: 'Security guard' };
+  const roleLabel = a => (a.role === 'staff' ? (a.department === 'cleaning' ? 'Staff · Cleaning' : 'Staff · Maintenance') : KIND_LABEL[a.role] || a.role);
 
   // ---------- staff: My jobs
   const jobCard = r => {
@@ -54,7 +55,11 @@
     const open = (j && j.open) || [], recent = (j && j.recent) || [];
     const shiftChip = sh && sh.current ? `<span class="tag tag-accent">On shift since ${esc(stamp(sh.current.punch_in))}</span><button class="btn btn-secondary" data-act="nav" data-page="shift">${ic('clock-user')}Punch in and hand-over</button>`
       : `<span class="tag tag-neutral">Not on shift</span><button class="btn btn-primary" data-act="rlpunchin">${ic('sign-in')}Punch in</button>`;
-    page(`<div class="rl">${head('Assigned work', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
+    const cleaning = S.me.department === 'cleaning';
+    const hero = HP.hero({ theme: cleaning ? 'clean' : 'fix', name: S.me.name, kicker: `${cleaning ? 'Cleaning' : 'Maintenance'} · ${HP.todayLabel()}`,
+      line: `${open.length ? `<b>${open.length} job${open.length > 1 ? 's' : ''}</b> assigned to you` : 'No jobs assigned right now'} · ${sh && sh.current ? 'on shift' : 'not on shift'}`,
+      actions: [[sh && sh.current ? 'Punch out' : 'Punch in', 'clock-user', 'shift', !open.length], cleaning ? ['Waste collection', 'recycle', 'waste'] : ['Inventory', 'package', 'inventory']] });
+    page(`<div class="rl">${hero}${head('Assigned work', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
       ${open.length ? `<div class="rl-grid">${open.map(jobCard).join('')}</div>` : '<p class="callout" style="margin:0">No open jobs. New jobs from the committee appear here.</p>'}
       <section class="col" style="gap:var(--space-2)"><h2>Closed this week</h2>${table(['Request', 'Flat', 'Category', 'Closed', 'Rating'], recent.map(r => `<tr><td><b>${esc(rid(r))}</b> ${esc(r.title)}</td><td>${esc(r.flat)}</td><td>${esc(catLabel(r.category))}</td><td>${esc(stamp(r.closed_at || r.updated_at))}</td><td>${r.rating ? esc(r.rating) + ' / 5' : '–'}</td></tr>`), 'Nothing closed in the last 7 days.')}</section></div>`);
     if (R.showUps && !R.ups[R.showUps]) loadUps(R.showUps);
@@ -158,8 +163,8 @@
     if (!h.last_backup) items.push({ icon: 'download-simple', text: 'No backup taken yet', sub: 'Download one before the next upgrade', page: 'health', tone: 'warn', cta: 'Back up' });
     if (m && m.message) items.push({ icon: 'wrench', text: 'Maintenance notice is showing to everyone', sub: m.message, page: 'health', cta: 'Edit' });
     const line = `${healthy ? 'All systems normal' : 'Needs a look'} · up for ${esc(uptime(h.uptime_s))} · ${num(t.open)} open quer${t.open === 1 ? 'y' : 'ies'} · last backup ${h.last_backup ? esc(day(h.last_backup)) : 'never'}`;
-    page(`<div class="calm">${HP.hero({ name: S.me.name, kicker: `IT support · version ${[h.version, h.commit].filter(Boolean).join(' · ')}`, line,
-      actions: [['Support queries', 'lifebuoy', 'support', true], ['Upgrades and maintenance', 'wrench', 'health']], art: healthy ? 'building' : 'loader' })}
+    page(`<div class="calm">${HP.hero({ theme: 'it', name: S.me.name, kicker: `IT support · version ${[h.version, h.commit].filter(Boolean).join(' · ')}`, line,
+      actions: [['Support queries', 'lifebuoy', 'support', true], ['Upgrades and maintenance', 'wrench', 'health']] })}
       ${HP.notifier(items.slice(0, 4), 'Nothing needs IT right now.')}</div>`);
   };
   ACT.rlticketgo = el => { R.ticket = Number(el.dataset.id); go('support'); };
@@ -205,21 +210,26 @@
   };
 
   // ---------- head / sysadmin: Accounts
+  // Accounts list: the person, role and status; position, suspend and remove sit behind the "⋯" menu.
   const accRow = a => {
     const me = a.id === S.me.id, committee = a.role === 'admin';
-    const kind = committee ? (HP.POSITION[a.position] || 'Admin') : KIND_LABEL[a.role] || a.role;
+    const kind = committee ? (HP.POSITION[a.position] || 'Admin') : roleLabel(a);
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
-    const ctl = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : `${committee ? `<label class="sr" for="rlpos${a.id}">Position of ${esc(a.name)}</label><select class="input" id="rlpos${a.id}" data-rlpos="${a.id}" style="width:auto">${['member', 'head', 'sysadmin'].map(p => `<option value="${p}" ${(a.position || 'sysadmin') === p ? 'selected' : ''}>${esc(HP.POSITION[p])}</option>`).join('')}</select>` : ''}
-      <button type="button" class="btn btn-secondary" data-act="rlsus" data-id="${a.id}" data-to="${a.status === 'suspended' ? 'approved' : 'suspended'}">${ic(a.status === 'suspended' ? 'play-circle' : 'pause-circle')}${a.status === 'suspended' ? 'Reactivate' : 'Suspend'}</button>
-      ${R.accDel === a.id ? `<button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove ${esc(a.name)}?</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="rldel" data-id="${a.id}" aria-label="Remove ${esc(a.name)}">${ic('trash')}Remove</button>`}`;
+    const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
+      committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
+      { label: a.status === 'suspended' ? 'Reactivate' : 'Suspend', icon: a.status === 'suspended' ? 'play-circle' : 'pause-circle', act: 'rlsus', data: { id: a.id, to: a.status === 'suspended' ? 'approved' : 'suspended' } },
+      { label: 'Remove', icon: 'trash', act: 'rldel', data: { id: a.id }, danger: true },
+    ]);
+    const extra = R.accDel === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="justify-content:space-between"><span>Remove ${esc(a.name)}? They will no longer be able to sign in.</span><span class="row-acts"><button type="button" class="btn btn-danger" data-act="rldelok" data-id="${a.id}">Remove</button><button type="button" class="btn btn-secondary" data-act="rldelno">Keep</button></span></span></td></tr>`
+      : R.accPos === a.id ? `<tr class="acc-panel"><td colspan="5"><span class="row" style="gap:10px"><label for="rlpos${a.id}">Position of ${esc(a.name)}</label><select class="input" id="rlpos${a.id}" data-rlpos="${a.id}" style="width:auto">${['member', 'head', 'sysadmin'].map(p => `<option value="${p}" ${(a.position || 'sysadmin') === p ? 'selected' : ''}>${esc(HP.POSITION[p])}</option>`).join('')}</select><button type="button" class="btn btn-ghost" data-act="rlposclose">Done</button></span></td></tr>` : '';
     return `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(a.name))}</span><span class="col" style="gap:0"><b>${esc(a.name)}</b><span class="muted xs">${esc(a.email)}</span></span></span></td>
-      <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td><span class="row" style="gap:var(--space-1);justify-content:flex-end">${ctl}</span></td></tr>`;
+      <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td class="acc-menu">${menu}</td></tr>${extra}`;
   };
   PAGES.accounts = async () => {
     if (!isGov()) return page(`<div class="rl">${head('Accounts', '')}<p class="callout" style="margin:0">Only the head of committee or the admin can manage accounts.</p></div>`);
     const list = await RAPI.admin.accounts();
-    const order = ['admin', 'staff', 'it', 'guard'], sorted = [...list].sort((x, y) => order.indexOf(x.role) - order.indexOf(y.role) || String(x.name).localeCompare(String(y.name)));
-    page(`<div class="rl">${head('Accounts', 'Committee, staff, IT and guard accounts. Residents are managed under Residents.')}${errLine()}
+    const order = ['admin', 'staff', 'it', 'guard', 'shop', 'laundry'], sorted = [...list].sort((x, y) => order.indexOf(x.role) - order.indexOf(y.role) || String(x.name).localeCompare(String(y.name)));
+    page(`<div class="rl">${head('Accounts', 'Committee, staff, IT, guard and service-provider accounts. Residents are managed under Residents.')}${errLine()}
       ${table(['Person', 'Role', 'Status', 'Added', ''], sorted.map(accRow), 'No accounts yet.')}
       <form id="rlacc" class="form-card col" style="max-width:720px"><h3>Add an account</h3>
         <div class="two">${field('rlan', 'Full name', '<input class="input" id="rlan" name="name" required maxlength="100">')}${field('rlak', 'Role', `<select class="input" id="rlak" name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>`)}</div>
@@ -228,7 +238,9 @@
   };
   const accRun = fn => async el => { R.err = ''; try { await fn(el); } catch (x) { R.err = x.message; toast(x.message, 'error'); } render(); };
   ACT.rlsus = accRun(async el => { await RAPI.admin.patchAccount(el.dataset.id, { status: el.dataset.to }); toast(el.dataset.to === 'suspended' ? 'Account suspended' : 'Account reactivated'); });
-  ACT.rldel = el => { R.accDel = Number(el.dataset.id); render(); };
+  ACT.rldel = el => { R.accDel = Number(el.dataset.id); R.accPos = null; render(); };
+  ACT.rlposopen = el => { R.accPos = Number(el.dataset.id); R.accDel = null; render(); };
+  ACT.rlposclose = () => { R.accPos = null; render(); };
   ACT.rldelno = () => { R.accDel = null; render(); };
   ACT.rldelok = accRun(async el => { R.accDel = null; await RAPI.admin.removeAccount(el.dataset.id); toast('Account removed'); });
 

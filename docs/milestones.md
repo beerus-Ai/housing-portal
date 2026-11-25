@@ -28,6 +28,7 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: SCRUM board on https:/
 | 11-25 | IT overview; menu uses the whiteboard names (Verification, Broadcast, Monitor; Assigned work; Support queries, Training guides, Upgrades and maintenance) | PR #31, Node 79 tests | SCRUM-93 |
 | 11-25 | Required items in a top bar per role, extras in the sidebar; deployed live | PR #32; walkthrough of four roles | SCRUM-94..96 |
 | 11-25 | Resident services (tuck shop, laundry, parcel desk, events); calm dashboards for every role; demo password `test123` | `services.js`, Node 83 tests | SCRUM-98..104 |
+| 11-25 | NFC gate cards (check in/out, staff shifts); staff departments; a dashboard per role (head, admin, member strictly different) | `nfc.js`, Node 84 tests | SCRUM-108..111 |
 
 ## Open
 - Port Telegram, email desk, roles and society modules to Java/React.
