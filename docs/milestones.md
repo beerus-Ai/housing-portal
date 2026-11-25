@@ -1,6 +1,6 @@
 # Milestones
 
-Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
+Dates are 2026. Code: GitHub (PR #16 and later). Stories: SCRUM board on https://dlastobeerus5.atlassian.net from 11-25 (one story per requirement); earlier work on the old HSP board.
 
 | Date | Milestone | Evidence | Jira |
 |---|---|---|---|
@@ -23,10 +23,15 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
 | 11-25 | Documentation refresh | `docs/`, PR #25 | – |
 | 11-25 | Flutter: committee assign and neutral error colour; seed duplicates fixed | Flutter 14, Node 79 tests | HSP-69 |
 | 11-25 | Flutter: society modules in a Services tab (amenities, dues, inventory, waste) | Flutter 18 tests; emulator check by role | HSP-70 (part) |
+| 11-25 | Requirements Document (scope, personas, functional, non-functional); Word, PDF, PowerPoint and Excel in `Requirements Documents/` | PR #30 | SCRUM-5..92, SCRUM-97 |
+| 11-25 | New Jira site: 9 epics, 81 stories, 4 sprints; team invited and assigned (Design, Development, Testing) | dlastobeerus5 SCRUM board | SCRUM |
+| 11-25 | IT overview; menu uses the whiteboard names (Verification, Broadcast, Monitor; Assigned work; Support queries, Training guides, Upgrades and maintenance) | PR #31, Node 79 tests | SCRUM-93 |
+| 11-25 | Required items in a top bar per role, extras in the sidebar; deployed live | PR #32; walkthrough of four roles | SCRUM-94..96 |
+| 11-25 | Resident services (tuck shop, laundry, parcel desk, events); calm dashboards for every role; demo password `test123` | `services.js`, Node 83 tests | SCRUM Resident services epic |
 
 ## Open
 - Port Telegram, email desk, roles and society modules to Java/React.
-- Flutter: vendor/staff assignment (DEF-15) and toast colour (DEF-16).
+- Flutter: same top bar ordering as the web (web only for now).
 - Online payment gateway for dues.
 - Paid Render disk for durable data.
 - Move n8n to a new account; update `CLASSIFY_WEBHOOK_URL` and `ADMIN_EMAIL_WEBHOOK_URL`.

@@ -74,7 +74,7 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-COM-14 | to manage inventory with reorder levels | stock does not run out unnoticed | FR-SM-06 |
 | US-COM-15 | to set the weekly waste schedule and see collection totals | pickups and segregation are tracked | FR-SM-07, FR-SM-08 |
 
-![Figure 5. Committee verifies new residents in the approval queue](images/approvals-queue.jpg)
+![Figure 5. Committee: Verification (approval queue for new residents)](images/approvals-queue.jpg)
 
 ![Figure 6. Monthly report (printable)](images/monthly-report.jpg)
 
@@ -103,9 +103,9 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-STF-07 | to record stock I take out | inventory stays correct | FR-SM-06 |
 | US-STF-08 | to log waste collections in kg | collection and segregation are tracked | FR-SM-08 |
 
-![Figure 9. Staff: My jobs (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
+![Figure 9. Staff: Assigned work (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
 
-![Figure 10. Staff: punch out with optional hand-over](images/staff-shift.jpg)
+![Figure 10. Staff: Punch in and hand-over](images/staff-shift.jpg)
 
 ![Figure 11. Cost approval and shift hand-over flows](images/cost-and-shift.png)
 
@@ -129,9 +129,9 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-IT-04 | a health page | I see problems before users do | FR-RL-13, NFR-04 |
 | US-IT-05 | one overview of support queries, training, backups and maintenance | I know what needs me first | FR-RL-14 |
 
-![Figure 13. IT: support queue](images/it-support-queue.jpg)
+![Figure 13. IT: Support queries](images/it-support-queue.jpg)
 
-![Figure 14. IT: system health, backup and maintenance notice (banner shown to everyone)](images/it-system-health.jpg)
+![Figure 14. IT: Upgrades and maintenance (health, backup, maintenance notice shown to everyone)](images/it-system-health.jpg)
 
 ## 4. To confirm with faculty
 - "Pre-Journey / Post-Journey" on the whiteboard: as-is and to-be journey maps per role?

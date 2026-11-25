@@ -170,7 +170,7 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | NFR-03 | Transport | HTTPS in production; secure cookies |
 | NFR-04 | Availability | Health check endpoint and backups. Uptime target not set |
 | NFR-05 | Accessibility | Keyboard-usable, labelled inputs. No WCAG audit yet |
-| NFR-06 | Usability | Works on desktop and phone (web, PWA, Flutter app) |
+| NFR-06 | Usability | Works on desktop and phone (web, PWA, Flutter app). Each role's required items sit in a top bar named as on the faculty whiteboard; extras sit in the sidebar |
 | NFR-07 | Maintainability | Automated tests for every story; one API for all clients; CI on every change |
 | NFR-08 | Portability | Runs on SQLite now; PostgreSQL-ready backend |
 | NFR-09 | AI safety | No names, phones, emails or flat numbers sent to a model; AI output is a suggestion; works without AI |
