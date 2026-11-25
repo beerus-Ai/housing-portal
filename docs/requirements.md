@@ -128,6 +128,9 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | FR-RL-03 | Staff see only their own jobs | Staff | M |
 | FR-AU-06 | Guards reach only the gate screens | Staff (guard) | M |
 | FR-AD-05 | Gate passes (QR and 6-digit code), resident token, guard check, gate log | Resident, Staff (guard) | C |
+| FR-GT-01 | The guard registers an NFC card to a resident or staff member (phone NFC or USB reader) | Staff (guard) | S |
+| FR-GT-02 | Tapping a card checks the holder in, the next tap checks them out, with timestamps; for staff the tap starts or ends the shift | Staff (guard) | S |
+| FR-RL-15 | Staff see only their department: cleaning (cleaning jobs, waste), maintenance (repair jobs, inventory), tuck shop, laundry | Staff | M |
 
 ### 3.7 IT Staff: support, training, upkeep
 | ID | Requirement | Role | Priority |
@@ -150,6 +153,7 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | FR-SM-08 | Log collections in kg; show segregated share | Staff | C |
 | FR-SM-09 | Report a missed pickup; it becomes a request | Resident | C |
 | FR-SM-10 | Calm dashboard for every role: greeting, one status line, and a short "For you" list of what needs the person now | Resident, Committee Member | S |
+| FR-SM-11 | Each role has its own dashboard look (illustration, colours, content); head of committee (governance), admin (system) and committee member (operations) are strictly different, including their top bars | All | S |
 
 ### 3.9 Resident services
 | ID | Requirement | Role | Priority |

@@ -104,3 +104,61 @@
 .st-user.open { box-shadow: 0 0 0 2px var(--color-accent-300, #66c2dd); }
 .acc-menu { text-align: right; width: 60px; }
 .acc-panel td { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
+
+/* ---------- one look per role (hero theme: background, ink, accent, illustration) */
+.hero { --ha: #33c4e6; --hb: rgba(255, 255, 255, .16); --hc: #ffffff; }
+.illus { width: 240px; height: 200px; position: relative; }
+.hero-home { background: #0a303e; }
+.hero-ops  { background: #0d4d63; --ha: #7fdcf0; }
+.hero-gov  { background: #26231f; --ha: #e0b44c; --hb: rgba(224, 180, 76, .2); grid-template-columns: 280px minmax(0, 1fr); }
+.hero-gov .hero-art { order: -1; }
+.hero-gov .hero-k { color: #e0b44c; }
+.hero-gov .btn-primary { background: #e0b44c; color: #26231f; border-color: #e0b44c; }
+.hero-sys  { background: #eef4f6; color: #0a303e; --ha: #0088b0; --hb: #d3e6ec; --hc: #0a303e; border: 1px solid #d3e6ec; }
+.hero-sys h1, .hero-sys .hero-line b { color: #0a303e; } .hero-sys .hero-line { color: #3c5a66; } .hero-sys .hero-k { color: #0088b0; }
+.hero-sys .btn-secondary { background: #fff; color: #0a303e; border-color: #c4dbe3; }
+.hero-sys .hero-blob { background: #cfe8f0; opacity: 1; }
+.hero-it   { background: #0f1f2e; --ha: #3ddc97; --hb: rgba(61, 220, 151, .16); }
+.hero-it .hero-k { color: #3ddc97; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.hero-clean { background: #e7f5ee; color: #12402c; --ha: #1f8a5b; --hb: #c9e9d9; --hc: #12402c; }
+.hero-fix   { background: #fbf0e2; color: #4a2c0e; --ha: #d9771f; --hb: #f2dcc0; --hc: #4a2c0e; }
+.hero-shop  { background: #fbeee6; color: #4b2416; --ha: #b4532a; --hb: #f1d6c7; --hc: #4b2416; }
+.hero-wash  { background: #e7f0fb; color: #12304f; --ha: #2f6fb0; --hb: #cfe0f4; --hc: #12304f; }
+.hero-gate  { background: #1e2a33; --ha: #f2b134; --hb: rgba(242, 177, 52, .18); }
+.hero-gate .hero-k { color: #f2b134; }
+:is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) h1, :is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) .hero-line b { color: inherit; }
+:is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) .hero-line, :is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) .hero-k { color: inherit; opacity: .8; }
+:is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) .btn-primary { background: var(--ha); border-color: var(--ha); color: #fff; }
+:is(.hero-clean, .hero-fix, .hero-shop, .hero-wash) .btn-secondary { background: #fff; color: inherit; border-color: var(--hb); }
+:is(.hero-clean, .hero-fix, .hero-shop, .hero-wash, .hero-sys) .hero-blob { background: var(--hb); opacity: 1; }
+:is(.hero-ops, .hero-gov, .hero-it, .hero-gate) .hero-blob { background: var(--hb); opacity: 1; }
+.hero-strip { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+.hero-strip > span { display: flex; flex-direction: column; } .hero-strip b { font-size: 24px; line-height: 1.1; } .hero-strip > span > span { font-size: 13px; opacity: .75; }
+
+/* illustration motion */
+.il-float { animation: calm-float 4s ease-in-out infinite; }
+.il-sway { animation: il-sway 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: bottom center; }
+.il-pop { animation: il-pop 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.il-blink { animation: il-blink 2.8s ease-in-out infinite; }
+.il-spin { animation: il-spin 6s linear infinite; } .il-spin-r { animation: il-spin 8s linear infinite reverse; }
+.il-tap { animation: il-tap 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.il-dash { stroke-dasharray: 220; animation: il-dash 3s linear infinite; }
+.il-lift { animation: il-lift 4s ease-in-out infinite; }
+.il-wave { animation: il-blink 1.6s ease-in-out infinite; }
+@keyframes il-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes il-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@keyframes il-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes il-spin { to { transform: rotate(360deg); } }
+@keyframes il-tap { 0%, 70%, 100% { transform: rotate(0); } 80% { transform: rotate(-14deg); } 90% { transform: rotate(4deg); } }
+@keyframes il-dash { from { stroke-dashoffset: 440; } to { stroke-dashoffset: 0; } }
+@keyframes il-lift { 0%, 35%, 100% { transform: rotate(0); } 50%, 80% { transform: rotate(-58deg); } }
+@media (prefers-reduced-motion: reduce) { [class*="il-"] { animation: none !important; } }
+
+/* ---------- Gate desk (NFC) */
+.nfc-pad { gap: 14px; }
+.nfc-idle, .nfc-res { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px; border-radius: 16px; text-align: center; background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
+.nfc-ring { width: 86px; height: 86px; border-radius: 50%; display: grid; place-items: center; font-size: 42px; color: var(--color-accent-700, #006d8d); background: var(--color-accent-100, #e6f6fb); animation: calm-pulse-soft 2s ease-out infinite; }
+.nfc-res { font-size: 17px; animation: calm-rise .3s ease both; } .nfc-res i { font-size: 46px; }
+.nfc-res.in { background: #e3f5ec; color: #12402c; } .nfc-res.out { background: #eef1f4; color: #2c3a45; } .nfc-res.bad { background: #fde8eb; color: #8c1d2e; }
+.nfc-people { gap: 6px; max-height: 260px; overflow: auto; } .nfc-people .list-row.on { outline: 2px solid var(--color-accent); }
+@keyframes calm-pulse-soft { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); } 100% { box-shadow: 0 0 0 22px transparent; } }

@@ -172,6 +172,15 @@ function openDb(file) {
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY(event_id, user_id));`);
   if (!db.prepare('PRAGMA table_info(shop_items)').all().some(c => c.name === 'image')) db.exec('ALTER TABLE shop_items ADD COLUMN image TEXT');
+  // Staff department (cleaning | maintenance) decides what a staff member sees; NFC gate cards and check-in/out.
+  if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'department')) db.exec('ALTER TABLE users ADD COLUMN department TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS gate_cards(
+    id INTEGER PRIMARY KEY, serial TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), label TEXT, active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE UNIQUE INDEX IF NOT EXISTS gate_cards_active ON gate_cards(serial) WHERE active=1;
+  CREATE TABLE IF NOT EXISTS gate_presence(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), card_id INTEGER, direction TEXT NOT NULL, guard_id INTEGER,
+    at TEXT NOT NULL DEFAULT (datetime('now')));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
@@ -201,11 +210,14 @@ function seedDemoAccounts(db) {
   add.run('Family One', 'family.test@sahyadri.test', 'B-101', 'family', hash, 'resident');
   add.run('Guard One', 'guard1@sahyadri.test', null, null, hash, 'guard');
   add.run('Staff One', 'staff1@sahyadri.test', null, null, hash, 'staff');
+  add.run('Cleaner One', 'cleaner1@sahyadri.test', null, null, hash, 'staff');
   add.run('IT Support', 'it1@sahyadri.test', null, null, hash, 'it');
   add.run('Committee Member', 'member1@sahyadri.test', null, null, hash, 'admin');
   add.run('Committee Head', 'head1@sahyadri.test', null, null, hash, 'admin');
   add.run('Tuck Shop', 'shop1@sahyadri.test', null, null, hash, 'shop');
   add.run('Laundry Service', 'laundry1@sahyadri.test', null, null, hash, 'laundry');
+  db.prepare("UPDATE users SET department='maintenance' WHERE email='staff1@sahyadri.test' AND department IS NULL").run();
+  db.prepare("UPDATE users SET department='cleaning' WHERE email='cleaner1@sahyadri.test' AND department IS NULL").run();
   db.prepare("UPDATE users SET position='member' WHERE email='member1@sahyadri.test' AND position IS NULL").run();
   db.prepare("UPDATE users SET position='head' WHERE email='head1@sahyadri.test' AND position IS NULL").run();
   // Optional Telegram test resident (flat T-101). The free hosting plan wipes the database on sleep and redeploy,

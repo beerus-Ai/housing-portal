@@ -37,10 +37,12 @@ async function boot() {
     assert.equal((await c('POST', '/api/login', { email, password: PW })).status, 200);
     return c;
   };
-  const staff = async () => {
-    assert.equal((await admin('POST', '/api/admin/accounts', { name: 'Staff One', email: 'st@x.test', password: PW, kind: 'staff' })).status, 201);
+  // kind: 'maintenance' (inventory) or 'cleaner' (waste); each department sees only its own work.
+  const staff = async (kind = 'maintenance') => {
+    const email = kind + '@x.test';
+    assert.equal((await admin('POST', '/api/admin/accounts', { name: 'Staff ' + kind, email, password: PW, kind })).status, 201);
     const c = client();
-    assert.equal((await c('POST', '/api/login', { email: 'st@x.test', password: PW })).status, 200);
+    assert.equal((await c('POST', '/api/login', { email, password: PW })).status, 200);
     return c;
   };
   const close = () => { server.close(); try { app.locals.db.close(); } catch {} fs.rmSync(dir, { recursive: true, force: true }); };
@@ -151,7 +153,10 @@ test('waste: schedule for everyone, staff log collections, resident reports a mi
   const t = await boot();
   try {
     const { admin } = t;
-    const st = await t.staff(), a = await t.resident('a@x.test', 'A-101');
+    const st = await t.staff('cleaner'), a = await t.resident('a@x.test', 'A-101');
+    const mt = await t.staff('maintenance');
+    assert.equal((await mt('POST', '/api/waste/logs', { kind: 'dry', weight_kg: 3 })).status, 403, 'maintenance staff do not log waste');
+    assert.equal((await st('GET', '/api/inventory')).status, 403, 'cleaners do not see inventory');
     assert.equal((await a('POST', '/api/waste/schedule', { weekday: 2, kind: 'wet', time: '07:00' })).status, 403);
     assert.equal((await admin('POST', '/api/waste/schedule', { weekday: 2, kind: 'wet', time: '07:00' })).status, 201);
     assert.equal((await admin('POST', '/api/waste/schedule', { weekday: 2, kind: 'wet', time: '08:00' })).status, 409);

@@ -7,7 +7,9 @@ const path = require('path');
 const crypto = require('crypto');
 const GUIDES = require('./guides');
 
-const KINDS = { member: ['admin', 'member'], head: ['admin', 'head'], sysadmin: ['admin', 'sysadmin'], staff: ['staff', null], it: ['it', null], guard: ['guard', null], shop: ['shop', null], laundry: ['laundry', null] };
+// kind -> [role, committee position, staff department]
+const KINDS = { member: ['admin', 'member'], head: ['admin', 'head'], sysadmin: ['admin', 'sysadmin'], maintenance: ['staff', null, 'maintenance'], staff: ['staff', null, 'maintenance'],
+  cleaner: ['staff', null, 'cleaning'], it: ['it', null], guard: ['guard', null], shop: ['shop', null], laundry: ['laundry', null] };
 const PROGRESS = { started: 'Started', waiting_parts: 'Waiting for parts', done: 'Work done' };
 const TICKET_KINDS = ['bug', 'question', 'access', 'other'];
 const TICKET_STATUS = ['open', 'in_progress', 'resolved'];
@@ -22,7 +24,7 @@ module.exports = function mountRoles(app, c) {
   const itOnly = (req, res, next) => (isIT(req.user) ? next() : res.status(403).json({ error: 'IT staff only' }));
   const staffOnly = (req, res, next) => (req.user.role === 'staff' ? next() : res.status(403).json({ error: 'Staff only' }));
   const govCount = () => one("SELECT COUNT(*) AS n FROM users WHERE role='admin' AND status='approved' AND COALESCE(position,'sysadmin') IN ('head','sysadmin')").n;
-  const ACC_SELECT = "SELECT id,name,email,role,position,status,created_at FROM users WHERE role IN ('admin','staff','it','guard','shop','laundry') AND status!='removed'";
+  const ACC_SELECT = "SELECT id,name,email,role,position,department,status,created_at FROM users WHERE role IN ('admin','staff','it','guard','shop','laundry') AND status!='removed'";
   const accRow = a => ({ ...a, position: a.role === 'admin' ? (a.position || 'sysadmin') : null, on_shift: a.role === 'staff' ? onShift(a.id) : undefined });
 
   // ---------- accounts for every non-resident role (head of committee or admin only)
@@ -35,7 +37,7 @@ module.exports = function mountRoles(app, c) {
     if (!name || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Name and a valid email are required' });
     if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
     if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });
-    const r = run("INSERT INTO users(name,email,password_hash,role,position,status,consent_at) VALUES(?,?,?,?,?,'approved',datetime('now'))", name, email, bcrypt.hashSync(pw, 10), k[0], k[1]);
+    const r = run("INSERT INTO users(name,email,password_hash,role,position,department,status,consent_at) VALUES(?,?,?,?,?,?,'approved',datetime('now'))", name, email, bcrypt.hashSync(pw, 10), k[0], k[1], k[2] || null);
     log(req.user.id, 'user', r.lastInsertRowid, 'account_created', `${b.kind}: ${email}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
@@ -55,7 +57,7 @@ module.exports = function mountRoles(app, c) {
     if (losesGov(u, pos, status)) return res.status(409).json({ error: 'Keep at least one head of committee or admin account' });
     if (u.role === 'admin' && pos !== posOf(u)) { run('UPDATE users SET position=? WHERE id=?', pos, u.id); log(req.user.id, 'user', u.id, 'position', `${posOf(u)} -> ${pos}`); notify(u.id, `Your committee role is now: ${pos === 'head' ? 'Head of committee' : pos === 'member' ? 'Committee member' : 'Admin'}`); }
     if (status !== u.status) { run('UPDATE users SET status=? WHERE id=?', status, u.id); log(req.user.id, 'user', u.id, status === 'suspended' ? 'suspended' : 'reinstated', u.email); }
-    res.json(accRow(one('SELECT id,name,email,role,position,status,created_at FROM users WHERE id=?', u.id)));
+    res.json(accRow(one('SELECT id,name,email,role,position,department,status,created_at FROM users WHERE id=?', u.id)));
   });
   app.delete('/api/admin/accounts/:id', auth, admin, governance, (req, res) => {
     const u = accTarget(req.params.id);

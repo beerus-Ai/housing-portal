@@ -41,10 +41,10 @@
       ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
       ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
-      ['gate', 'Visitor management', 'shield-check'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
+      ['gate', 'Visitor management', 'shield-check'], ['cards', 'NFC gate cards', 'identification-card'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['parcels', 'Parcel desk', 'package'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    guard: [['cards', 'Gate desk', 'identification-card'], ['gate', 'Visitor passes', 'qr-code'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste collection', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
     shop: [['shop', 'Orders and stock', 'storefront'], ...HELP, ['profile', 'Profile', 'user-circle']],
     laundry: [['laundry', 'Laundry orders', 't-shirt'], ...HELP, ['profile', 'Profile', 'user-circle']],
     it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['profile', 'Profile', 'user-circle']],
@@ -55,14 +55,18 @@
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
-    shop: 'services', laundry: 'services', parcels: 'services', events: 'services',
+    cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services',
     help: 'help', support: 'help', profile: 'help' };
   // The required items (Requirements Document / faculty whiteboard) sit in the top bar for every role;
   // the sidebar only holds the extras.
   const CORE = { resident: ['home', 'raise', 'requests', 'notices', 'emergency', 'household'],
     admin: ['dashboard', 'approvals', 'requests', 'notices', 'reports', 'audit', 'emergencies', 'costs'],
-    staff: ['myjobs', 'shift'], it: ['itoverview', 'support', 'help', 'health'], guard: ['gate', 'gatelog', 'parcels'], shop: ['shop'], laundry: ['laundry'] };
-  const coreKeys = () => CORE[S.me.role] || CORE.resident;
+    staff: ['myjobs', 'shift', 'inventory', 'waste'], it: ['itoverview', 'support', 'help', 'health'], guard: ['cards', 'gate', 'gatelog', 'parcels'], shop: ['shop'], laundry: ['laundry'] };
+  // The committee's top bar differs by position: head = governance, admin = system, member = operations.
+  const CORE_POS = { head: ['dashboard', 'costs', 'reports', 'requests', 'emergencies', 'notices', 'audit'],
+    sysadmin: ['dashboard', 'approvals', 'users', 'accounts', 'settings', 'health', 'audit'],
+    member: ['dashboard', 'approvals', 'requests', 'notices', 'emergencies', 'reports'] };
+  const coreKeys = () => (isAdmin() ? CORE_POS[S.me.position || 'sysadmin'] || CORE.admin : CORE[S.me.role] || CORE.resident);
   const COLKEY = 'hp.navc3';
   // Stores the sidebar groups whose state differs from the default (all open).
   const DEFAULT_COLLAPSED = [];
@@ -80,10 +84,12 @@
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
-    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => ['resident', 'admin', 'shop'].includes(S.me.role), laundry: () => ['resident', 'admin', 'laundry'].includes(S.me.role), parcels: () => !isIT(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
+    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => ['resident', 'admin', 'shop'].includes(S.me.role), laundry: () => ['resident', 'admin', 'laundry'].includes(S.me.role), parcels: () => !isIT() && !isStaff(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || (isStaff() && dept() === 'maintenance'),
+    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
-  const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => flatNav() || allowed(k));
-  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'itoverview' : S.me.role === 'shop' ? 'shop' : S.me.role === 'laundry' ? 'laundry' : 'home';
+  const dept = () => (S.me && S.me.department) || 'maintenance';
+  const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => (flatNav() && !isStaff()) || allowed(k));
+  const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'cards' : isStaff() ? 'myjobs' : isIT() ? 'itoverview' : S.me.role === 'shop' ? 'shop' : S.me.role === 'laundry' ? 'laundry' : 'home';
   const go = (page, selId = null) => { stopScan(); S.page = page; S.selId = selId; render(); window.scrollTo(0, 0); };
 
   // ---------- shell

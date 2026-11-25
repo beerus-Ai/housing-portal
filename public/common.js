@@ -149,7 +149,7 @@ window.HP = (() => {
   // ---------- roles from the faculty review (docs/roles-api.md): staff, IT, committee positions. Shared by both apps.
   const POSITION = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin' };
   const ROLE_LABEL = { staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard', admin: 'Committee', shop: 'Tuck shop owner', laundry: 'Laundry service' };
-  const positionLabel = me => (!me ? '' : me.role === 'admin' ? (POSITION[me.position] || 'Admin') : ROLE_LABEL[me.role] || TYPE[me.resident_type] || 'Resident');
+  const positionLabel = me => (!me ? '' : me.role === 'admin' ? (POSITION[me.position] || 'Admin') : me.role === 'staff' ? (me.department === 'cleaning' ? 'Cleaning staff' : 'Maintenance staff') : ROLE_LABEL[me.role] || TYPE[me.resident_type] || 'Resident');
   // Governance = head or sysadmin (an empty position is an older admin account). The API decides; the UI only hides buttons.
   const isGov = me => !!me && me.role === 'admin' && (!me.position || me.position === 'head' || me.position === 'sysadmin');
   const PROGRESS = [['started', 'Started', 'play-circle'], ['waiting_parts', 'Waiting for parts', 'hourglass'], ['done', 'Work done', 'check-circle']];
@@ -279,17 +279,23 @@ window.HP = (() => {
   // Calm dashboards (every role): a greeting with a moving illustration, one status line and one or two actions,
   // then a short "For you" list. Detail lives behind the top bar and the sidebar, not on the dashboard.
   const greeting = () => { const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date())); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
-  const hero = ({ name, kicker, line, actions = [], art = 'building' }) => `<section class="hero">
+  // theme: home | ops | gov | sys | it | clean | fix | shop | wash | gate (colours and layout per role, css/calm.css).
+  const hero = ({ name, kicker, line, actions = [], theme = 'home', strip = '' }) => {
+    const svg = (window.HP_ILLUS || {})[theme] || '';
+    return `<section class="hero hero-${theme}">
     <div class="hero-txt"><span class="hero-k">${esc(kicker)}</span><h1>${esc(greeting())}, ${esc(firstName(name))}</h1><p class="hero-line">${line}</p>
-      <div class="row hero-acts">${actions.map(([label, icon, pg, primary]) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-lg" data-act="nav" data-page="${pg}">${ic(icon)}${esc(label)}</button>`).join('')}</div></div>
-    <div class="hero-art" aria-hidden="true"><span class="hero-blob"></span><span class="hero-anim" data-lottie="${art}"></span></div></section>`;
+      <div class="row hero-acts">${actions.map(([label, icon, pg, primary]) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-lg" data-act="nav" data-page="${pg}">${ic(icon)}${esc(label)}</button>`).join('')}</div>${strip}</div>
+    <div class="hero-art" aria-hidden="true"><span class="hero-blob"></span>${svg || '<span class="hero-anim" data-lottie="building"></span>'}</div></section>`;
+  };
+  // A small strip of 2-4 numbers inside the hero (head and admin dashboards).
+  const heroStrip = cells => `<div class="hero-strip">${cells.map(([n, l]) => `<span><b class="fig">${esc(n)}</b><span>${esc(l)}</span></span>`).join('')}</div>`;
   // items: { icon, text, sub, page, sel?, tone: 'urgent' | 'warn' | '' , cta }
   const notifier = (items, empty = "You're all caught up.") => `<section class="ntf" aria-label="For you"><h2>For you</h2>${items.length
     ? `<div class="ntf-list">${items.map((n, i) => `<button type="button" class="ntf-row ${n.tone || ''}" style="--i:${i}" data-act="${n.act || 'nav'}" data-page="${n.page}" ${n.sel ? `data-id="${n.sel}" data-sel="${n.sel}"` : ''}>
         <span class="ntf-ic">${ic(n.icon)}${n.tone === 'urgent' ? '<i class="ntf-pulse" aria-hidden="true"></i>' : ''}</span><span class="ntf-txt"><b>${esc(n.text)}</b>${n.sub ? `<span>${esc(n.sub)}</span>` : ''}</span><span class="ntf-go">${esc(n.cta || 'Open')}${ic('caret-right')}</span></button>`).join('')}</div>`
     : `<div class="ntf-empty"><span class="ntf-anim" data-lottie="check" data-loop="false"></span><b>${esc(empty)}</b><span class="muted">New things will appear here.</span></div>`}</section>`;
 
-  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, notifier, kebab,
+  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, heroStrip, notifier, kebab,
     STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge,
     POSITION, positionLabel, isGov, PROGRESS, progressLabel, rupees, costTag, updatesList, updatePhotoUrl, TICKET_KINDS, ticketTag, maintBanner, whenText, RAPI };
 })();

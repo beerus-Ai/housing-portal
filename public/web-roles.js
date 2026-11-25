@@ -22,7 +22,8 @@
   const hrs = h => (h == null || h === '' ? '–' : `${Math.round(Number(h) * 10) / 10} h`);
   const num = v => (v == null || v === '' ? '–' : v);
   const errLine = () => `<p class="err" id="rlerr" role="alert">${esc(R.err)}</p>`;
-  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', staff: 'Maintenance staff', it: 'IT support', guard: 'Security guard', shop: 'Tuck shop owner', laundry: 'Laundry service' };
+  const KIND_LABEL = { member: 'Committee member', head: 'Head of committee', sysadmin: 'Admin', maintenance: 'Staff · Maintenance', cleaner: 'Staff · Cleaning', shop: 'Staff · Tuck shop', laundry: 'Staff · Laundry', it: 'IT support', guard: 'Security guard' };
+  const roleLabel = a => (a.role === 'staff' ? (a.department === 'cleaning' ? 'Staff · Cleaning' : 'Staff · Maintenance') : KIND_LABEL[a.role] || a.role);
 
   // ---------- staff: My jobs
   const jobCard = r => {
@@ -54,7 +55,11 @@
     const open = (j && j.open) || [], recent = (j && j.recent) || [];
     const shiftChip = sh && sh.current ? `<span class="tag tag-accent">On shift since ${esc(stamp(sh.current.punch_in))}</span><button class="btn btn-secondary" data-act="nav" data-page="shift">${ic('clock-user')}Punch in and hand-over</button>`
       : `<span class="tag tag-neutral">Not on shift</span><button class="btn btn-primary" data-act="rlpunchin">${ic('sign-in')}Punch in</button>`;
-    page(`<div class="rl">${head('Assigned work', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
+    const cleaning = S.me.department === 'cleaning';
+    const hero = HP.hero({ theme: cleaning ? 'clean' : 'fix', name: S.me.name, kicker: `${cleaning ? 'Cleaning' : 'Maintenance'} · ${HP.todayLabel()}`,
+      line: `${open.length ? `<b>${open.length} job${open.length > 1 ? 's' : ''}</b> assigned to you` : 'No jobs assigned right now'} · ${sh && sh.current ? 'on shift' : 'not on shift'}`,
+      actions: [[sh && sh.current ? 'Punch out' : 'Punch in', 'clock-user', 'shift', !open.length], cleaning ? ['Waste collection', 'recycle', 'waste'] : ['Inventory', 'package', 'inventory']] });
+    page(`<div class="rl">${hero}${head('Assigned work', `${open.length} open · ${recent.length} closed in the last 7 days`, shiftChip)}
       ${open.length ? `<div class="rl-grid">${open.map(jobCard).join('')}</div>` : '<p class="callout" style="margin:0">No open jobs. New jobs from the committee appear here.</p>'}
       <section class="col" style="gap:var(--space-2)"><h2>Closed this week</h2>${table(['Request', 'Flat', 'Category', 'Closed', 'Rating'], recent.map(r => `<tr><td><b>${esc(rid(r))}</b> ${esc(r.title)}</td><td>${esc(r.flat)}</td><td>${esc(catLabel(r.category))}</td><td>${esc(stamp(r.closed_at || r.updated_at))}</td><td>${r.rating ? esc(r.rating) + ' / 5' : '–'}</td></tr>`), 'Nothing closed in the last 7 days.')}</section></div>`);
     if (R.showUps && !R.ups[R.showUps]) loadUps(R.showUps);
@@ -158,8 +163,8 @@
     if (!h.last_backup) items.push({ icon: 'download-simple', text: 'No backup taken yet', sub: 'Download one before the next upgrade', page: 'health', tone: 'warn', cta: 'Back up' });
     if (m && m.message) items.push({ icon: 'wrench', text: 'Maintenance notice is showing to everyone', sub: m.message, page: 'health', cta: 'Edit' });
     const line = `${healthy ? 'All systems normal' : 'Needs a look'} · up for ${esc(uptime(h.uptime_s))} · ${num(t.open)} open quer${t.open === 1 ? 'y' : 'ies'} · last backup ${h.last_backup ? esc(day(h.last_backup)) : 'never'}`;
-    page(`<div class="calm">${HP.hero({ name: S.me.name, kicker: `IT support · version ${[h.version, h.commit].filter(Boolean).join(' · ')}`, line,
-      actions: [['Support queries', 'lifebuoy', 'support', true], ['Upgrades and maintenance', 'wrench', 'health']], art: healthy ? 'building' : 'loader' })}
+    page(`<div class="calm">${HP.hero({ theme: 'it', name: S.me.name, kicker: `IT support · version ${[h.version, h.commit].filter(Boolean).join(' · ')}`, line,
+      actions: [['Support queries', 'lifebuoy', 'support', true], ['Upgrades and maintenance', 'wrench', 'health']] })}
       ${HP.notifier(items.slice(0, 4), 'Nothing needs IT right now.')}</div>`);
   };
   ACT.rlticketgo = el => { R.ticket = Number(el.dataset.id); go('support'); };
@@ -208,7 +213,7 @@
   // Accounts list: the person, role and status; position, suspend and remove sit behind the "⋯" menu.
   const accRow = a => {
     const me = a.id === S.me.id, committee = a.role === 'admin';
-    const kind = committee ? (HP.POSITION[a.position] || 'Admin') : KIND_LABEL[a.role] || a.role;
+    const kind = committee ? (HP.POSITION[a.position] || 'Admin') : roleLabel(a);
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
     const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
       committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
