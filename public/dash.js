@@ -58,10 +58,6 @@
     D.reqs = reqs; D.notices = notices; D.people = hh;
     const { toRate } = residentSummary(reqs, S.me, notices);
     const open = reqs.filter(isOpen).length;
-    // Shortcuts to the required processes only; extras (gate pass, vehicles, parking, contacts) are under More in the menu.
-    const chipList = [{ l: 'Raise', icon: 'plus-circle', go: 'raise', show: allowed('raise') }, { l: 'My requests', icon: 'list-checks', go: 'requests', n: toRate.length || '' },
-      { l: 'Notices', icon: 'megaphone', go: 'notices', show: allowed('notices') }, { l: 'Alerts', icon: 'bell', go: 'alerts' },
-      { l: 'Emergency', icon: 'siren', go: 'emergency', show: allowed('emergency') }, { l: 'Household', icon: 'users-three', go: 'household', show: allowed('household') && t === 'owner' }];
     const attn = [stat(open ? 's-dark' : 's-tint', 'list-checks', open, 'Open requests', open ? 'Being worked on' : 'Nothing pending', 'requests'), stat(toRate.length ? 's-dark' : 's-tint', 'star', toRate.length, 'To rate', toRate.length ? 'Rate the finished work' : 'All rated', 'requests')];
     if (feat('emergency') && allowed('emergency')) attn.push(stat('s-white', 'siren', '', 'Emergency', 'Raise an alert', 'emergency'));
     const rcards = sorted.slice(0, 12).map(reqCard);
@@ -83,7 +79,7 @@
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">Flat ${esc(S.me.flat)} · ${esc(todayLabel())}</p></div>
         <div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${open} open${toRate.length ? ' · ' + toRate.length + ' to rate' : ''}</span></div></header>
-      ${search('Search requests, notices and people')}${chips(chipList)}
+      ${search('Search requests, notices and people')}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}${parts.join('')}</div>`);
   };
   ACT.dpass = el => { S.gpSel = Number(el.dataset.id); S.gpCancel = null; go('gatepass', null); };
@@ -163,10 +159,6 @@
     const people = await API.admin.allUsers().catch(() => []);
     D.reqs = reqs; D.people = Array.isArray(people) ? people : []; D.notices = await API.notices.list().catch(() => []);
     const a = adminSummary(reqs, s), unassigned = a.open.filter(r => !r.vendor_id && !r.assignee_id); // staff-assigned work counts as assigned
-    // Shortcuts follow the whiteboard committee list: verification, requests, broadcast, reports, monitoring.
-    const chipList = [{ l: 'Verification', icon: 'user-check', go: 'approvals', n: s.pending_users || '' }, { l: 'Requests', icon: 'list-checks', go: 'requests' },
-      { l: 'Broadcast', icon: 'megaphone', go: 'notices', show: feat('notices') }, { l: 'Reports', icon: 'chart-line', go: 'reports' }, { l: 'Monitor', icon: 'clock-counter-clockwise', go: 'audit' },
-      { l: 'Emergencies', icon: 'siren', go: 'emergencies', n: em.length || '', show: feat('emergency') }];
     const attn = [stat(s.pending_users ? 's-dark ds-glow' : 's-tint', 'user-check', s.pending_users, 'Awaiting verification', s.pending_users ? 'New residents to verify' : 'All caught up', 'approvals')];
     if (feat('emergency')) attn.push(stat(em.length ? 's-red ds-glow-red' : 's-tint', 'siren', em.length, 'Active emergencies', em.length ? em.map(e => W.emType(e.type)[2] + (e.flat ? ' · ' + e.flat : '')).slice(0, 2).join(', ') : 'None right now', 'emergencies'));
     attn.push(stat(unassigned.length ? 's-dark ds-glow' : 's-tint', 'user-gear', unassigned.length, 'Unassigned requests', unassigned.length ? 'Need a vendor' : 'Everything has a vendor', 'requests'));
@@ -189,7 +181,7 @@
     const act = audit.slice(0, 8).map(x => `<div class="ds-act"><span class="muted sm">${esc(stamp(x.created_at))}</span><span><b>${esc(x.action.replace('_', ' '))}</b> · ${esc(x.entity)} ${esc(x.entity_id)} <span class="muted">by ${esc(x.actor || 'system')}</span></span></div>`).join('');
     page(`<div class="ds">
       <header class="ds-hello"><div><h1>Hello, ${esc(firstName(S.me.name))}</h1><p class="muted">${esc(todayLabel())}</p></div><div class="ds-hello-r">${HP.liveBadge()}<span class="ds-sum">${a.open.length} open requests</span></div></header>
-      ${search('Search requests, notices and residents')}${chips(chipList)}
+      ${search('Search requests, notices and residents')}
       ${section('Needs your attention', `<div class="ds-row ds-attn" role="region" aria-label="Needs your attention" tabindex="0">${attn.join('')}</div>`)}
       ${section('Open requests', carousel(openCards.length ? openCards : ['<div class="ds-card ds-empty"><span class="ds-body"><span class="ds-title">All clear</span><span class="ds-meta">No open requests.</span></span></div>'], 'Open requests'), 'requests')}
       ${section('Recent activity', `<div class="ds-actlist">${act || '<p class="muted">Nothing yet.</p>'}</div>`, 'audit')}

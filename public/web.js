@@ -13,6 +13,7 @@
   const loadNav = () => { try { const v = JSON.parse(localStorage.getItem(NAVKEY)); return { pos: v && v.pos === 'top' ? 'top' : 'side', hidden: !!(v && v.hidden) }; } catch (e) { return { pos: 'side', hidden: false }; } };
   const saveNav = () => { try { localStorage.setItem(NAVKEY, JSON.stringify(S.nav)); } catch (e) { /* storage blocked: choice lasts for this visit only */ } };
   S.nav = loadNav();
+  S.nav.pos = 'side'; // the required items are always in the top bar; the sidebar holds the extras
   const applyNav = () => {
     const w = document.querySelector('.web'); if (!w) return;
     w.classList.toggle('top-shell', S.nav.pos === 'top'); w.classList.toggle('side-shell', S.nav.pos !== 'top'); w.classList.toggle('nav-hidden', S.nav.hidden);
@@ -47,15 +48,20 @@
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
-  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['more', 'More', 'dots-three-circle'], ['help', 'Help and support', 'question']];
+  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
     help: 'help', support: 'help', profile: 'help' };
-  const FLAT_GROUPS = ['home', 'core'];
-  const COLKEY = 'hp.navc2';
-  // Stores the groups whose state differs from the default ("More" and Help start collapsed, the rest open).
-  const DEFAULT_COLLAPSED = ['more', 'help'];
+  // The required items (Requirements Document / faculty whiteboard) sit in the top bar for every role;
+  // the sidebar only holds the extras.
+  const CORE = { resident: ['home', 'raise', 'requests', 'notices', 'emergency', 'household'],
+    admin: ['dashboard', 'approvals', 'requests', 'notices', 'reports', 'audit', 'emergencies', 'costs'],
+    staff: ['myjobs', 'shift'], it: ['itoverview', 'support', 'help', 'health'], guard: ['gate', 'gatelog'] };
+  const coreKeys = () => CORE[S.me.role] || CORE.resident;
+  const COLKEY = 'hp.navc3';
+  // Stores the sidebar groups whose state differs from the default (all open).
+  const DEFAULT_COLLAPSED = [];
   const loadToggled = () => { try { const v = JSON.parse(localStorage.getItem(COLKEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
   const loadCollapsed = () => { const t = loadToggled(); return GROUPS.map(([g]) => g).filter(g => DEFAULT_COLLAPSED.includes(g) !== t.includes(g)); };
   const saveCollapsed = (g, on) => { try { const v = loadToggled().filter(x => x !== g); if (on !== DEFAULT_COLLAPSED.includes(g)) v.push(g); localStorage.setItem(COLKEY, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
@@ -93,32 +99,35 @@
       : k === 'costs' && costPending ? { n: costPending, h: `<span class="tag tag-accent-2" aria-label="${costPending} costs waiting for approval">${costPending}</span>` }
       : k === 'requests' && unassigned ? { n: unassigned, h: `<span class="tag tag-accent-2" aria-label="${unassigned} unassigned requests">${unassigned}</span>` }
       : { n: 0, h: '' };
-    const items = navFor(), col = loadCollapsed();
+    const all = navFor(), col = loadCollapsed(), core = coreKeys();
+    const coreItems = core.map(k => all.find(([x]) => x === k)).filter(Boolean);
+    const items = all.filter(([k]) => !core.includes(k));
+    const topBtn = ([k, label, icon]) => `<button class="btn core-link ${S.page === k ? 'on' : ''} ${extra(k).danger ? 'nav-danger' : ''}" data-act="nav" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span>${esc(label)}</span>${extra(k).h}</button>`;
+    const topbar = `<nav class="core-bar" aria-label="Main">${coreItems.map(topBtn).join('')}<span class="core-sp"></span>${topBtn(['alerts', 'Alerts', 'bell'])}</nav>`;
     let nav;
     if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
     else nav = GROUPS.map(([g, gl, gi]) => {
       const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
-      if (FLAT_GROUPS.includes(g)) return its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('');
       const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), on = its.some(([k]) => k === S.page), c = col.includes(g) && !on;
       return `<div class="nav-grp ${c ? 'collapsed' : ''} ${on ? 'has-on' : ''}" data-g="${g}"><button type="button" class="btn nav-grp-h" data-act="navgroup" aria-expanded="${!c}" aria-controls="ng-${g}">${ic(gi, 'nav-grp-i')}<span class="nav-grp-t">${esc(gl)}</span>${n ? `<span class="nav-grp-b ${danger ? 'danger' : ''}" aria-label="${n} need attention">${n}</span>` : ''}${ic('caret-down', 'nav-grp-c')}</button>
         <div class="nav-grp-items" id="ng-${g}">${its.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h, extra(k).danger ? 'nav-danger' : '')).join('')}</div></div>`;
     }).join('');
     const sub = isAdmin() || flatNav() ? positionLabel(S.me) : 'Flat ' + (S.me.flat || '');
     const who = `${S.me.name} · ${sub}`;
-    root.innerHTML = `<div class="web side-shell">
-      <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show menu" aria-label="Show menu" hidden>${ic('list')}<span class="nav-reveal-t">Menu</span></button>
+    root.innerHTML = `<div class="web side-shell core-shell">
+      <button class="btn btn-primary nav-reveal" data-act="navhide" title="Show more" aria-label="Show the sidebar" hidden>${ic('list')}<span class="nav-reveal-t">More</span></button>
       ${isAdmin() && activeEm ? `<button class="emg-banner" data-act="nav" data-page="emergencies" aria-label="${activeEm} active emergencies, view now">${ic('siren')}<span><strong>${activeEm} active emergenc${activeEm > 1 ? 'ies' : 'y'}</strong> — tap to view</span></button>` : ''}
       <aside class="sidebar">
         <div class="side-brand side-brand-logo"><span class="side-logo">${HP.logo(44)}</span></div>
-        <nav aria-label="Main" class="side-nav">${nav}${navBtn('alerts', 'Alerts', 'bell')}</nav>
+        ${nav ? `<nav aria-label="More" class="side-nav">${nav}</nav>` : ''}
         <div class="side-meta sm">${HP.liveBadge()}<i class="side-t">${esc(todayLabel())}</i></div>
-        <div class="side-tools" role="group" aria-label="Menu layout">
-          <button class="btn btn-ghost side-tool" data-act="navpos" title="Move menu to the top" aria-label="Move menu to the top">${ic('align-top-simple')}<span class="side-t side-tt">Menu to top</span></button>
-          <button class="btn btn-ghost side-tool" data-act="navhide" title="Hide menu" aria-label="Hide menu" aria-expanded="true">${ic('caret-double-left')}<span class="side-t">Hide menu</span></button></div>
+        <div class="side-tools" role="group" aria-label="Sidebar">
+          <button class="btn btn-ghost side-tool" data-act="navhide" title="Hide sidebar" aria-label="Hide sidebar" aria-expanded="true">${ic('caret-double-left')}<span class="side-t">Hide sidebar</span></button></div>
         <div class="side-user"><button type="button" class="side-me" data-act="nav" data-page="profile" title="Your profile: ${esc(who)}"><span class="avatar">${esc(initials(S.me.name))}</span><span class="sm side-t side-who">${esc(S.me.name)}<span class="side-pos">${esc(sub)}</span></span></button>
           <button class="btn btn-secondary side-out" data-act="logout" title="Sign out">${ic('sign-out')}<span class="side-t">Sign out</span></button>
           <a class="side-t xs muted" href="/m/">Open the mobile app</a></div>
       </aside>
+      ${topbar}
       <main id="page" class="page"></main></div>`;
     applyNav();
     if (!PAGES[S.page] || !allowed(S.page)) S.page = home0();
@@ -214,7 +223,7 @@
           <span class="muted xs">Suggestion only. ${esc(d.ai.source === 'llm' ? 'Written by an AI model with personal details removed.' : 'Based on keyword rules.')} The committee decides.</span></div>` : '';
         // One-click suggested action the committee approves or dismisses.
         const actLabel = d.ai && d.ai.action === 'register_vehicle' ? 'Register the vehicle described in this request for Flat ' + esc(d.flat)
-          : d.ai && d.ai.action === 'assign_vendor' && sv ? 'Assign <strong>' + esc(sv.name) + '</strong> to this request' : '';
+          : d.ai && d.ai.action === 'assign_vendor' && sv && !d.vendor_id && !d.assignee_id ? 'Assign <strong>' + esc(sv.name) + '</strong> to this request' : '';
         const actionBlock = isAdmin() && d.ai && d.ai.action && d.status !== 'closed' && actLabel ? `<div class="soft-card col" style="gap:var(--space-2);border:1px solid var(--color-accent-400)"><h6 style="margin:0">${ic('magic-wand')} Suggested action</h6>
           <p style="margin:0">${actLabel}</p><div class="row"><button class="btn btn-primary" data-act="aiaction" data-id="${d.id}">${ic('check')}Approve</button><button class="btn btn-ghost" data-act="aidismiss" data-id="${d.id}">Dismiss</button></div>
           <span class="muted xs">Nothing happens until you approve.</span></div>` : '';
