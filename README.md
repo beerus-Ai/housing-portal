@@ -1,6 +1,6 @@
 # Sahyadri Heights: Housing Society Portal
 
-A portal for one housing society. Residents register with consent, raise and track work requests (portal, phone app or Telegram), book amenities, see their dues and rate the work. The committee approves residents, assigns vendors or staff, posts notices, raises bills, runs inventory and waste schedules, and sees dashboards and an audit trail. AI only suggests; a person confirms. Built for the MBA BPA "Using AI" assignment. It starts empty: no demo data ships with it.
+A portal for one housing society. Residents register with consent, raise and track work requests (portal, phone app or Telegram), book amenities, see their dues, order from the tuck shop, book laundry, get parcel alerts and RSVP to events, and rate the work. The committee approves residents, assigns vendors or staff, posts notices, raises bills, runs inventory and waste schedules, and sees dashboards and an audit trail. AI only suggests; a person confirms. Built for the MBA BPA "Using AI" assignment. It starts empty: no demo data ships with it.
 
 **Live:** https://sahyadri-heights.onrender.com (Render free plan: first request after sleep takes about 50 s, and the database resets on sleep or redeploy).
 
@@ -16,7 +16,7 @@ A portal for one housing society. Residents register with consent, raise and tra
 ```
 npm install
 npm start          # http://localhost:3000, committee sign-in admin@society.test
-npm test           # Node, 79 tests
+npm test           # Node, 83 tests
 cd backend && ./gradlew test      # Java, 81
 cd frontend && npm test           # React, 67
 cd flutter_app && flutter test    # Flutter, 18
@@ -36,6 +36,7 @@ Word, PDF, PowerPoint and Excel versions of the requirements are in [`Requiremen
 | [ADR 0001](docs/architecture/adr-0001-java-react.md) | Java/React migration decision |
 | [roles-api](docs/roles-api.md) | Roles API contract |
 | [modules-api](docs/modules-api.md) | Society modules API contract |
+| [services-api](docs/services-api.md) | Tuck shop, laundry, parcels, events API |
 | [deploy](docs/deploy.md) | Hosting, Docker, database export |
 | [test plan](docs/testing/test-plan.md), [test cases](docs/testing/test-cases.md), [results](docs/testing/test-results.md), [defects](docs/testing/defect-log.md), [acceptance](docs/testing/acceptance-plan.md) | Testing |
 | [process-flows](docs/process-flows/README.md) | BPMN for Signavio |

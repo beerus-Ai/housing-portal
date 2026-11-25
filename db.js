@@ -145,7 +145,32 @@ function openDb(file) {
     id INTEGER PRIMARY KEY, weekday INTEGER NOT NULL, kind TEXT NOT NULL, time TEXT NOT NULL, note TEXT);
   CREATE TABLE IF NOT EXISTS waste_logs(
     id INTEGER PRIMARY KEY, date TEXT NOT NULL, kind TEXT NOT NULL, weight_kg REAL NOT NULL, note TEXT,
-    user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
+    user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  -- Resident services (services.js): tuck shop, laundry, parcel desk, community events.
+  CREATE TABLE IF NOT EXISTS shop_items(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL, price REAL NOT NULL, stock INTEGER NOT NULL DEFAULT 0, unit TEXT,
+    active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS shop_orders(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), flat TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'placed',
+    total REAL NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS shop_order_lines(
+    id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES shop_orders(id), item_id INTEGER NOT NULL, name TEXT NOT NULL, price REAL NOT NULL, qty INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS laundry_rates(
+    id INTEGER PRIMARY KEY, item TEXT NOT NULL, price REAL NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+  CREATE TABLE IF NOT EXISTS laundry_orders(
+    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), flat TEXT NOT NULL, pickup_date TEXT NOT NULL, pickup_slot TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'requested', total REAL NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS laundry_lines(
+    id INTEGER PRIMARY KEY, order_id INTEGER NOT NULL REFERENCES laundry_orders(id), rate_id INTEGER NOT NULL, item TEXT NOT NULL, price REAL NOT NULL, qty INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS parcels(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, carrier TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'waiting',
+    logged_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')), collected_at TEXT, collected_by TEXT);
+  CREATE TABLE IF NOT EXISTS events(
+    id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, starts_at TEXT NOT NULL, location TEXT, cancelled INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS event_rsvps(
+    event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY(event_id, user_id));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
@@ -164,10 +189,10 @@ function openDb(file) {
   return db;
 }
 // Optional demo accounts (one per role) so a freshly wiped hosted instance can be tested straight away.
-// Only runs when SEED_PASSWORD (8+ chars) is set in the environment; the password is never stored in the repo.
+// Only runs when SEED_PASSWORD (6+ chars, e.g. test123 for the demo) is set in the environment; never stored in the repo.
 function seedDemoAccounts(db) {
   const pw = process.env.SEED_PASSWORD;
-  if (!pw || pw.length < 8) return;
+  if (!pw || pw.length < 6) return;
   const hash = bcrypt.hashSync(pw, 10);
   const add = db.prepare("INSERT OR IGNORE INTO users(name,email,flat,resident_type,password_hash,role,status,consent_at) VALUES(?,?,?,?,?,?,'approved',datetime('now'))");
   add.run('Owner One', 'owner1@sahyadri.test', 'B-101', 'owner', hash, 'resident');
@@ -206,6 +231,16 @@ function seedDemoAccounts(db) {
     const req = db.prepare("INSERT INTO requests(user_id,category,title,description,source,status) VALUES(?,?,?,?,?,?)");
     if (owner) { req.run(owner.id, 'plumbing', 'Kitchen tap leaking', 'The kitchen tap has been dripping since yesterday.', 'app', 'open'); req.run(owner.id, 'electrical', 'Corridor light not working', 'The 3rd floor corridor light is out.', 'app', 'open'); }
     if (t) req.run(t.id, 'housekeeping', 'Garbage not collected', 'Garbage on B wing was not collected today.', 'app', 'open');
+  }
+  // A small tuck shop range and laundry price list so the services can be tried straight away.
+  if (db.prepare('SELECT COUNT(*) AS n FROM shop_items').get().n === 0) {
+    const si = db.prepare('INSERT INTO shop_items(name,category,price,stock,unit) VALUES(?,?,?,?,?)');
+    for (const r of [['Milk', 'dairy', 30, 40, '500 ml'], ['Bread', 'groceries', 45, 20, 'loaf'], ['Eggs', 'dairy', 90, 15, 'dozen'], ['Rice', 'groceries', 350, 10, '5 kg'],
+      ['Tea', 'groceries', 140, 12, '250 g'], ['Biscuits', 'snacks', 30, 30, 'pack'], ['Detergent', 'household', 180, 8, '1 kg'], ['Soap', 'personal care', 45, 25, 'bar']]) si.run(...r);
+  }
+  if (db.prepare('SELECT COUNT(*) AS n FROM laundry_rates').get().n === 0) {
+    const lr = db.prepare('INSERT INTO laundry_rates(item,price) VALUES(?,?)');
+    for (const r of [['Shirt or top (wash and iron)', 20], ['Trousers (wash and iron)', 25], ['Saree (dry clean)', 120], ['Bedsheet', 40], ['Towel', 15], ['Suit (dry clean)', 250]]) lr.run(...r);
   }
   // Demo vehicles, parking slots and workers so the estate pages have data to test.
   if (db.prepare('SELECT COUNT(*) AS n FROM vehicles').get().n === 0) {

@@ -37,6 +37,7 @@ EPICS = [
     ("Staff", "Staff · limited access", "Staff and guards see only their own work and the gate.", 1),
     ("IT", "IT Staff · support, training, upkeep", "Support tickets, guides per role, health, backup and maintenance.", 3),
     ("Society", "Society modules · amenities, dues, inventory, waste", "Modules from the product architecture whiteboard (25 Nov 2026).", 4),
+    ("Resident", "Resident services · tuck shop, laundry, parcels, events", "Services residents use every day; the tuck shop is the e-commerce interface on the whiteboard.", 4),
     ("NFR", "Non-Functional Requirements", "Security, privacy, availability, accessibility, AI safety and operation.", 4),
 ]
 SPRINTS = [

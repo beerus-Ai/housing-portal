@@ -46,6 +46,10 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-RES-13 | to see my flat's dues, payments and balance | I know what I owe (online payment: planned) | FR-SM-05 |
 | US-RES-14 | to see the waste pickup schedule | I put the right bin out on the right day | FR-SM-07 |
 | US-RES-15 | to report a missed pickup | it is followed up like any request | FR-SM-09 |
+| US-RES-16 | to order groceries from the tuck shop | I need not step out for everyday items | FR-SV-01 |
+| US-RES-17 | to book a laundry pickup and follow it | my clothes come back without a phone call | FR-SV-03, FR-SV-04 |
+| US-RES-18 | to be told when a parcel arrives at the gate | I collect it the same day | FR-SV-05 |
+| US-RES-19 | to see events and say I am going | I do not miss what happens in the society | FR-SV-06 |
 
 ![Figure 3. Resident registration (Join): owner, tenant or family, with consent](images/join-form.jpg)
 

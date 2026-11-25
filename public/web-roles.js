@@ -140,7 +140,8 @@
       <form id="rlmaint" class="form-card col"><h3>Maintenance notice</h3><p class="muted" style="margin:0">Shown at the top of the portal for everyone. Leave the message empty to remove it.</p>
         ${field('rlmm', 'Message', `<textarea class="input" id="rlmm" name="message" maxlength="300" placeholder="The portal will be down for 15 minutes from 10 pm for an update.">${esc(m ? m.message : '')}</textarea>`)}
         ${field('rlmu', 'Until (optional)', `<input class="input" id="rlmu" name="until" type="datetime-local" style="max-width:260px" value="${m && m.until && !isNaN(new Date(m.until)) && /T/.test(m.until) ? esc(local(new Date(m.until))) : ''}">`)}
-        ${errLine()}<div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save notice</button>${m && m.message ? `<button type="button" class="btn btn-secondary" data-act="rlmaintclear">${ic('x')}Remove notice</button>` : ''}</div></form></div></div>`);
+        ${errLine()}<div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save notice</button>${m && m.message ? `<button type="button" class="btn btn-secondary" data-act="rlmaintclear">${ic('x')}Remove notice</button>` : ''}</div></form></div>
+      <section class="col" style="gap:var(--space-2)"><h2>Upgrades and maintenance log</h2>${table(['When', 'What', 'By'], (h.system_events || []).map(e => `<tr><td>${esc(stamp(e.created_at))}</td><td>${esc(EVENT[e.action] || e.action.replace(/_/g, ' '))}${e.detail && e.action !== 'backup' ? ': ' + esc(e.detail) : ''}</td><td>${esc(e.actor || 'system')}</td></tr>`), 'Nothing yet. Backups and maintenance notices are listed here.')}</section></div>`);
   };
   ACT.rlhealth = () => render();
 
@@ -148,27 +149,18 @@
   const EVENT = { backup: 'Backup downloaded', maintenance_set: 'Maintenance notice set', maintenance_cleared: 'Maintenance notice removed' };
   PAGES.itoverview = async () => {
     const [h, tickets] = await Promise.all([RAPI.it.health(), RAPI.support.list('').catch(() => [])]);
-    const t = h.tickets || {}, c = h.counts || {}, m = h.maintenance || (S.settings && S.settings.maintenance) || null;
+    const t = h.tickets || {}, m = h.maintenance || (S.settings && S.settings.maintenance) || null;
     const healthy = h.ok && h.integrity === 'ok';
-    const openT = tickets.filter(x => x.status !== 'resolved').slice(0, 5);
-    const duty = (icon, title, sub, pg, n) => `<button type="button" class="eg-card" data-act="nav" data-page="${pg}"><span class="eg-ic">${ic(icon)}</span><span class="eg-n">${esc(n)}</span><span class="eg-l">${esc(title)}</span><span class="eg-s">${esc(sub)}</span></button>`;
-    page(`<div class="rl">${head('IT overview', 'Support queries, training and upgrades for the portal, at a glance.', `<button class="btn btn-secondary" data-act="rlhealth">${ic('arrows-clockwise')}Refresh</button>`)}
-      <section class="form-card it-status"><span class="tile lg">${ic(healthy ? 'check-circle' : 'warning')}</span>
-        <span class="col" style="gap:2px"><span class="list-title rl-job-t">${healthy ? 'All systems normal' : 'Needs a look'}</span>
-        <span class="muted">Database check ${esc(h.integrity || '–')} · up for ${esc(uptime(h.uptime_s))} · ${esc(mb(h.db_bytes))} · version ${esc([h.version, h.commit].filter(Boolean).join(' · '))}</span></span></section>
-      <div class="eg-grid">
-        ${duty('lifebuoy', 'Support queries', `${num(t.in_progress)} in progress · ${num(t.resolved_30d)} resolved in 30 days`, 'support', num(t.open))}
-        ${duty('graduation-cap', 'Training guides', 'How-to guides for every role', 'help', num(h.guides))}
-        ${duty('download-simple', 'Last backup', h.last_backup ? 'Download one before every upgrade' : 'No backup yet: take one now', 'health', h.last_backup ? day(h.last_backup) : 'None')}
-        ${duty('wrench', 'Maintenance notice', m && m.message ? m.message : 'No notice showing', 'health', m && m.message ? 'On' : 'Off')}
-        ${duty('users', 'Accounts', `${num(c.staff_on_shift)} staff on shift`, 'health', num(c.users))}
-        ${duty('list-checks', 'Open repair requests', 'Handled by the committee', 'health', num(c.open_requests))}</div>
-      ${h.hosting_note ? `<p class="callout" style="margin:0">${ic('info')} ${esc(h.hosting_note)}</p>` : ''}
-      <div class="split-eq" style="align-items:start">
-        <section class="col" style="gap:var(--space-2)"><h2>Open support queries</h2>${openT.map(x => ticketRow(x).replace('data-act="rlticket"', 'data-act="rlticketgo"')).join('') || '<p class="callout" style="margin:0">No open queries. New tickets from residents, the committee, staff and guards appear here.</p>'}
-          <div class="row"><button class="btn btn-secondary" data-act="nav" data-page="support">${ic('lifebuoy')}All support queries</button></div></section>
-        <section class="col" style="gap:var(--space-2)"><h2>Upgrades and maintenance log</h2>${table(['When', 'What', 'By'], (h.system_events || []).map(e => `<tr><td>${esc(stamp(e.created_at))}</td><td>${esc(EVENT[e.action] || e.action.replace(/_/g, ' '))}${e.detail && e.action !== 'backup' ? ': ' + esc(e.detail) : ''}</td><td>${esc(e.actor || 'system')}</td></tr>`), 'Nothing yet. Backups and maintenance notices are listed here.')}
-          <div class="row"><button class="btn btn-primary" data-act="nav" data-page="health">${ic('wrench')}Upgrades and maintenance</button></div></section></div></div>`);
+    const items = [];
+    if (!healthy) items.push({ icon: 'warning', text: 'The database check needs a look', sub: `Result: ${h.integrity || 'unknown'}`, page: 'health', tone: 'urgent', cta: 'Check' });
+    tickets.filter(x => x.status === 'open').slice(0, 2).forEach(x => items.push({ icon: x.kind === 'bug' ? 'bug' : x.kind === 'access' ? 'key' : 'lifebuoy', text: x.subject, sub: `New support query from ${x.user_name || 'a user'}`, page: 'support', sel: x.id, act: 'rlticketgo', tone: 'warn', cta: 'Answer' }));
+    if (t.in_progress) items.push({ icon: 'hourglass', text: `${t.in_progress} support quer${t.in_progress > 1 ? 'ies' : 'y'} in progress`, page: 'support' });
+    if (!h.last_backup) items.push({ icon: 'download-simple', text: 'No backup taken yet', sub: 'Download one before the next upgrade', page: 'health', tone: 'warn', cta: 'Back up' });
+    if (m && m.message) items.push({ icon: 'wrench', text: 'Maintenance notice is showing to everyone', sub: m.message, page: 'health', cta: 'Edit' });
+    const line = `${healthy ? 'All systems normal' : 'Needs a look'} · up for ${esc(uptime(h.uptime_s))} · ${num(t.open)} open quer${t.open === 1 ? 'y' : 'ies'} · last backup ${h.last_backup ? esc(day(h.last_backup)) : 'never'}`;
+    page(`<div class="calm">${HP.hero({ name: S.me.name, kicker: `IT support · version ${[h.version, h.commit].filter(Boolean).join(' · ')}`, line,
+      actions: [['Support queries', 'lifebuoy', 'support', true], ['Upgrades and maintenance', 'wrench', 'health']], art: healthy ? 'building' : 'loader' })}
+      ${HP.notifier(items.slice(0, 4), 'Nothing needs IT right now.')}</div>`);
   };
   ACT.rlticketgo = el => { R.ticket = Number(el.dataset.id); go('support'); };
   ACT.rlmaintclear = async () => { await RAPI.it.maintenance(''); S.settings = await API.settings.public().catch(() => S.settings); toast('Maintenance notice removed'); render(); };

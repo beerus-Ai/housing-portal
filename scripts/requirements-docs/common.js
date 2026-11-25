@@ -36,7 +36,7 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const LABEL = {
   'Process 1': 'Process 1 · On-boarding', 'Process 2': 'Process 2 · Raise a request',
   'Process 3': 'Process 3 · Request lifecycle', Committee: 'Committee Member', Head: 'Head of Committee and Admin',
-  Staff: 'Staff', IT: 'IT Staff', Society: 'Society modules',
+  Staff: 'Staff', IT: 'IT Staff', Society: 'Society modules', Resident: 'Resident services',
 };
 
 function groups(d) {

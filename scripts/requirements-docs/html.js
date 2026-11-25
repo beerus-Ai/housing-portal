@@ -217,7 +217,7 @@ module.exports = function html(d) {
   `);
 
   // Detailed tables, paged manually (about 34 rows per page).
-  const areaIcon = { 'Process 1': 'user-plus', 'Process 2': 'send', 'Process 3': 'refresh', 'Committee': 'users', 'Head': 'award', 'Staff': 'tool', 'IT': 'cpu', 'Society': 'home' };
+  const areaIcon = { 'Process 1': 'user-plus', 'Process 2': 'send', 'Process 3': 'refresh', 'Committee': 'users', 'Head': 'award', 'Staff': 'tool', 'IT': 'cpu', 'Society': 'home', 'Resident': 'users' };
   const blocks = [];
   for (const g of byArea) {
     const ic = Object.entries(areaIcon).find(([k2]) => g.area.startsWith(k2))[1];
