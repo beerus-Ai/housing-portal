@@ -42,7 +42,7 @@ Google sign-in is off by default; to enable it, swap in the Google CSP lines in 
 
 ## Render (live)
 - Live: https://sahyadri-heights.onrender.com, Node app, service `sahyadri-heights` from `render.yaml`.
-- Branch: `feat/HSP-28-admin-overview`, auto-deployed. To deploy, fast-forward it to `main`: `git push origin origin/main:feat/HSP-28-admin-overview`. Last deployed: `df996d8` (2026-11-25).
+- Branch: `feat/HSP-28-admin-overview`, auto-deployed. To deploy, fast-forward it to `main`: `git push origin origin/main:feat/HSP-28-admin-overview`. Last deployed: `3d732f5` (2026-11-25).
 - Deploy: push to that branch. If auto-deploy is off, use Manual Deploy > Deploy latest commit.
 - Admin password: the generated `ADMIN_PASSWORD` under the service's Environment tab.
 - Free plan: the first request after sleep takes about 50 s, and the SQLite database and uploads reset on sleep and redeploy. `SEED_*` recreates the demo accounts. For durable data, use a paid plan with the disk block in `render.yaml` (`DB_FILE=/var/data/portal.db`, `UPLOAD_DIR=/var/data/uploads`).
