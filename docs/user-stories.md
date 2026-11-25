@@ -46,6 +46,10 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-RES-13 | to see my flat's dues, payments and balance | I know what I owe (online payment: planned) | FR-SM-05 |
 | US-RES-14 | to see the waste pickup schedule | I put the right bin out on the right day | FR-SM-07 |
 | US-RES-15 | to report a missed pickup | it is followed up like any request | FR-SM-09 |
+| US-RES-16 | to order groceries from the tuck shop | I need not step out for everyday items | FR-SV-01 |
+| US-RES-17 | to book a laundry pickup and follow it | my clothes come back without a phone call | FR-SV-03, FR-SV-04 |
+| US-RES-18 | to be told when a parcel arrives at the gate | I collect it the same day | FR-SV-05 |
+| US-RES-19 | to see events and say I am going | I do not miss what happens in the society | FR-SV-06 |
 
 ![Figure 3. Resident registration (Join): owner, tenant or family, with consent](images/join-form.jpg)
 
@@ -70,7 +74,7 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-COM-14 | to manage inventory with reorder levels | stock does not run out unnoticed | FR-SM-06 |
 | US-COM-15 | to set the weekly waste schedule and see collection totals | pickups and segregation are tracked | FR-SM-07, FR-SM-08 |
 
-![Figure 5. Committee verifies new residents in the approval queue](images/approvals-queue.jpg)
+![Figure 5. Committee: Verification (approval queue for new residents)](images/approvals-queue.jpg)
 
 ![Figure 6. Monthly report (printable)](images/monthly-report.jpg)
 
@@ -99,9 +103,9 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-STF-07 | to record stock I take out | inventory stays correct | FR-SM-06 |
 | US-STF-08 | to log waste collections in kg | collection and segregation are tracked | FR-SM-08 |
 
-![Figure 9. Staff: My jobs (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
+![Figure 9. Staff: Assigned work (take up, update progress, cost estimate)](images/staff-my-jobs.jpg)
 
-![Figure 10. Staff: punch out with optional hand-over](images/staff-shift.jpg)
+![Figure 10. Staff: Punch in and hand-over](images/staff-shift.jpg)
 
 ![Figure 11. Cost approval and shift hand-over flows](images/cost-and-shift.png)
 
@@ -125,9 +129,9 @@ Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026
 | US-IT-04 | a health page | I see problems before users do | FR-RL-13, NFR-04 |
 | US-IT-05 | one overview of support queries, training, backups and maintenance | I know what needs me first | FR-RL-14 |
 
-![Figure 13. IT: support queue](images/it-support-queue.jpg)
+![Figure 13. IT: Support queries](images/it-support-queue.jpg)
 
-![Figure 14. IT: system health, backup and maintenance notice (banner shown to everyone)](images/it-system-health.jpg)
+![Figure 14. IT: Upgrades and maintenance (health, backup, maintenance notice shown to everyone)](images/it-system-health.jpg)
 
 ## 4. To confirm with faculty
 - "Pre-Journey / Post-Journey" on the whiteboard: as-is and to-be journey maps per role?

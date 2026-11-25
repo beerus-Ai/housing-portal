@@ -145,13 +145,15 @@ function createApp(opts = {}) {
     if (u.role === 'guard') {
       const p = req.path, m = req.method;
       const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
-        (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/');
+        (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/') ||
+        p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p);
       if (!okGuard && !COMMON_PATH(p, m)) return res.status(403).json({ error: 'Not allowed for guard accounts' });
     }
     // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
     if (u.role === 'staff' || u.role === 'it') {
       const p = req.path;
-      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || p === '/api/inventory' || p.startsWith('/api/inventory/') || p === '/api/waste/logs' || p === '/api/waste/schedule' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
+      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || p === '/api/inventory' || p.startsWith('/api/inventory/') || p === '/api/waste/logs' || p === '/api/waste/schedule' ||
+        p === '/api/shop/items' || p === '/api/laundry/rates' || /^\/api\/(shop|laundry)\/orders(\/\d+\/status)?$/.test(p) || p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) || p === '/api/services/summary' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
         (u.role === 'it' && p.startsWith('/api/it/'));
       if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
       if (u.role === 'staff' && p === '/api/requests' && req.method !== 'GET') return res.status(403).json({ error: 'Not allowed for this account' });
@@ -1403,6 +1405,7 @@ function createApp(opts = {}) {
 
   require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
   require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, clock: opts.clock });
+  require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, istNow: require('./modules').istNow, clock: opts.clock });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));

@@ -31,33 +31,35 @@
   // request lifecycle; committee dashboard, verification, broadcast, reports, monitoring), extras under "More".
   const NAV = {
     owner: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'], ['household', 'Household', 'users-three'],
-      ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     tenant: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['lease', 'My lease', 'file-text'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['lease', 'My lease', 'file-text'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     family: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track flat requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
       ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
       ['gate', 'Visitor management', 'shield-check'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    guard: [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['shop', 'Tuck shop orders', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
     it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
-  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
+  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['services', 'Services', 'storefront'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
+    shop: 'services', laundry: 'services', parcels: 'services', events: 'services',
     help: 'help', support: 'help', profile: 'help' };
   // The required items (Requirements Document / faculty whiteboard) sit in the top bar for every role;
   // the sidebar only holds the extras.
   const CORE = { resident: ['home', 'raise', 'requests', 'notices', 'emergency', 'household'],
     admin: ['dashboard', 'approvals', 'requests', 'notices', 'reports', 'audit', 'emergencies', 'costs'],
-    staff: ['myjobs', 'shift'], it: ['itoverview', 'support', 'help', 'health'], guard: ['gate', 'gatelog'] };
+    staff: ['myjobs', 'shift'], it: ['itoverview', 'support', 'help', 'health'], guard: ['gate', 'gatelog', 'parcels'] };
   const coreKeys = () => CORE[S.me.role] || CORE.resident;
   const COLKEY = 'hp.navc3';
   // Stores the sidebar groups whose state differs from the default (all open).
@@ -76,7 +78,7 @@
   const PAGE_RULE = { raise: () => can('request.create'), emergency: () => feat('emergency') && can('emergency.raise'), emergencies: () => feat('emergency'), gatepass: () => feat('gate') && can('gate.pass'), gate: () => isGuard() || feat('gate'),
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
-    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
+    accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => !isGuard() && !isIT(), laundry: () => !isGuard() && !isIT(), parcels: () => !isIT(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || isStaff() };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => flatNav() || allowed(k));
   const home0 = () => isAdmin() ? 'dashboard' : isGuard() ? 'gate' : isStaff() ? 'myjobs' : isIT() ? 'itoverview' : 'home';

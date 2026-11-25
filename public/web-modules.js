@@ -1,6 +1,5 @@
 // Society modules from the faculty whiteboard (docs/modules-api.md): Amenities, Maintenance dues, Inventory, Waste.
-// Loaded after web-roles.js; registers pages and delegated events on window.HPWeb, and adds a "Society services"
-// row to the resident home and the committee dashboard. No inline handlers (CSP 'self').
+// Loaded after web-roles.js; registers pages and delegated events on window.HPWeb. No inline handlers (CSP 'self').
 (() => {
   const W = window.HPWeb; if (!W) return;
   const { esc, ic, toast, day, stamp, rupees, dateLong, RAPI } = HP;
@@ -221,32 +220,6 @@
       <section class="form-card col"><h2 style="margin:0">Weekly pickups</h2><div class="md-week">${week}</div>${addSched}</section>${missed}${team_}</div>`);
   };
   ACT.mdschdel = async el => { if (!sure(el, 'ws' + el.dataset.id, 'Remove?')) return; try { await M.removeSchedule(el.dataset.id); toast('Pickup removed'); } catch (x) { toast(x.message, 'error'); } await render(); };
-
-  // =====================================================================
-  // "Society services" row on the resident home and the committee dashboard
-  // =====================================================================
-  const svcRow = cards => `<section class="md-svc" aria-label="Society services"><h2>Society services</h2><div class="eg-grid md-stats">${cards.join('')}</div></section>`;
-  const insertRow = html => {
-    const host = $('#page .ds') || $('#page'); if (!host) return;
-    const old = host.querySelector('.md-svc'); if (old) old.remove();
-    // Extras come last: the required work (attention, requests, notices) stays at the top of the page.
-    host.insertAdjacentHTML('beforeend', html);
-  };
-  const wrap = (name, build) => {
-    const orig = PAGES[name]; if (!orig) return;
-    PAGES[name] = async (...a) => { await orig(...a); try { const s = await M.summary(); if (S.page === name || (name === 'home' && S.page === 'home') || (name === 'dashboard' && S.page === 'dashboard')) { const h = build(s); if (h) insertRow(h); } } catch (e) { /* the row is optional */ } };
-  };
-  wrap('home', s => svcRow([
-    stat('wallet', rupees(s.dues_balance) || '₹0', 'Dues to pay', s.dues_overdue ? `${s.dues_overdue} overdue` : 'Nothing overdue', 'dues'),
-    stat('calendar-check', s.next_booking ? s.next_booking.amenity : 'None', 'Next booking', s.next_booking ? `${dateLong(s.next_booking.date)}, ${s.next_booking.start}` : 'Book the clubhouse or gym', 'amenities'),
-    stat('recycle', s.waste_today && s.waste_today.length ? s.waste_today.map(w => wasteLabel(w.kind).split(' ')[0]).join(' + ') : 'No pickup', 'Waste today', s.waste_today && s.waste_today.length ? `From ${s.waste_today[0].time}` : 'See the weekly schedule', 'waste'),
-  ]));
-  wrap('dashboard', s => svcRow([
-    stat('wallet', rupees(s.dues_outstanding) || '₹0', 'Dues outstanding', s.dues_overdue ? `${s.dues_overdue} overdue bills` : 'Nothing overdue', 'dues'),
-    stat('calendar-check', s.bookings_today, 'Bookings today', 'Amenities', 'amenities'),
-    stat('package', s.low_stock, 'Items to reorder', 'Inventory', 'inventory'),
-    stat('recycle', `${s.waste_kg_7d} kg`, 'Waste, last 7 days', 'Collections logged', 'waste'),
-  ]));
 
   // =====================================================================
   // Form submits and filters

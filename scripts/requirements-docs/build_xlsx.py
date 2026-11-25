@@ -20,7 +20,7 @@ thin = Side(style="thin", color="E2DFD3")
 wrap = Alignment(wrap_text=True, vertical="top")
 
 GROUP = {"Process 1": "Process 1 · On-boarding", "Process 2": "Process 2 · Raise a request", "Process 3": "Process 3 · Request lifecycle",
-         "Committee": "Committee Member", "Head": "Head of Committee and Admin", "Staff": "Staff", "IT": "IT Staff", "Society": "Society modules"}
+         "Committee": "Committee Member", "Head": "Head of Committee and Admin", "Staff": "Staff", "IT": "IT Staff", "Society": "Society modules", "Resident": "Resident services"}
 label = lambda area: next(v for k, v in GROUP.items() if area.startswith(k))
 
 wb = Workbook()

@@ -115,7 +115,9 @@ SHORT = {
  "FR-SM-03": "Raise monthly dues", "FR-SM-04": "Record payments",
  "FR-SM-05": "Residents see their dues", "FR-SM-06": "Inventory with reorder alerts",
  "FR-SM-07": "Waste pickup schedule", "FR-SM-08": "Log waste collected (kg)",
- "FR-SM-09": "Report a missed pickup", "FR-SM-10": "Society services on home screens",
+ "FR-SM-09": "Report a missed pickup", "FR-SM-10": "Calm dashboard with a For you list",
+ "FR-SV-01": "Tuck shop ordering", "FR-SV-02": "Shop order flow", "FR-SV-03": "Book a laundry pickup", "FR-SV-04": "Laundry progress",
+ "FR-SV-05": "Parcel desk at the gate", "FR-SV-06": "Community events",
 }
 NFR_SHORT = {
  "NFR-01": "Hashed passwords, role checks, safe SQL, CSP", "NFR-02": "Consent, minimum data, synthetic test data",
@@ -176,9 +178,10 @@ scope = {
                ("Business modules", ["On-boarding", "User management", "Request management", "Workforce management",
                                      "Amenity management", "Financial management", "Inventory management",
                                      "Waste management", "Visitor management"]),
+               ("Resident services", ["Tuck shop", "Laundry", "Parcel desk", "Events"]),
                ("Ancillary", ["Notifications", "Reports", "AI assist (suggests only)"]),
                ("Interfaces", ["Payment gateway (planned)"])],
-    "out": ["Online payments", "E-commerce", "Medical services", "IoT and biometrics", "Polls",
+    "out": ["Online payments", "Medical services", "IoT and biometrics", "Polls",
             "AI acting without a person confirming"],
     "assumptions": ["The society gives written permission before testing with residents",
                     "A resident's registered phone is their identity on messaging",

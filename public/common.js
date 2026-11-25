@@ -210,6 +210,29 @@ window.HP = (() => {
     },
     help: { guides: () => api('GET', '/api/help/guides') },
     // Society modules (docs/modules-api.md): amenities, dues, inventory, waste.
+    // Resident services (docs/services-api.md): tuck shop, laundry, parcel desk, community events.
+    svc: {
+      summary: () => api('GET', '/api/services/summary'),
+      items: () => api('GET', '/api/shop/items'),
+      addItem: body => api('POST', '/api/shop/items', body),
+      updateItem: (id, body) => api('PATCH', `/api/shop/items/${id}`, body),
+      orders: () => api('GET', '/api/shop/orders'),
+      order: body => api('POST', '/api/shop/orders', body),
+      orderStatus: (id, status) => api('POST', `/api/shop/orders/${id}/status`, { status }),
+      rates: () => api('GET', '/api/laundry/rates'),
+      addRate: body => api('POST', '/api/laundry/rates', body),
+      updateRate: (id, body) => api('PATCH', `/api/laundry/rates/${id}`, body),
+      laundry: () => api('GET', '/api/laundry/orders'),
+      bookLaundry: body => api('POST', '/api/laundry/orders', body),
+      laundryStatus: (id, status) => api('POST', `/api/laundry/orders/${id}/status`, { status }),
+      parcels: () => api('GET', '/api/parcels'),
+      logParcel: body => api('POST', '/api/parcels', body),
+      collect: (id, by) => api('POST', `/api/parcels/${id}/collect`, { collected_by: by }),
+      events: () => api('GET', '/api/events'),
+      addEvent: body => api('POST', '/api/events', body),
+      cancelEvent: id => api('POST', `/api/events/${id}/cancel`),
+      rsvp: (id, going) => api('POST', `/api/events/${id}/rsvp`, { going }),
+    },
     mod: {
       summary: () => api('GET', '/api/modules/summary'),
       amenities: () => api('GET', '/api/amenities'),
@@ -241,7 +264,20 @@ window.HP = (() => {
     },
   };
 
-  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName,
+  // Calm dashboards (every role): a greeting with a moving illustration, one status line and one or two actions,
+  // then a short "For you" list. Detail lives behind the top bar and the sidebar, not on the dashboard.
+  const greeting = () => { const h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date())); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+  const hero = ({ name, kicker, line, actions = [], art = 'building' }) => `<section class="hero">
+    <div class="hero-txt"><span class="hero-k">${esc(kicker)}</span><h1>${esc(greeting())}, ${esc(firstName(name))}</h1><p class="hero-line">${line}</p>
+      <div class="row hero-acts">${actions.map(([label, icon, pg, primary]) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-lg" data-act="nav" data-page="${pg}">${ic(icon)}${esc(label)}</button>`).join('')}</div></div>
+    <div class="hero-art" aria-hidden="true"><span class="hero-blob"></span><span class="hero-anim" data-lottie="${art}"></span></div></section>`;
+  // items: { icon, text, sub, page, sel?, tone: 'urgent' | 'warn' | '' , cta }
+  const notifier = (items, empty = "You're all caught up.") => `<section class="ntf" aria-label="For you"><h2>For you</h2>${items.length
+    ? `<div class="ntf-list">${items.map((n, i) => `<button type="button" class="ntf-row ${n.tone || ''}" style="--i:${i}" data-act="${n.act || 'nav'}" data-page="${n.page}" ${n.sel ? `data-id="${n.sel}" data-sel="${n.sel}"` : ''}>
+        <span class="ntf-ic">${ic(n.icon)}${n.tone === 'urgent' ? '<i class="ntf-pulse" aria-hidden="true"></i>' : ''}</span><span class="ntf-txt"><b>${esc(n.text)}</b>${n.sub ? `<span>${esc(n.sub)}</span>` : ''}</span><span class="ntf-go">${esc(n.cta || 'Open')}${ic('caret-right')}</span></button>`).join('')}</div>`
+    : `<div class="ntf-empty"><span class="ntf-anim" data-lottie="check" data-loop="false"></span><b>${esc(empty)}</b><span class="muted">New things will appear here.</span></div>`}</section>`;
+
+  return { $, esc, ic, toast, api, guard, CATS, catLabel, catIcon, TYPE, dt, day, stamp, hoursOld, ageLabel, isOpen, overdue, todayLabel, initials, firstName, greeting, hero, notifier,
     STEP_DEF, stageOf, statusTag, stepper, stars, noticeIcon, photoSlot, residentSummary, adminSummary, ring, fileToUpload, rid, SOCIETY, EMERGENCY_TYPES, CONTACT_ICONS, qrSvg, logo, dateLong, leaseInfo, live, liveBadge,
     POSITION, positionLabel, isGov, PROGRESS, progressLabel, rupees, costTag, updatesList, updatePhotoUrl, TICKET_KINDS, ticketTag, maintBanner, whenText, RAPI };
 })();
