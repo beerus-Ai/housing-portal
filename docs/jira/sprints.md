@@ -21,6 +21,6 @@ Review (2026-11-14): Telegram replaced WhatsApp (Meta blocked); n8n LLM gate; AI
 ## Sprint 5: Faculty review (2026-11-21 to 2026-11-25)
 Goal: act on the faculty review and whiteboard.
 Scope: review roles (HSP-46..58); Flutter app; product and technology architecture doc; society modules (amenities, dues, inventory, waste) on web.
-Review (2026-11-25): all merged (PRs #19-#24) and deployed; Node 78, Java 81, React 67, Flutter 8 tests; CI 6/6 green. Flutter and modules have no Jira issues yet (to add). Open: Java/React ports, Flutter assign and toast colour, payment gateway.
+Review (2026-11-25): all merged (PRs #19-#24) and deployed; Node 78, Java 81, React 67, Flutter 8 tests; CI 6/6 green. Jira: epic HSP-59 (HSP-60..67), Flutter HSP-68..70. Open: Java/React ports, Flutter assign and toast colour, payment gateway.
 
 Sprints 2 and 3 contain coded work that has not had a formal sprint review.

@@ -118,7 +118,7 @@ API: `roles-api.md`. Not ported to Java/React.
 ![Figure 4. Cost approval (FR-RL-07) and shift hand-over (FR-RL-06)](images/cost-and-shift.png)
 
 ### Epic 8: Society modules (2026-11-25)
-API: `modules-api.md`. Node and web only; not ported to Java/React/Flutter. Jira: to add.
+API: `modules-api.md`. Node and web only; not ported to Java/React/Flutter. Jira: epic HSP-59.
 
 | ID | Requirement | MoSCoW |
 | --- | --- | --- |

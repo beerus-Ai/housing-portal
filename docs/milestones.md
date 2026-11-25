@@ -18,9 +18,9 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
 | 11-13 | Committee email desk | 6b2be56 | HSP-42 |
 | 11-14 | Email desk runs every stage; docs updated; CI green on PR #18 | daedcd3 | HSP-42, 45 |
 | 11-21 | Faculty review roles: positions, staff, IT, head cost approval, reopen, monthly report | PRs #19-#22, `docs/roles-api.md` | HSP-46..58 |
-| 11-25 | Flutter app; product and technology architecture doc | PR #23, `flutter_app/`, `docs/architecture/product-and-technology-architecture.md` | to add |
-| 11-25 | Society modules on web (amenities, dues, inventory, waste); deployed live | PR #24, `docs/modules-api.md`; Node 78 tests, CI 6/6 | to add |
-| 11-25 | Documentation refresh | `docs/` | to add |
+| 11-25 | Flutter app; product and technology architecture doc | PR #23, `flutter_app/`, `docs/architecture/product-and-technology-architecture.md` | HSP-65, HSP-68 |
+| 11-25 | Society modules on web (amenities, dues, inventory, waste); deployed live | PR #24, `docs/modules-api.md`; Node 78 tests, CI 6/6 | HSP-59..64 |
+| 11-25 | Documentation refresh | `docs/`, PR #25 | – |
 
 ## Open
 - Port Telegram, email desk, roles and society modules to Java/React.
@@ -32,4 +32,3 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
 - Import BPMN into Signavio (HSP-35).
 - Fill contribution matrix names (blank on purpose).
 - Acceptance test with residents.
-- Add Jira issues for the Flutter and society-modules work.
