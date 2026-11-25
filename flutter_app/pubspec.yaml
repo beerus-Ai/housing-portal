@@ -1,0 +1,25 @@
+name: sahyadri_heights
+description: Sahyadri Heights housing portal - Flutter (Dart) mobile client for the existing portal API.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.1.0
+  http: ^1.2.2
+  http_parser: ^4.0.2
+  shared_preferences: ^2.3.2
+  qr_flutter: ^4.1.0
+  image_picker: ^1.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,5 +1,7 @@
 # Architecture
 
+Product and technology architecture (faculty whiteboard, 2026-11-25), including the new Flutter app: [product-and-technology-architecture.md](product-and-technology-architecture.md).
+
 Decision record: [ADR 0001, move to Java (Spring Boot) and React side by side](adr-0001-java-react.md). The API contract is frozen: both backends expose the same URLs and JSON, and `public/api.js` documents it. Parts marked **planned** are not built yet. Updated 2026-11-14: Telegram intake, the n8n LLM gate and the committee email desk are built, tested and live; WhatsApp delivery is built but not connected.
 
 ## 1. System context
@@ -30,6 +32,7 @@ flowchart TB
     pwa[Mobile PWA - public/m]
     react[React app - frontend/]
     droid[Android app - Capacitor, mobile/]
+    flut[Flutter app - Dart, flutter_app/]
   end
   subgraph Node["Node API (default, port 3000)"]
     app[app.js routes and rules]
@@ -51,6 +54,7 @@ flowchart TB
   react --> app
   react --> jb
   droid --> pwa
+  flut --> app
   app --> sqlite
   app --> files
   jb --> pg
