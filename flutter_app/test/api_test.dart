@@ -68,4 +68,16 @@ void main() {
     final api = Api('http://x', client: MockClient((_) async => throw http.ClientException('Failed host lookup')));
     expect(() => api.me(), throwsA(isA<ApiException>().having((e) => e.message, 'message', startsWith('Cannot reach the server'))));
   });
+
+  test('assign sends vendor_id or staff_id', () async {
+    final bodies = <Object?>[];
+    final api = Api('http://x', client: MockClient((req) async {
+      expect(req.url.path, '/api/requests/9/assign');
+      bodies.add(jsonDecode(req.body));
+      return http.Response('{"ok":true}', 200);
+    }));
+    await api.assign(9, vendorId: 3);
+    await api.assign(9, staffId: 5);
+    expect(bodies, [{'vendor_id': 3}, {'staff_id': 5}]);
+  });
 }

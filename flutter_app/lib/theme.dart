@@ -10,8 +10,11 @@ class Palette {
   static const bg = Color(0xFFF3F2F2);
   static const surface = Color(0xFFFFFFFF);
   static const text = Color(0xFF201E1D);
+  /// Emergencies only (SOS button, active-emergency card).
   static const emRed = Color(0xFFB3261E);
   static const emRedBg = Color(0xFFFDECEA);
+  /// Errors and validation: neutral, never red (red means an emergency).
+  static const errorText = Color(0xFF4A4544);
 }
 
 ThemeData buildTheme() {
@@ -19,7 +22,7 @@ ThemeData buildTheme() {
     seedColor: Palette.accent,
     primary: Palette.accent,
     surface: Palette.surface,
-    error: Palette.emRed,
+    error: Palette.errorText,
   );
   return ThemeData(
     useMaterial3: true,
@@ -126,8 +129,12 @@ class EmptyState extends StatelessWidget {
 
 void toast(BuildContext context, String msg, {bool error = false}) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg),
-    backgroundColor: error ? Palette.emRed : null,
+    // Errors look like any other message plus an info icon; the colour stays neutral.
+    content: Row(children: [
+      if (error) ...[const Icon(Icons.info_outline, color: Colors.white, size: 20), const SizedBox(width: 10)],
+      Expanded(child: Text(msg)),
+    ]),
+    backgroundColor: Palette.text,
     behavior: SnackBarBehavior.floating,
   ));
 }

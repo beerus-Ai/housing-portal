@@ -75,7 +75,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(_error!, key: const Key('error'), style: const TextStyle(color: Palette.emRed)),
+                    Row(key: const Key('error'), children: [
+                      const Icon(Icons.info_outline, size: 18, color: Palette.errorText),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_error!, style: const TextStyle(color: Palette.errorText))),
+                    ]),
                   ],
                   const SizedBox(height: 20),
                   FilledButton(

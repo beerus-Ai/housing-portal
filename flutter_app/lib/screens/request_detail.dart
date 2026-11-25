@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
 import '../theme.dart';
+import 'assign_sheet.dart';
 
 class RequestDetailScreen extends StatefulWidget {
   const RequestDetailScreen({super.key, required this.id});
@@ -34,6 +35,20 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _assign(Map<String, dynamic> r) async {
+    final pick = await showModalBottomSheet<AssignPick>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => AssignSheet(request: r),
+    );
+    if (pick == null) return;
+    await _act(
+      () => app.run((a) => a.assign(widget.id, vendorId: pick.vendorId, staffId: pick.staffId)),
+      'Assigned to ${pick.name}. The resident has been told.',
+    );
   }
 
   @override
@@ -91,15 +106,37 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                   ),
                 ),
               ],
+              // Committee: the server needs a vendor or staff member before a request can move forward,
+              // so assignment comes first and "Move to" appears only once someone is assigned.
               if (app.isAdmin && next != null) ...[
                 const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(() => app.run((a) => a.setStatus(widget.id, next)),
-                          'Moved to ${statusLabel(next)}'),
-                  child: Text('Move to ${statusLabel(next)}'),
-                ),
+                if (r['vendor_name'] == null && r['assignee_name'] == null) ...[
+                  FilledButton.icon(
+                    key: const Key('assign'),
+                    onPressed: _busy ? null : () => _assign(r),
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: const Text('Assign vendor or staff'),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('Assign someone first; then the request can move to the next stage.',
+                      style: TextStyle(color: Colors.black54)),
+                ] else ...[
+                  FilledButton(
+                    key: const Key('move'),
+                    onPressed: _busy
+                        ? null
+                        : () => _act(() => app.run((a) => a.setStatus(widget.id, next)),
+                            'Moved to ${statusLabel(next)}'),
+                    child: Text('Move to ${statusLabel(next)}'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                    onPressed: _busy ? null : () => _assign(r),
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Change assignment'),
+                  ),
+                ],
               ],
               const SizedBox(height: 20),
               const Text('Messages', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
