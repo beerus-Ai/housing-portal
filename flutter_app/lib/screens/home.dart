@@ -113,12 +113,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (app.role != 'guard' && app.role != 'it') const SizedBox(width: 12),
                 Expanded(child: _stat('Unread alerts', unread, Icons.notifications_none, badge: unread > 0)),
               ]),
-              if (d.services != null) ...[
-                const SizedBox(height: 20),
-                const Text('Society services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                _servicesRow(d.services!),
-              ],
               if (app.isResident && app.can('request.create')) ...[
                 const SizedBox(height: 20),
                 const Text('Raise a request', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
@@ -208,6 +202,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                     child: const Text('Mark all as read'),
                   ),
+              ],
+              // Extras last: the required work (requests, notices, alerts) stays at the top.
+              if (d.services != null) ...[
+                const SizedBox(height: 20),
+                const Text('Society services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                _servicesRow(d.services!),
               ],
             ]);
           },

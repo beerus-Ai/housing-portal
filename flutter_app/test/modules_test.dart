@@ -23,10 +23,10 @@ void main() {
     expect(rupees(null), '₹0');
   });
 
-  test('Services menu follows the API rules per role', () {
+  test('More menu follows the API rules per role', () {
     List<String> titles(String role) => serviceEntries(role).map((e) => e.title).toList();
-    expect(titles('resident'), ['Amenities', 'Maintenance dues', 'Waste collection', 'Notices']);
-    expect(titles('admin'), ['Amenities', 'Maintenance dues', 'Inventory', 'Waste', 'Notices']);
+    expect(titles('resident'), ['Amenities', 'Maintenance dues', 'Waste collection', 'Gate pass']);
+    expect(titles('admin'), ['Amenities', 'Maintenance dues', 'Inventory', 'Waste']);
     expect(titles('staff'), ['Inventory', 'Waste']);
     expect(titles('guard'), isEmpty);
   });
