@@ -25,4 +25,4 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 ## Status
 Checked on an Android emulator against a local server. Not verified: physical phone, iOS, the live server.
 
-Open: no vendor or staff assignment in the app yet; error toasts are red (the palette keeps red for emergencies). Society modules (amenities, dues, inventory, waste) are not in the app. Jira: to add.
+Open: no vendor or staff assignment in the app yet; error toasts are red (the palette keeps red for emergencies). Society modules (amenities, dues, inventory, waste) are not in the app. Jira: HSP-68 (done), HSP-69, HSP-70.
