@@ -54,7 +54,7 @@ flowchart TB
 
 ### Module status in our build
 
-Built = working in the Node API and web app. Partial = some of it built. Planned = not built. Amenities, dues, inventory and waste (2026-11-25, [modules-api.md](../modules-api.md)) are not ported to Java, React or Flutter.
+Built = working in the Node API and web app. Partial = some of it built. Planned = not built. Amenities, dues, inventory and waste (2026-11-25, [modules-api.md](../modules-api.md)) are in the web and Flutter apps, not yet in Java or React.
 
 | Module | Status | What exists today | Where |
 |---|---|---|---|

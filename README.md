@@ -19,7 +19,7 @@ npm start          # http://localhost:3000, committee sign-in admin@society.test
 npm test           # Node, 79 tests
 cd backend && ./gradlew test      # Java, 81
 cd frontend && npm test           # React, 67
-cd flutter_app && flutter test    # Flutter, 14
+cd flutter_app && flutter test    # Flutter, 18
 ```
 CI runs 6 jobs on every pull request (Node, Java H2, Java PostgreSQL 16, React, Docker build, Flutter). Environment variables and rules: `CLAUDE.md`. SQLite to PostgreSQL export: `docs/deploy.md`.
 

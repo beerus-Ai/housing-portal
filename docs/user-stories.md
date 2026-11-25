@@ -1,6 +1,6 @@
 # User Stories by Role: Sahyadri Heights Housing Society Portal
 
-Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026-11-21; society modules from the whiteboard, 2026-11-25). FR IDs are in `requirements.md`. All stories are built in the Node app and web UI; review-role and society-module stories are not yet ported to Java/React (modules also not in Flutter).
+Form: **As a <role>, I want <requirement>, so that <why>** (faculty review, 2026-11-21; society modules from the whiteboard, 2026-11-25). FR IDs are in `requirements.md`. All stories are built in the Node app and web UI; review-role and society-module stories are not yet ported to Java/React; the modules are also in the Flutter app.
 
 ## 1. Roles
 | # | Role (review) | Role in the portal |
