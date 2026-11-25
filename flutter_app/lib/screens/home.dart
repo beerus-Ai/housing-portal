@@ -3,9 +3,14 @@ import 'package:material_ui/material_ui.dart';
 import '../api.dart';
 import '../app_state.dart';
 import '../theme.dart';
+import '../modules_util.dart';
+import 'amenities.dart';
+import 'dues.dart';
 import 'emergency.dart';
+import 'inventory.dart';
 import 'new_request.dart';
 import 'request_detail.dart';
+import 'waste.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeData {
   List<dynamic> requests = const [], emergencies = const [], notices = const [], notifications = const [];
+  Map<String, dynamic>? services; // /api/modules/summary (residents and committee)
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -44,6 +50,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ..emergencies = r[1]
       ..notices = r[2]
       ..notifications = r[3];
+    if (role == 'resident' || role == 'admin') {
+      try {
+        d.services = await app.run((a) => a.modulesSummary());
+      } on ApiException catch (e) {
+        if (e.status == 401) rethrow;
+      }
+    }
     return d;
   }
 
@@ -100,6 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (app.role != 'guard' && app.role != 'it') const SizedBox(width: 12),
                 Expanded(child: _stat('Unread alerts', unread, Icons.notifications_none, badge: unread > 0)),
               ]),
+              if (d.services != null) ...[
+                const SizedBox(height: 20),
+                const Text('Society services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                _servicesRow(d.services!),
+              ],
               if (app.isResident && app.can('request.create')) ...[
                 const SizedBox(height: 20),
                 const Text('Raise a request', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
@@ -223,6 +242,30 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
       );
+
+  void _open(Widget page) => Navigator.push(context, MaterialPageRoute(builder: (_) => page)).then((_) => _refresh());
+
+  Widget _servicesRow(Map<String, dynamic> s) {
+    if (app.isAdmin) {
+      return statGrid([
+        StatTile(icon: Icons.account_balance_wallet_outlined, value: rupees(s['dues_outstanding'] as num?), label: 'Dues outstanding',
+            sub: (s['dues_overdue'] ?? 0) > 0 ? '${s['dues_overdue']} overdue bills' : 'Nothing overdue', onTap: () => _open(const DuesScreen())),
+        StatTile(icon: Icons.event_available_outlined, value: '${s['bookings_today'] ?? 0}', label: 'Bookings today', onTap: () => _open(const AmenitiesScreen())),
+        StatTile(icon: Icons.inventory_2_outlined, value: '${s['low_stock'] ?? 0}', label: 'Items to reorder', onTap: () => _open(const InventoryScreen())),
+        StatTile(icon: Icons.recycling, value: '${s['waste_kg_7d'] ?? 0} kg', label: 'Waste, last 7 days', onTap: () => _open(const WasteScreen())),
+      ]);
+    }
+    final next = s['next_booking'] as Map?;
+    final waste = (s['waste_today'] as List?) ?? const [];
+    return statGrid([
+      StatTile(icon: Icons.account_balance_wallet_outlined, value: rupees(s['dues_balance'] as num?), label: 'Dues to pay',
+          sub: (s['dues_overdue'] ?? 0) > 0 ? '${s['dues_overdue']} overdue' : 'Nothing overdue', onTap: () => _open(const DuesScreen())),
+      StatTile(icon: Icons.event_available_outlined, value: next == null ? 'None' : '${next['amenity']}', label: 'Next booking',
+          sub: next == null ? 'Book the clubhouse or gym' : '${dayLabel(next['date'] as String)}, ${next['start']}', onTap: () => _open(const AmenitiesScreen())),
+      StatTile(icon: Icons.recycling, value: waste.isEmpty ? 'No pickup' : waste.map((w) => wasteLabel(w['kind'] as String?).split(' ').first).join(' + '),
+          label: 'Waste today', sub: waste.isEmpty ? 'See the schedule' : 'From ${waste.first['time']}', onTap: () => _open(const WasteScreen())),
+    ]);
+  }
 
   Widget _emergencyCard(dynamic e) => Card(
         color: Palette.emRedBg,

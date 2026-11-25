@@ -192,4 +192,54 @@ class Api {
   /// Resident's personal gate token: `{token, qr: "HSP:<token>", nfc}`.
   Future<Map<String, dynamic>> gatePass() async =>
       Map<String, dynamic>.from(await get('/api/gate/me') as Map);
+
+  // ---- society modules (docs/modules-api.md)
+  static Map<String, dynamic> _map(dynamic v) => Map<String, dynamic>.from(v as Map);
+
+  /// Resident: dues_balance, dues_overdue, next_booking, waste_today. Committee: bookings_today, dues_outstanding, ...
+  Future<Map<String, dynamic>> modulesSummary() async => _map(await get('/api/modules/summary'));
+
+  Future<List<dynamic>> amenities() async => await get('/api/amenities') as List<dynamic>;
+
+  Future<Map<String, dynamic>> slots(int amenityId, String date) async =>
+      _map(await get('/api/amenities/$amenityId/slots', {'date': date}));
+
+  Future<List<dynamic>> bookings() async => await get('/api/bookings') as List<dynamic>;
+
+  Future<int> book(int amenityId, String date, String start) async =>
+      (_map(await post('/api/bookings', {'amenity_id': amenityId, 'date': date, 'start': start})))['id'] as int;
+
+  Future<void> cancelBooking(int id) => post('/api/bookings/$id/cancel');
+
+  /// `{dues: [...], totals: {billed, collected, outstanding, overdue}}`.
+  Future<Map<String, dynamic>> dues({String? status}) async =>
+      _map(await get('/api/dues', status == null ? null : {'status': status}));
+
+  Future<Map<String, dynamic>> raiseDues({required String period, required num amount, required String dueDate, String title = 'Maintenance'}) async =>
+      _map(await post('/api/admin/dues', {'period': period, 'title': title, 'amount': amount, 'due_date': dueDate, 'flats': 'all'}));
+
+  /// Returns the balance left after the payment.
+  Future<num> recordPayment(int dueId, {required num amount, required String method, String reference = ''}) async =>
+      (_map(await post('/api/admin/dues/$dueId/payments', {'amount': amount, 'method': method, 'reference': reference})))['balance'] as num;
+
+  Future<List<dynamic>> inventory() async => await get('/api/inventory') as List<dynamic>;
+
+  Future<int> addItem({required String name, required String category, int quantity = 0, int minQty = 0, String unit = 'pcs', String location = ''}) async =>
+      (_map(await post('/api/inventory', {'name': name, 'category': category, 'quantity': quantity, 'min_qty': minQty, 'unit': unit, 'location': location})))['id'] as int;
+
+  /// `change` > 0 is stock in (committee only), < 0 is stock out. Returns the updated item.
+  Future<Map<String, dynamic>> moveStock(int itemId, int change, {String note = '', int? requestId}) async =>
+      _map(await post('/api/inventory/$itemId/move', {'change': change, 'note': note, if (requestId != null) 'request_id': requestId}));
+
+  Future<List<dynamic>> wasteSchedule() async => await get('/api/waste/schedule') as List<dynamic>;
+
+  /// `{from, days, logs, totals: {wet, dry, ..., total, segregated_pct}}`.
+  Future<Map<String, dynamic>> wasteLogs({int days = 30}) async => _map(await get('/api/waste/logs', {'days': '$days'}));
+
+  Future<void> logWaste(String kind, num weightKg, {String note = ''}) =>
+      post('/api/waste/logs', {'kind': kind, 'weight_kg': weightKg, 'note': note});
+
+  /// A missed pickup becomes a housekeeping request; returns its id.
+  Future<int> reportMissedPickup(String kind, {String note = ''}) async =>
+      (_map(await post('/api/waste/missed', {'kind': kind, 'note': note})))['id'] as int;
 }

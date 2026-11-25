@@ -1,6 +1,6 @@
 # Society modules API (amenities, dues, inventory, waste)
 
-Modules from the faculty whiteboard ([product and technology architecture](architecture/product-and-technology-architecture.md)). Code: `modules.js`; web pages: `public/web-modules.js`; tests: `test/modules.test.js`. Node and web app only; not ported to Java, React or Flutter.
+Modules from the faculty whiteboard ([product and technology architecture](architecture/product-and-technology-architecture.md)). Code: `modules.js`; web pages: `public/web-modules.js`; tests: `test/modules.test.js`. Node, web and Flutter app; not ported to Java, React or Flutter.
 
 All routes need a signed-in session; every change is audited; "today" and "now" are India time (IST); errors are `{ "error": "..." }`. "Residents" means approved residents with a flat. Guards and IT cannot call these routes; staff can call only the inventory and waste log/schedule routes (allow-list in `auth`).
 

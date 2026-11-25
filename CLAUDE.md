@@ -8,7 +8,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - **Java (`backend/`, port 8080):** Spring Boot 3.3, Java 17+, Gradle wrapper, Spring Security session cookie, JPA, Flyway, H2 locally, PostgreSQL 16 in prod. Drop-in replacement for the Node API (same URLs, JSON, status codes, error strings).
 - **React (`frontend/`, port 5173):** React 18, TypeScript, Vite, React Router, TanStack Query. Talks to either backend through the Vite proxy (`VITE_API_TARGET`).
 - **Mobile (`mobile/`):** Capacitor Android wrapper around the PWA; `public/m/` stays until the React app replaces it.
-- **Flutter (`flutter_app/`):** Flutter + Dart client on the same API (session cookie captured from `/api/login`); bottom nav by role; `flutter test` (14). SDK on this machine: `E:	oolslutter`. Product and technology architecture: `docs/architecture/product-and-technology-architecture.md`.
+- **Flutter (`flutter_app/`):** Flutter + Dart client on the same API (session cookie captured from `/api/login`); bottom nav by role (Services tab: amenities, dues, inventory, waste, notices); `flutter test` (18). SDK on this machine: `E:\tools\flutter`. Product and technology architecture: `docs/architecture/product-and-technology-architecture.md`.
 - Vanilla JS frontend in `public/` (no build step, strict CSP: no inline scripts). The menu can sit on the side or on top and can be hidden; the choice is kept in localStorage (`hp.nav`). Animations are small Lottie JSON files in `public/anim/` played by `lottie-web` (`public/ui.js`). Fonts (Outfit, Plus Jakarta Sans) and Phosphor duotone icons are self-hosted in `public/vendor/`, so the CSP stays `'self'` only.
 - Two clients on one API: the **web app** (`/`, desktop-first and responsive) and the **mobile app** (`/m/`, installable PWA with a bottom tab bar). Phones opening `/` are sent to `/m/` (add `?web` to stay). Design source: Claude Design handoff `Housing Portal.dc.html` (tokens in `public/css/tokens.css`, base components in `public/css/ds.css`).
 - **AI module (in progress):** `ai.js` holds PII redaction, rule-based triage, optional LLM triage, notice drafter and weekly digest. AI only suggests; a committee member confirms assignments and sends notices. Never send names, phones, emails or flat numbers to a model.
@@ -26,7 +26,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 67), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android). Flutter: `cd flutter_app && flutter pub get && flutter test && flutter run` (see `flutter_app/README.md`).
 - CI (`.github/workflows/ci.yml`) runs 6 jobs on every PR: Node, Java (H2), Java (PostgreSQL 16 + packaged boot), React, Docker image build, Flutter. Docker Compose (`docker-compose.yml`) has not been run end to end.
-- Docs: `docs/` (index in `README.md`). Word copies in `docs/word/` are generated with `node E:	ools\md2docx\md2docx.js <docsRoot> <outDir> <md files...>` (run from that folder).
+- Docs: `docs/` (index in `README.md`). Word copies in `docs/word/` are generated with `node E:\tools\md2docx\md2docx.js <docsRoot> <outDir> <md files...>` (run from that folder).
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).
 
 ## Layout

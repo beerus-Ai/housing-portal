@@ -8,7 +8,7 @@ Updated 2026-11-25. Only what was actually run is marked as passed.
 | Node API | `npm test` | 79 | All pass (includes `modules`, `roles`, `telegram`, `email-desk`) |
 | Java backend | `cd backend && ./gradlew test` | 81 | Green in CI (H2 and PostgreSQL 16) |
 | React | `cd frontend && npm test` | 67 | Green in CI |
-| Flutter | `cd flutter_app && flutter test` | 14 | Green in CI |
+| Flutter | `cd flutter_app && flutter test` | 18 | Green in CI |
 | CI | GitHub Actions, PR #24 | 6 jobs | All green |
 
 AI tests run with no API key, so they prove the rule-based path, not LLM output.
@@ -26,6 +26,7 @@ AI tests run with no API key, so they prove the rule-based path, not LLM output.
 | 2026-11-25 | Society modules in a browser on a local server, as committee and resident | Pass |
 | 2026-11-25 | Flutter app on an Android emulator against a local server (sign in, requests, new request with photo, detail, next stage, notices, SOS, gate QR, profile) | Pass |
 | 2026-11-25 | Flutter committee flow on the emulator: assign a vendor from the sheet, then Assigned -> In progress; wrong-password error shown neutral with an info icon | Pass |
+| 2026-11-25 | Flutter society modules on the emulator: resident books a slot, sees dues, reports a missed pickup (request opens); committee records a part payment and takes stock out (reorder shown); staff see only Inventory and Waste and log a collection | Pass |
 | 2026-11-25 | Live site after deploy: `/healthz` ok, society module routes respond | Pass |
 
 ## Not verified

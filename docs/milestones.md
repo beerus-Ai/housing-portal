@@ -22,6 +22,7 @@ Dates are 2026. Code: GitHub (PR #16 and later). Stories: HSP Jira board.
 | 11-25 | Society modules on web (amenities, dues, inventory, waste); deployed live | PR #24, `docs/modules-api.md`; Node 78 tests, CI 6/6 | HSP-59..64 |
 | 11-25 | Documentation refresh | `docs/`, PR #25 | – |
 | 11-25 | Flutter: committee assign and neutral error colour; seed duplicates fixed | Flutter 14, Node 79 tests | HSP-69 |
+| 11-25 | Flutter: society modules in a Services tab (amenities, dues, inventory, waste) | Flutter 18 tests; emulator check by role | HSP-70 (part) |
 
 ## Open
 - Port Telegram, email desk, roles and society modules to Java/React.

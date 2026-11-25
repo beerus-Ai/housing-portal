@@ -3,9 +3,9 @@ import 'package:material_ui/material_ui.dart';
 import '../app_state.dart';
 import 'gate_pass.dart';
 import 'home.dart';
-import 'notices.dart';
 import 'profile.dart';
 import 'requests.dart';
+import 'services.dart';
 
 typedef _Tab = ({String label, IconData icon, IconData selected, Widget page});
 
@@ -32,8 +32,9 @@ class _ShellState extends State<Shell> {
         page: const RequestsScreen()
       ));
     }
-    if (role == 'resident' || role == 'admin') {
-      tabs.add((label: 'Notices', icon: Icons.campaign_outlined, selected: Icons.campaign, page: const NoticesScreen()));
+    // Amenities, dues, inventory, waste and notices live under one tab (the bar holds at most 5).
+    if (role == 'resident' || role == 'admin' || role == 'staff') {
+      tabs.add((label: 'Services', icon: Icons.storefront_outlined, selected: Icons.storefront, page: const ServicesScreen()));
     }
     if (role == 'resident') {
       tabs.add((label: 'Gate pass', icon: Icons.qr_code_2_outlined, selected: Icons.qr_code_2, page: const GatePassScreen()));
