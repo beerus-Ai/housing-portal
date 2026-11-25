@@ -114,6 +114,38 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS support_replies(
     id INTEGER PRIMARY KEY, ticket_id INTEGER NOT NULL REFERENCES support_tickets(id), user_id INTEGER NOT NULL REFERENCES users(id),
     body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
+  // Society modules from the faculty whiteboard (2026-11-25): amenity booking, maintenance dues, inventory, waste.
+  // Additive and safe to re-run. Contract: docs/modules-api.md.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS amenities(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT, capacity INTEGER, open_from TEXT NOT NULL DEFAULT '06:00',
+    open_to TEXT NOT NULL DEFAULT '22:00', slot_minutes INTEGER NOT NULL DEFAULT 60, active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS amenity_bookings(
+    id INTEGER PRIMARY KEY, amenity_id INTEGER NOT NULL REFERENCES amenities(id), user_id INTEGER NOT NULL REFERENCES users(id),
+    flat TEXT NOT NULL, date TEXT NOT NULL, start TEXT NOT NULL, end_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'booked',
+    note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), cancelled_at TEXT);
+  CREATE UNIQUE INDEX IF NOT EXISTS amenity_slot_once ON amenity_bookings(amenity_id, date, start) WHERE status='booked';
+  CREATE TABLE IF NOT EXISTS dues(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, period TEXT NOT NULL, title TEXT NOT NULL, amount REAL NOT NULL,
+    due_date TEXT NOT NULL, created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE UNIQUE INDEX IF NOT EXISTS dues_once ON dues(flat, period, title);
+  CREATE TABLE IF NOT EXISTS due_payments(
+    id INTEGER PRIMARY KEY, due_id INTEGER NOT NULL REFERENCES dues(id), amount REAL NOT NULL, method TEXT NOT NULL,
+    reference TEXT, recorded_by INTEGER NOT NULL REFERENCES users(id), paid_on TEXT NOT NULL DEFAULT (date('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS inventory_items(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'other', unit TEXT NOT NULL DEFAULT 'pcs',
+    quantity INTEGER NOT NULL DEFAULT 0, min_qty INTEGER NOT NULL DEFAULT 0, location TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS inventory_moves(
+    id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL REFERENCES inventory_items(id), change INTEGER NOT NULL, note TEXT,
+    request_id INTEGER, user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS waste_schedule(
+    id INTEGER PRIMARY KEY, weekday INTEGER NOT NULL, kind TEXT NOT NULL, time TEXT NOT NULL, note TEXT);
+  CREATE TABLE IF NOT EXISTS waste_logs(
+    id INTEGER PRIMARY KEY, date TEXT NOT NULL, kind TEXT NOT NULL, weight_kg REAL NOT NULL, note TEXT,
+    user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };

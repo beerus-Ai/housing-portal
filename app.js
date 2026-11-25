@@ -151,7 +151,7 @@ function createApp(opts = {}) {
     // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
     if (u.role === 'staff' || u.role === 'it') {
       const p = req.path;
-      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
+      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || p === '/api/inventory' || p.startsWith('/api/inventory/') || p === '/api/waste/logs' || p === '/api/waste/schedule' || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
         (u.role === 'it' && p.startsWith('/api/it/'));
       if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
       if (u.role === 'staff' && p === '/api/requests' && req.method !== 'GET') return res.status(403).json({ error: 'Not allowed for this account' });
@@ -1402,6 +1402,7 @@ function createApp(opts = {}) {
   });
 
   require('./roles')(app, { db, q, one, run, log, notify, notifyReq, auth, admin, governance, posOf, isGov, canApproveCost, hasHead, committeeIds, canSee, canReopen, shape, str, upload, validImage, uploadDir, approvalLimit, getSetting, getMaintenance, REQ_SELECT, REOPEN_DAYS, bcrypt });
+  require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, clock: opts.clock });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));

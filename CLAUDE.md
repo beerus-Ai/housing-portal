@@ -16,11 +16,12 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - **Telegram intake:** `/api/telegram/webhook` (same pipeline as WhatsApp). Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`. Request-vs-chatter gate can use a free n8n LLM: `CLASSIFY_WEBHOOK_URL`.
 - **Email desk (`email-desk.js`):** new requests, review-queue messages, registrations and emergencies are POSTed to an n8n Gmail workflow (`ADMIN_EMAIL_WEBHOOK_URL`) when no admin has the dashboard open (emergencies always). Signed links open `/desk/<token>`; confirming replays the dashboard's own API route as the admin, so audit and notifications are the same. Env: `PUBLIC_URL` (else `RENDER_EXTERNAL_URL`), `EMAIL_ACTION_SECRET`. Node only so far.
 - **Roles (faculty review, 2026-11-21, `roles.js`, `guides.js`, contract `docs/roles-api.md`):** `users.role` is resident | admin (committee) | guard | staff | it; committee accounts carry `users.position` member | head | sysadmin (empty = sysadmin). `governance` middleware (head or sysadmin) guards settings, access rules, accounts, guards and the Telegram webhook. Staff and IT have strict allow-lists in `auth` like guards. Costs over `approval_limit` need the head (sysadmin only when no head exists). Node only so far.
+- **Society modules (faculty whiteboard, 2026-11-25, `modules.js`, `public/web-modules.js`, contract `docs/modules-api.md`):** amenity booking, maintenance dues with recorded payments (no online gateway yet), inventory with stock moves, waste schedule/log and missed-pickup requests; "Society services" row on the resident home and committee dashboard. Times are IST; `createApp({ clock })` fixes the clock in tests. Node and web only so far.
 - **Free hosting:** the SQLite file is wiped on sleep/redeploy. `SEED_PASSWORD` seeds role accounts and vendors; `SEED_TELEGRAM_PHONE` / `SEED_TELEGRAM_ID` recreate the linked Telegram test resident (flat T-101).
 
 ## Run
 - `npm start` -> http://localhost:3000. The database starts empty except for the committee admin (`admin@society.test`; set `ADMIN_EMAIL` / `ADMIN_PASSWORD`, required and 12+ characters in production). There is no demo data: register residents through the UI and enter only the minimum data when testing.
-- `npm test` -> Node API tests (`node:test`, 73 including `test/roles.test.js`, `test/ai.test.js`, `test/telegram.test.js`, `test/email-desk.test.js`). Every story ships with a test; testing leads sign off.
+- `npm test` -> Node API tests (`node:test`, 78 including `test/modules.test.js`, `test/roles.test.js`, `test/ai.test.js`, `test/telegram.test.js`, `test/email-desk.test.js`). Every story ships with a test; testing leads sign off.
 - Java: `cd backend && ./gradlew test` (JUnit, 79 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
 - React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 65), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android). Flutter: `cd flutter_app && flutter pub get && flutter test && flutter run` (see `flutter_app/README.md`).
@@ -28,7 +29,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).
 
 ## Layout
-- `app.js` routes + rules, `db.js` schema + admin seed, `ai.js` AI module (in progress), `email-desk.js` committee email actions, `server.js` entry, `test/` Node tests, `n8n/` importable n8n workflows.
+- `app.js` routes + rules, `db.js` schema + admin seed, `ai.js` AI module (in progress), `email-desk.js` committee email actions, `roles.js` review roles, `modules.js` society modules, `server.js` entry, `test/` Node tests, `n8n/` importable n8n workflows.
 - `public/index.html` + `web.js` web app; `public/m/` mobile app (`m.js`, `sw.js`, manifest); `public/common.js` shared helpers (api, escaping, tracker, status mapping); `public/api.js` API contract; `public/css/` styles.
 - `backend/` Java API; `frontend/` React app; `mobile/` Capacitor Android; `scripts/` SQLite to Postgres export.
 - `docs/`: `requirements.md`, `process-flows/` (BPMN for Signavio), `architecture/` (diagrams, ADR), `testing/`, `jira/` (backlog, sprints), `demo-script.md`, `contribution-matrix.md`, `privacy-and-consent.md`, `deploy.md`.
