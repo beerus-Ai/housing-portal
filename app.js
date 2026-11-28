@@ -138,7 +138,8 @@ function createApp(opts = {}) {
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
-  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && (p === '/api/me/password' || p === '/api/me/card/freeze')) || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && (p === '/api/me/password' || p === '/api/me/card/freeze')) || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/') ||
+    p === '/api/chat' || p.startsWith('/api/chat/'); // chat (chat.js): every signed-in role; chat.js limits neighbour routes to residents
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -761,6 +762,7 @@ function createApp(opts = {}) {
   };
   app.get('/api/pulse', auth, (req, res) => {
     const u = req.user;
+    const json = res.json.bind(res); res.json = o => json({ ...o, chat_unread: require('./chat').unreadFor(one, u) }); // additive: unread chat messages
     if (u.role === 'staff') return res.json({ a: alertsFor(u), v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM requests WHERE assignee_id=?", u.id).m, one('SELECT COUNT(*) AS n FROM job_updates WHERE user_id=?', u.id).n, one('SELECT COALESCE(MAX(id),0) AS m FROM staff_shifts WHERE user_id=?', u.id).m].join('|') });
     if (u.role === 'it') return res.json({ a: alertsFor(u), v: [one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m, one("SELECT COALESCE(MAX(updated_at),'') AS m FROM support_tickets").m, one('SELECT COUNT(*) AS n FROM support_replies').n].join('|') });
     if (u.role === 'guard') return res.json({ a: alertsFor(u), v: String(one('SELECT COALESCE(MAX(id),0) AS m FROM notifications WHERE user_id=?', u.id).m) }); // guards only see their own notification marker
@@ -1442,6 +1444,7 @@ function createApp(opts = {}) {
   require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
   require('./bulk')(app, { q, one, run, log, notify, auth, admin, str, bcrypt, isGov, desk });
   require('./carpool')(app, { q, one, run, log, notify, auth, str, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./chat')(app, { q, one, run, log, notify, auth, committeeIds });
   require('./wallet')(app, { q, one, run, log, notify, auth, admin, governance, str, creditLimit });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);

@@ -186,6 +186,11 @@ const ROWS = [
   // ---------- carpool (residents offer and ask; the committee sees all and can take a ride down)
   ['GET carpool', 'GET', () => '/api/carpool', null, only([...RES, ...COM], 200)],
   ['POST carpool ride', 'POST', () => '/api/carpool', (f, r) => ({ to_place: 'Station ' + r, depart_at: '2026-12-05T08:00', seats: 2 }), only(RES, 201)],
+  // ---------- chat (everyone writes to the committee desk; neighbour messages are resident to resident)
+  ['GET chat', 'GET', () => '/api/chat', null, expect(200)],
+  ['POST chat desk', 'POST', () => '/api/chat/desk', (f, r) => ({ body: 'Hello from ' + r }), expect(201, { member: 403, head: 403, sysadmin: 403 })],
+  ['GET chat residents', 'GET', () => '/api/chat/residents', null, only(RES, 200)],
+  ['POST chat direct', 'POST', () => '/api/chat/direct', (f, r) => ({ user_id: f.ownerId, body: 'Hi from ' + r }), expect(403, { owner: 400, tenant: 201, family: 201 })],
   // ---------- amenities
   ['GET amenities', 'GET', () => '/api/amenities', null, only([...RES, ...COM], 200)],
   ['POST amenities', 'POST', () => '/api/amenities', (f, r) => ({ name: 'Court ' + r }), only(COM, 201)],
