@@ -173,6 +173,7 @@
       <h2>${login ? 'Welcome back' : 'Join your society'}</h2>
       ${login ? '' : `<p class="muted am-sub">The committee approves new residents before you can sign in.</p>`}
       ${google}
+      ${login && S.regDone ? `<div class="callout col ev-done" role="status" style="gap:6px"><b>${ic('envelope-simple')} Check your inbox</b><span class="sm">${S.regDone.ev === 'sent' ? `We sent a link to <b>${esc(S.regDone.email)}</b>. Open it to confirm your email; the committee then reviews your registration.` : `We could not send the confirmation email right now. The committee can still review your registration.`}</span><button type="button" class="link-btn sm" data-act="evagain" style="align-self:flex-start">Didn't get it? Send the link again</button></div>` : ''}
       <form id="authform" class="col" novalidate>
         ${login ? '' : `<div class="type-tiles" role="group" aria-label="I am a">${tiles}</div>
           <div class="two">${authField('n', 'Full name', 'user', '<input class="input" id="n" name="name" required maxlength="100" autocomplete="name">')}
@@ -417,7 +418,7 @@
       const us = (await API.admin.users()).filter(u => u.role !== 'admin');
       const ordered = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 10)];
       page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Verification: approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
-        <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span></span></span></td>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span>${u.email_verified ? `<span class="tag tag-accent ev-tag">${ic('seal-check')}Email confirmed</span>` : `<span class="row" style="gap:6px;flex-wrap:wrap"><span class="tag tag-accent-2 ev-tag">${ic('envelope-simple')}Email not confirmed</span>${u.status === 'pending' ? `<button class="link-btn xs" data-act="evresend" data-id="${u.id}">Resend link</button>` : ''}</span>`}</span></span></td>
           <td>${esc(u.flat)}</td><td>${esc(TYPE[u.resident_type] || '')}</td><td>${esc(day(u.created_at))}</td>
           <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end;flex-wrap:nowrap"><button class="btn btn-primary" data-act="decidecard" data-id="${u.id}" data-name="${esc(u.name)}" title="Approve, then tap the card you hand them">${ic('contactless-payment')}Approve + card</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
     },
@@ -524,6 +525,8 @@
   document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
   const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
+    evagain: async () => { try { const r = await HP.api('POST', '/api/verify-email/resend', { email: S.regDone && S.regDone.email }); toast(r.message); } catch (x) { toast(x.message, 'error'); } },
+    evresend: async el => { try { const r = await HP.api('POST', `/api/admin/users/${el.dataset.id}/verify-email`); toast(r.result === 'sent' ? 'A new confirmation link was sent' : 'No email could be sent right now'); } catch (x) { toast(x.message, 'error'); } },
     reqpast: () => { S.showPast = !S.showPast; render(); },
     catfilter: el => { S.catFilter = el.dataset.c; S.srcFilter = ''; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
@@ -618,7 +621,7 @@
       try {
         if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = home0(); return render(); }
         d.consent = f.consent.checked; d.resident_type = S.regType;
-        const r = await API.auth.register(d); S.mode = 'login'; await render(); toast(r.message);
+        const r = await API.auth.register(d); S.mode = 'login'; S.regDone = { email: d.email, ev: r.email_verification }; await render(); toast(r.message);
       } catch (x) { err.textContent = x.message; f.classList.remove('busy'); if (btn) btn.disabled = false; void f.offsetWidth; f.classList.add('shake'); }
     } else if (f.id === 'raiseform') {
       const fd = new FormData();

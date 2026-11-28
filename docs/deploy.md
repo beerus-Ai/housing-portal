@@ -31,6 +31,7 @@ Open http://localhost:8081. Services: `postgres` (16, volume `pgdata`), `backend
 | `WEB_PORT` | compose | host port, default 8081 |
 | `PORT`, `DB_FILE`, `UPLOAD_DIR`, `NODE_ENV=production` | Node | `NODE_ENV=production` turns on secure cookies and trust proxy |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Node | Telegram intake; if the URL changes, call `POST /api/admin/telegram/set-webhook` as head or sysadmin (no button) |
+| `VERIFY_EMAIL_WEBHOOK_URL` | Node | n8n workflow that emails the confirmation link to a new resident (`n8n/verify-email.json`); unset = link printed to the log in development, not sent in production |
 | `CLASSIFY_WEBHOOK_URL` | Node | n8n message classifier (LLM gate); unset = rules |
 | `ADMIN_EMAIL_WEBHOOK_URL` | Node | n8n admin email desk; unset = no emails |
 | `PUBLIC_URL`, `EMAIL_ACTION_SECRET` | Node | base for email links (else `RENDER_EXTERNAL_URL`); signing key (else `ADMIN_PASSWORD`) |

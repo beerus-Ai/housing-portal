@@ -84,6 +84,13 @@ window.API = (() => {
       removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
+    // Email verification at onboarding (docs/email-verification-api.md). POST /api/register also returns email_verification: 'sent'|'unavailable'.
+    verifyEmail: {
+      resend: email => call('POST', '/api/verify-email/resend', { email }), // anyone: always { ok, message } (does not reveal accounts); at most 1 email per 5 min
+      adminResend: uid => call('POST', `/api/admin/users/${id(uid)}/verify-email`), // committee: { result: 'sent'|'unavailable' }; 409 already confirmed
+      required: () => call('GET', '/api/admin/settings/email-verification'), // committee: { required }
+      setRequired: required => call('PUT', '/api/admin/settings/email-verification', { required }), // head or admin
+    },
     charts: () => call('GET', '/api/admin/charts'), // committee: { requests_weekly, sla_weekly, open_by_category, dues_monthly, gate_daily, sla_hours } (docs/charts-api.md)
     // Bulk upload (docs/bulk-upload-api.md): the committee imports a CSV; a dry run checks every row first.
     bulk: {

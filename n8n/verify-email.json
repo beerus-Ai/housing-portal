@@ -1,0 +1,72 @@
+{
+  "name": "Sahyadri: email verification",
+  "nodes": [
+    {
+      "id": "v1",
+      "name": "Verification request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "c2d3e4f5-0000-4000-8000-9e1f00a1b2c3",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sahyadri-verify-email-CHANGE-ME",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "v2",
+      "name": "Email the person",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        280,
+        0
+      ],
+      "parameters": {
+        "sendTo": "={{ $json.body.to }}",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "v3",
+      "name": "Read me",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -220
+      ],
+      "parameters": {
+        "width": 560,
+        "height": 180,
+        "content": "## Email verification\nThe portal POSTs { kind: \"verify_email\", to, name, subject, html, text, link } here when someone registers.\n1. Change the webhook path, connect your Gmail credential to \"Email the person\", publish.\n2. Set VERIFY_EMAIL_WEBHOOK_URL on Render to the production webhook URL.\nKeep this separate from the committee email desk: these emails go to residents."
+      }
+    }
+  ],
+  "connections": {
+    "Verification request": {
+      "main": [
+        [
+          {
+            "node": "Email the person",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
