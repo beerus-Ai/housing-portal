@@ -250,3 +250,6 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .rl .list-row:has(> :nth-child(3)) { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; }
 .rl .list-row:has(> :nth-child(4)) { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
 .rl .list-row .muted.sm { white-space: nowrap; }
+/* Tuck shop: product information under the name (two lines, the rest on the edit form) */
+.sv-desc { color: var(--color-text-muted, #5b5755); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+.sv-edit textarea { resize: vertical; }

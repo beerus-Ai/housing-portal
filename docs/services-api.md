@@ -7,8 +7,8 @@ The **tuck shop owner** (account role `shop`) runs the shop and the **laundry se
 | Area | Route | Who | Notes |
 |---|---|---|---|
 | Tuck shop | `GET /api/shop/items` | everyone | Residents see shown items only |
-| | `POST /api/shop/items` `{name,category,price,stock,unit?,image?}` | shop owner | Category: groceries, dairy, snacks, household, personal care, other. 409 on duplicate name |
-| | `PATCH /api/shop/items/:id` `{price?,stock?,active?,image?,...}` | shop owner | `image` is one of `/img/shop/*.jpg` |
+| | `POST /api/shop/items` `{name,category,price,stock,unit?,image?,description?}` | shop owner | Category: groceries, dairy, snacks, household, personal care, other. 409 on duplicate name |
+| | `PATCH /api/shop/items/:id` `{name?,category?,price?,stock?,unit?,active?,image?,description?}` | shop owner | `image` is one of `/img/shop/*.jpg`; `description` (up to 300 characters: what it is, brand, pack, storage) shows on the shop card |
 | | `POST /api/shop/orders` `{items:[{id,qty}],note?}` | resident | Stock is taken; 409 when stock is short. The shop owner is told |
 | | `GET /api/shop/orders` | resident (own flat), shop owner, committee (read only) | |
 | | `POST /api/shop/orders/:id/status` `{status}` | shop owner; resident cancels own while placed | placed → ready → delivered; cancel from placed or ready puts stock back |

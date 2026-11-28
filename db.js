@@ -172,6 +172,7 @@ function openDb(file) {
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY(event_id, user_id));`);
   if (!db.prepare('PRAGMA table_info(shop_items)').all().some(c => c.name === 'image')) db.exec('ALTER TABLE shop_items ADD COLUMN image TEXT');
+  if (!db.prepare('PRAGMA table_info(shop_items)').all().some(c => c.name === 'description')) db.exec('ALTER TABLE shop_items ADD COLUMN description TEXT');
   // Staff department (cleaning | maintenance) decides what a staff member sees; NFC gate cards and check-in/out.
   if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'department')) db.exec('ALTER TABLE users ADD COLUMN department TEXT');
   // Purchases are connected to the flat's finances: how the order is received, how it is paid, and the bill when on credit.
@@ -215,6 +216,17 @@ function openDb(file) {
 }
 // Optional demo accounts (one per role) so a freshly wiped hosted instance can be tested straight away.
 // Only runs when SEED_PASSWORD (6+ chars, e.g. test123 for the demo) is set in the environment; never stored in the repo.
+// Product information for the demo tuck shop range (see public/img/shop/CREDITS.md for the photos).
+const SHOP_INFO = [
+  ['milk', 'Toned milk, pasteurised. Delivered fresh every morning; keep refrigerated and use within 2 days.'],
+  ['bread', 'Soft white sandwich loaf, sliced. Baked daily by a local bakery.'],
+  ['eggs', 'Farm eggs, a tray of 12. Keep cool; best within 2 weeks.'],
+  ['rice', 'Long-grain basmati rice, aged. Cooks fluffy and separate: rinse, then 1 cup rice to 2 cups water.'],
+  ['tea', 'Strong Assam CTC black tea leaves, for chai. About 120 cups per pack.'],
+  ['biscuits', 'Glucose biscuits, a family pack. Good with tea.'],
+  ['detergent', 'Washing powder for machine and hand wash, 1 kg. Gentle on colours.'],
+  ['soap', 'Bath soap, 100 g bar. Mild and moisturising.'],
+];
 function seedDemoAccounts(db) {
   const pw = process.env.SEED_PASSWORD;
   if (!pw || pw.length < 6) return;
@@ -269,6 +281,9 @@ function seedDemoAccounts(db) {
     for (const r of [['Milk', 'dairy', 30, 40, '500 ml'], ['Bread', 'groceries', 45, 20, 'loaf'], ['Eggs', 'dairy', 90, 15, 'dozen'], ['Rice', 'groceries', 350, 10, '5 kg'],
       ['Tea', 'groceries', 140, 12, '250 g'], ['Biscuits', 'snacks', 30, 30, 'pack'], ['Detergent', 'household', 180, 8, '1 kg'], ['Soap', 'personal care', 45, 25, 'bar']]) si.run(...r, `/img/shop/${r[0].toLowerCase()}.jpg`);
   }
+  // Short product information for the shop cards; only fills items that have none, so the shop owner's own text stays.
+  const info = db.prepare('UPDATE shop_items SET description=? WHERE lower(name)=? AND description IS NULL');
+  for (const [n, d] of SHOP_INFO) info.run(d, n);
   if (db.prepare('SELECT COUNT(*) AS n FROM laundry_rates').get().n === 0) {
     const lr = db.prepare('INSERT INTO laundry_rates(item,price) VALUES(?,?)');
     for (const r of [['Shirt or top (wash and iron)', 20], ['Trousers (wash and iron)', 25], ['Saree (dry clean)', 120], ['Bedsheet', 40], ['Towel', 15], ['Suit (dry clean)', 250]]) lr.run(...r);

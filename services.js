@@ -75,6 +75,7 @@ module.exports = function mountServices(app, c) {
       unit: 'unit' in b ? str(b.unit, 20) || null : base.unit ?? null,
       active: 'active' in b ? (b.active ? 1 : 0) : base.active ?? 1,
       image: 'image' in b ? (b.image || null) : base.image ?? null,
+      description: 'description' in b ? str(b.description, 300) || null : base.description ?? null, // what it is, brand, pack: shown on the shop card
     };
     if (!i.name) return [null, 'Give the item a name'];
     if (i.image != null && !/^\/img\/shop\/[a-z0-9-]+\.(jpg|png|webp)$/.test(i.image)) return [null, 'Choose a photo from the shop library'];
@@ -91,14 +92,14 @@ module.exports = function mountServices(app, c) {
   app.post('/api/shop/items', auth, shopOwner, (req, res) => {
     const [i, err] = itemBody(req.body || {}); if (err) return bad(res, err);
     if (one('SELECT id FROM shop_items WHERE lower(name)=lower(?)', i.name)) return res.status(409).json({ error: 'An item with that name already exists' });
-    const r = run('INSERT INTO shop_items(name,category,price,stock,unit,active,image) VALUES(?,?,?,?,?,?,?)', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image);
+    const r = run('INSERT INTO shop_items(name,category,price,stock,unit,active,image,description) VALUES(?,?,?,?,?,?,?,?)', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image, i.description);
     log(req.user.id, 'shop_item', r.lastInsertRowid, 'created', `${i.name} at ${i.price}`);
     res.status(201).json({ id: Number(r.lastInsertRowid) });
   });
   app.patch('/api/shop/items/:id', auth, shopOwner, (req, res) => {
     const base = one('SELECT * FROM shop_items WHERE id=?', req.params.id); if (!base) return res.status(404).json({ error: 'Item not found' });
     const [i, err] = itemBody(req.body || {}, base); if (err) return bad(res, err);
-    run('UPDATE shop_items SET name=?,category=?,price=?,stock=?,unit=?,active=?,image=? WHERE id=?', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image, base.id);
+    run('UPDATE shop_items SET name=?,category=?,price=?,stock=?,unit=?,active=?,image=?,description=? WHERE id=?', i.name, i.category, i.price, i.stock, i.unit, i.active, i.image, i.description, base.id);
     log(req.user.id, 'shop_item', base.id, 'updated', `${i.name}: price ${i.price}, stock ${i.stock}${i.active ? '' : ', hidden'}`);
     res.json({ ok: true });
   });
