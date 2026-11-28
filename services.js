@@ -6,8 +6,12 @@
 const SHOP_CATEGORIES = ['groceries', 'dairy', 'snacks', 'household', 'personal care', 'other'];
 const SHOP_FLOW = { placed: ['ready', 'cancelled'], ready: ['delivered', 'collected', 'cancelled'] };
 const FULFILMENT = ['delivery', 'pickup'];
-// cash or UPI is paid on delivery or collection; 'account' adds a bill to the flat's maintenance dues (credit).
-const PAYMENTS = ['cash', 'upi', 'account'];
+// cash or UPI is paid on delivery or collection; 'account' adds a bill to the flat's maintenance dues (credit);
+// 'wallet' is debited from the flat's prepaid wallet in the same transaction as the order (docs/card-wallet-api.md).
+const PAYMENTS = ['cash', 'upi', 'account', 'wallet'];
+const PAY_ERR = 'Choose cash, UPI, wallet or the maintenance account';
+const { ledger } = require('./wallet');
+const { FROZEN } = require('./nfc');
 const LAUNDRY_FLOW = { requested: ['picked_up', 'cancelled'], picked_up: ['washing'], washing: ['ready'], ready: ['delivered'] };
 const LAUNDRY_SLOTS = ['morning', 'afternoon', 'evening'];
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,6 +40,15 @@ module.exports = function mountServices(app, c) {
   const creditUsed = flat => money(q('SELECT due_id FROM shop_orders WHERE flat=? AND due_id IS NOT NULL UNION SELECT due_id FROM laundry_orders WHERE flat=? AND due_id IS NOT NULL', flat, flat).reduce((t, d) => t + Math.max(0, dueBalance(d.due_id)), 0));
   // Several writes that must all happen or none (order, bill, lines, stock).
   const atomic = fn => { run('BEGIN'); try { const v = fn(); run('COMMIT'); return v; } catch (e) { run('ROLLBACK'); throw e; } };
+  app.locals.creditUsed = creditUsed;
+  // Wallet: the debit is checked and written inside the order's atomic(); a short balance throws and rolls the order back.
+  const W = ledger(c);
+  const stamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const walletPay = (flat, total, kind, refType, refId, userId) => W.debit(flat, total, kind, { ref_type: refType, ref_id: refId, by_user: userId, note: `${kind === 'shop' ? 'Tuck shop order' : 'Laundry'} #${refId}` });
+  // Runs fn as one transaction; answers 409 with the wallet message when the balance is short (returns undefined then).
+  const atomicPay = (res, fn) => { try { return atomic(fn); } catch (e) { if (e.wallet) { res.status(409).json({ error: e.message }); return undefined; } throw e; } };
+  const refundWallet = (o, refType, userId) => { if (o.payment === 'wallet' && o.paid_at) W.write(o.flat, o.total, 'refund', { ref_type: refType, ref_id: o.id, by_user: userId, note: `Refund of ${refType === 'shop_order' ? 'tuck shop order' : 'laundry'} #${o.id}` }); };
+  const payLabel = p => (p === 'account' ? 'on account' : p === 'wallet' ? 'paid by wallet' : p.toUpperCase());
   const chargeAccount = (flat, title, amount, userId) => {
     const n = istNow(clock()), period = n.date.slice(0, 7), dueDate = istNow(new Date(clock().getTime() + 15 * 864e5)).date;
     // A committee bill could already use this title for the period: keep both by marking ours as a purchase.
@@ -95,7 +108,7 @@ module.exports = function mountServices(app, c) {
     if (!linesOk(b.items)) return bad(res, 'Add at least one item (up to 50 of each)');
     const fulfilment = b.fulfilment || 'delivery', payment = b.payment || 'cash';
     if (!FULFILMENT.includes(fulfilment)) return bad(res, 'Choose delivery to your door or pick-up at the shop');
-    if (!PAYMENTS.includes(payment)) return bad(res, 'Choose cash, UPI or your maintenance account');
+    if (!PAYMENTS.includes(payment)) return bad(res, PAY_ERR);
     const lines = [];
     for (const l of b.items) {
       const it = one('SELECT * FROM shop_items WHERE id=? AND active=1', Number(l.id));
@@ -106,26 +119,29 @@ module.exports = function mountServices(app, c) {
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(req.user.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const id = atomic(() => {
-      const r = run('INSERT INTO shop_orders(user_id,flat,total,note,fulfilment,payment) VALUES(?,?,?,?,?,?)', req.user.id, req.user.flat, total, str(b.note, 300) || null, fulfilment, payment);
+    const id = atomicPay(res, () => {
+      const r = run('INSERT INTO shop_orders(user_id,flat,total,note,fulfilment,payment,paid_at) VALUES(?,?,?,?,?,?,?)', req.user.id, req.user.flat, total, str(b.note, 300) || null, fulfilment, payment, payment === 'wallet' ? stamp() : null);
       const id = Number(r.lastInsertRowid);
       if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Tuck shop order #${id}`, total, req.user.id), id);
+      if (payment === 'wallet') walletPay(req.user.flat, total, 'shop', 'shop_order', id, req.user.id);
       for (const l of lines) {
         run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty);
         run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id);
       }
       return id;
     });
+    if (id === undefined) return;
     log(req.user.id, 'shop_order', id, 'placed', `flat ${req.user.flat}: ${lines.length} items, ${total}, ${fulfilment}, ${payment}`);
-    notifyRole('shop', `New tuck shop order #${id} from flat ${req.user.flat} (₹${total}, ${fulfilment === 'pickup' ? 'pick-up' : 'deliver to door'}, ${payment === 'account' ? 'on account' : payment.toUpperCase() + ' on ' + (fulfilment === 'pickup' ? 'pick-up' : 'delivery')})`);
+    notifyRole('shop', `New tuck shop order #${id} from flat ${req.user.flat} (₹${total}, ${fulfilment === 'pickup' ? 'pick-up' : 'deliver to door'}, ${payment === 'account' || payment === 'wallet' ? payLabel(payment) : payment.toUpperCase() + ' on ' + (fulfilment === 'pickup' ? 'pick-up' : 'delivery')})`);
     res.status(201).json({ id, total, fulfilment, payment });
   });
   app.post('/api/shop/counter', auth, shopOwner, (req, res) => {
     const b = req.body || {}, h = app.locals.cardHolder && app.locals.cardHolder(b.serial);
     if (!h || h.role !== 'resident' || !h.flat) return res.status(404).json({ error: 'Tap a resident card first' });
+    if (h.frozen) return res.status(403).json({ error: FROZEN });
     if (!linesOk(b.items)) return bad(res, 'Add at least one item');
     const payment = b.payment || 'cash';
-    if (!PAYMENTS.includes(payment)) return bad(res, 'Choose cash, UPI or the maintenance account');
+    if (!PAYMENTS.includes(payment)) return bad(res, PAY_ERR);
     const lines = [];
     for (const l of b.items) {
       const it = one('SELECT * FROM shop_items WHERE id=? AND active=1', Number(l.id));
@@ -136,15 +152,17 @@ module.exports = function mountServices(app, c) {
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(h.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const id = atomic(() => {
-      const r = run("INSERT INTO shop_orders(user_id,flat,total,fulfilment,payment,status,paid_at) VALUES(?,?,?,'counter',?,'collected',?)", h.id, h.flat, total, payment, payment === 'account' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '));
+    const id = atomicPay(res, () => {
+      const r = run("INSERT INTO shop_orders(user_id,flat,total,fulfilment,payment,status,paid_at) VALUES(?,?,?,'counter',?,'collected',?)", h.id, h.flat, total, payment, payment === 'account' ? null : stamp());
       const id = Number(r.lastInsertRowid);
       for (const l of lines) { run('INSERT INTO shop_order_lines(order_id,item_id,name,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.name, l.price, l.qty); run('UPDATE shop_items SET stock=stock-? WHERE id=?', l.qty, l.id); }
       if (payment === 'account') run('UPDATE shop_orders SET due_id=? WHERE id=?', chargeAccount(h.flat, `Tuck shop order #${id}`, total, req.user.id), id);
+      if (payment === 'wallet') walletPay(h.flat, total, 'shop', 'shop_order', id, req.user.id);
       return id;
     });
+    if (id === undefined) return;
     log(req.user.id, 'shop_order', id, 'counter_sale', `card of ${h.name} (${h.flat}): ${total}, ${payment}`);
-    notifyFlat(h.flat, `Tuck shop: ₹${total} bought with ${h.name}'s card${payment === 'account' ? ', added to your maintenance account' : ' (' + payment.toUpperCase() + ')'}`);
+    notifyFlat(h.flat, `Tuck shop: ₹${total} bought with ${h.name}'s card${payment === 'account' ? ', added to your maintenance account' : payment === 'wallet' ? ', paid from your wallet' : ' (' + payment.toUpperCase() + ')'}`);
     res.status(201).json({ id, total, payment, name: h.name, flat: h.flat });
   });
   app.get('/api/shop/orders', auth, (req, res) => {
@@ -161,11 +179,16 @@ module.exports = function mountServices(app, c) {
     if (!isTeam && !(to === 'cancelled' && o.status === 'placed')) return res.status(403).json({ error: 'You can cancel an order until it is ready' });
     if ((to === 'delivered' && o.fulfilment === 'pickup') || (to === 'collected' && o.fulfilment !== 'pickup')) return res.status(409).json({ error: o.fulfilment === 'pickup' ? 'This order is picked up at the shop: mark it collected' : 'This order is delivered: mark it delivered' });
     if (to === 'cancelled' && !voidCharge(o.due_id)) return res.status(409).json({ error: 'Money was already paid on this order. Ask the committee to refund it first.' });
-    const handover = ['delivered', 'collected'].includes(to) && o.payment !== 'account';
-    run(`UPDATE shop_orders SET status=?, updated_at=datetime('now')${handover ? ", paid_at=datetime('now')" : ''}${to === 'cancelled' ? ', due_id=NULL' : ''} WHERE id=?`, to, o.id);
-    if (to === 'cancelled') for (const l of q('SELECT item_id, qty FROM shop_order_lines WHERE order_id=?', o.id)) run('UPDATE shop_items SET stock=stock+? WHERE id=?', l.qty, l.item_id);
-    log(req.user.id, 'shop_order', o.id, to, `${o.status} -> ${to}`);
-    if (isTeam) notifyFlat(o.flat, to === 'ready' ? (o.fulfilment === 'pickup' ? `Tuck shop order #${o.id} is ready to pick up` : `Your tuck shop order #${o.id} is ready and on its way`) : to === 'delivered' ? `Tuck shop order #${o.id} delivered` : to === 'collected' ? `Tuck shop order #${o.id} collected` : `Tuck shop order #${o.id} was cancelled${o.due_id ? '; the bill was removed from your account' : ''}`);
+    const handover = ['delivered', 'collected'].includes(to) && !['account', 'wallet'].includes(o.payment);
+    atomic(() => {
+      run(`UPDATE shop_orders SET status=?, updated_at=datetime('now')${handover ? ", paid_at=datetime('now')" : ''}${to === 'cancelled' ? ', due_id=NULL' : ''} WHERE id=?`, to, o.id);
+      if (to === 'cancelled') {
+        for (const l of q('SELECT item_id, qty FROM shop_order_lines WHERE order_id=?', o.id)) run('UPDATE shop_items SET stock=stock+? WHERE id=?', l.qty, l.item_id);
+        refundWallet(o, 'shop_order', req.user.id);
+      }
+    });
+    log(req.user.id, 'shop_order', o.id, to, `${o.status} -> ${to}${to === 'cancelled' && o.payment === 'wallet' ? `, ${o.total} refunded to the wallet` : ''}`);
+    if (isTeam) notifyFlat(o.flat, to === 'ready' ? (o.fulfilment === 'pickup' ? `Tuck shop order #${o.id} is ready to pick up` : `Your tuck shop order #${o.id} is ready and on its way`) : to === 'delivered' ? `Tuck shop order #${o.id} delivered` : to === 'collected' ? `Tuck shop order #${o.id} collected` : `Tuck shop order #${o.id} was cancelled${o.due_id ? '; the bill was removed from your account' : o.payment === 'wallet' ? `; ₹${o.total} was refunded to your wallet` : ''}`);
     else notifyRole('shop', `Flat ${o.flat} cancelled tuck shop order #${o.id}`);
     res.json({ ok: true, status: to });
   });
@@ -202,7 +225,7 @@ module.exports = function mountServices(app, c) {
     if (b.pickup_date > istNow(new Date(clock().getTime() + 14 * 864e5)).date) return bad(res, 'Pickups can be booked up to 14 days ahead');
     if (!LAUNDRY_SLOTS.includes(b.pickup_slot)) return bad(res, 'Choose morning, afternoon or evening');
     const payment = b.payment || 'cash';
-    if (!PAYMENTS.includes(payment)) return bad(res, 'Choose cash, UPI or your maintenance account');
+    if (!PAYMENTS.includes(payment)) return bad(res, PAY_ERR);
     if (!linesOk(b.items)) return bad(res, 'Add at least one item (up to 50 of each)');
     const lines = [];
     for (const l of b.items) {
@@ -212,16 +235,54 @@ module.exports = function mountServices(app, c) {
     }
     const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
     if (payment === 'account') { const why = creditCheck(req.user.flat, total); if (why) return res.status(409).json({ error: why }); }
-    const id = atomic(() => {
-      const r = run('INSERT INTO laundry_orders(user_id,flat,pickup_date,pickup_slot,total,note,payment) VALUES(?,?,?,?,?,?,?)', req.user.id, req.user.flat, b.pickup_date, b.pickup_slot, total, str(b.note, 300) || null, payment);
+    const id = atomicPay(res, () => {
+      const r = run('INSERT INTO laundry_orders(user_id,flat,pickup_date,pickup_slot,total,note,payment,paid_at) VALUES(?,?,?,?,?,?,?,?)', req.user.id, req.user.flat, b.pickup_date, b.pickup_slot, total, str(b.note, 300) || null, payment, payment === 'wallet' ? stamp() : null);
       const id = Number(r.lastInsertRowid);
       if (payment === 'account') run('UPDATE laundry_orders SET due_id=? WHERE id=?', chargeAccount(req.user.flat, `Laundry #${id}`, total, req.user.id), id);
+      if (payment === 'wallet') walletPay(req.user.flat, total, 'laundry', 'laundry_order', id, req.user.id);
       for (const l of lines) run('INSERT INTO laundry_lines(order_id,rate_id,item,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.item, l.price, l.qty);
       return id;
     });
-    log(req.user.id, 'laundry_order', id, 'requested', `flat ${req.user.flat}: ${b.pickup_date} ${b.pickup_slot}, ${total}`);
+    if (id === undefined) return;
+    log(req.user.id, 'laundry_order', id, 'requested', `flat ${req.user.flat}: ${b.pickup_date} ${b.pickup_slot}, ${total}, ${payment}`);
     notifyRole('laundry', `Laundry pickup #${id} for flat ${req.user.flat} on ${b.pickup_date} (${b.pickup_slot})`);
     res.status(201).json({ id, total });
+  });
+  // Laundry counter: the resident taps their card at the laundry desk and hands the clothes over (status picked_up, today).
+  // Lines are [{item, qty}] where item is the rate id (or the rate's name); [{id, qty}] as in /api/laundry/orders also works.
+  app.post('/api/laundry/counter', auth, laundryOp, (req, res) => {
+    const b = req.body || {}, h = app.locals.cardHolder && app.locals.cardHolder(b.serial);
+    if (!h || h.role !== 'resident' || !h.flat) return res.status(404).json({ error: 'Tap a resident card first' });
+    if (h.frozen) return res.status(403).json({ error: FROZEN });
+    const raw = Array.isArray(b.lines) ? b.lines : b.items;
+    if (!Array.isArray(raw) || !raw.length || raw.length > 30 || !raw.every(l => l && Number.isInteger(Number(l.qty)) && Number(l.qty) >= 1 && Number(l.qty) <= 50)) return bad(res, 'Add at least one item (up to 50 of each)');
+    const payment = b.payment || 'cash';
+    if (!PAYMENTS.includes(payment)) return bad(res, PAY_ERR);
+    const lines = [];
+    for (const l of raw) {
+      const ref = l.id ?? l.item ?? l.rate_id;
+      const rt = typeof ref === 'string' && !/^\d+$/.test(ref.trim())
+        ? one('SELECT * FROM laundry_rates WHERE lower(item)=lower(?) AND active=1', ref.trim())
+        : one('SELECT * FROM laundry_rates WHERE id=? AND active=1', Number(ref));
+      if (!rt) return bad(res, 'One of the items is no longer offered');
+      lines.push({ id: rt.id, item: rt.item, price: rt.price, qty: Number(l.qty) });
+    }
+    const total = money(lines.reduce((t, l) => t + l.price * l.qty, 0));
+    if (payment === 'account') { const why = creditCheck(h.flat, total); if (why) return res.status(409).json({ error: why }); }
+    const n = istNow(clock()), hour = Number(String(n.time).slice(0, 2));
+    const slot = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+    const id = atomicPay(res, () => {
+      const r = run("INSERT INTO laundry_orders(user_id,flat,pickup_date,pickup_slot,total,note,payment,status,paid_at) VALUES(?,?,?,?,?,?,?,'picked_up',?)", h.id, h.flat, n.date, slot, total, 'Handed over at the counter', payment, payment === 'wallet' ? stamp() : null);
+      const id = Number(r.lastInsertRowid);
+      if (payment === 'account') run('UPDATE laundry_orders SET due_id=? WHERE id=?', chargeAccount(h.flat, `Laundry #${id}`, total, req.user.id), id);
+      if (payment === 'wallet') walletPay(h.flat, total, 'laundry', 'laundry_order', id, req.user.id);
+      for (const l of lines) run('INSERT INTO laundry_lines(order_id,rate_id,item,price,qty) VALUES(?,?,?,?,?)', id, l.id, l.item, l.price, l.qty);
+      return id;
+    });
+    if (id === undefined) return;
+    log(req.user.id, 'laundry_order', id, 'counter_order', `card of ${h.name} (${h.flat}): ${total}, ${payment}`);
+    notifyFlat(h.flat, `Laundry #${id}: ${lines.reduce((t, l) => t + l.qty, 0)} items handed over with ${h.name}'s card (₹${total}, ${payment === 'account' ? 'added to your maintenance account' : payment === 'wallet' ? 'paid from your wallet' : payment.toUpperCase() + ' on delivery'})`);
+    res.status(201).json({ id, total, payment, name: h.name, flat: h.flat });
   });
   app.get('/api/laundry/orders', auth, (req, res) => {
     if (req.user.role === 'resident') return res.json(q('SELECT * FROM laundry_orders WHERE flat=? ORDER BY id DESC LIMIT 100', req.user.flat || '').map(laundryOut));
@@ -236,8 +297,11 @@ module.exports = function mountServices(app, c) {
     if (!(LAUNDRY_FLOW[o.status] || []).includes(to)) return res.status(409).json({ error: `A ${o.status.replace('_', ' ')} order cannot move to ${String(to).replace('_', ' ')}` });
     if (!isTeam && to !== 'cancelled') return res.status(403).json({ error: 'You can cancel before the pickup' });
     if (to === 'cancelled' && !voidCharge(o.due_id)) return res.status(409).json({ error: 'Money was already paid on this order. Ask the committee to refund it first.' });
-    run(`UPDATE laundry_orders SET status=?, updated_at=datetime('now')${to === 'delivered' && o.payment !== 'account' ? ", paid_at=datetime('now')" : ''}${to === 'cancelled' ? ', due_id=NULL' : ''} WHERE id=?`, to, o.id);
-    log(req.user.id, 'laundry_order', o.id, to, `${o.status} -> ${to}`);
+    atomic(() => {
+      run(`UPDATE laundry_orders SET status=?, updated_at=datetime('now')${to === 'delivered' && !['account', 'wallet'].includes(o.payment) ? ", paid_at=datetime('now')" : ''}${to === 'cancelled' ? ', due_id=NULL' : ''} WHERE id=?`, to, o.id);
+      if (to === 'cancelled') refundWallet(o, 'laundry_order', req.user.id);
+    });
+    log(req.user.id, 'laundry_order', o.id, to, `${o.status} -> ${to}${to === 'cancelled' && o.payment === 'wallet' ? `, ${o.total} refunded to the wallet` : ''}`);
     const msg = { picked_up: 'picked up', washing: 'being washed', ready: 'ready', delivered: 'delivered', cancelled: 'cancelled' }[to];
     if (isTeam) notifyFlat(o.flat, `Laundry #${o.id} is ${msg}`); else notifyRole('laundry', `Flat ${o.flat} cancelled laundry pickup #${o.id}`);
     res.json({ ok: true, status: to });
@@ -264,11 +328,26 @@ module.exports = function mountServices(app, c) {
   app.post('/api/parcels/:id/collect', auth, desk, (req, res) => {
     const p = one('SELECT * FROM parcels WHERE id=?', req.params.id); if (!p) return res.status(404).json({ error: 'Parcel not found' });
     if (p.status === 'collected') return res.status(409).json({ error: 'Already collected' });
-    const by = str((req.body || {}).collected_by, 80) || null;
+    const b = req.body || {};
+    let by = str(b.collected_by, 80) || null;
+    // Collect with card: the card must be an approved resident's of the parcel's flat; collected_by is the holder's name.
+    if (b.serial != null && b.serial !== '') {
+      const got = app.locals.resolveCard(b.serial);
+      if (got.code === 404 || got.code === 403 && got.error === FROZEN) return res.status(got.code).json({ error: got.error });
+      if (got.error || got.h.role !== 'resident' || got.h.flat !== p.flat) return res.status(409).json({ error: `This card is not from flat ${p.flat}` });
+      by = got.h.name;
+    }
     run("UPDATE parcels SET status='collected', collected_at=datetime('now'), collected_by=? WHERE id=?", by, p.id);
     log(req.user.id, 'parcel', p.id, 'collected', by ? `by ${by}` : '');
     notifyFlat(p.flat, `Parcel #${p.id} from ${p.carrier} collected${by ? ' by ' + by : ''}`);
     res.json({ ok: true });
+  });
+  // Waiting parcels for the flat of a tapped card (guard, staff or committee).
+  app.get('/api/parcels/card/:serial', auth, role(['admin', 'guard', 'staff']), (req, res) => {
+    const got = app.locals.resolveCard(req.params.serial);
+    if (got.error) return res.status(got.code).json({ error: got.error });
+    if (got.h.role !== 'resident' || !got.h.flat) return res.status(409).json({ error: 'This card is not a resident card' });
+    res.json(q("SELECT p.*, u.name AS logged_by_name FROM parcels p JOIN users u ON u.id=p.logged_by WHERE p.flat=? AND p.status='waiting' ORDER BY p.id DESC LIMIT 100", got.h.flat));
   });
 
   // =====================================================================
@@ -303,6 +382,26 @@ module.exports = function mountServices(app, c) {
     if ((req.body || {}).going === false) run('DELETE FROM event_rsvps WHERE event_id=? AND user_id=?', e.id, req.user.id);
     else run('INSERT OR IGNORE INTO event_rsvps(event_id,user_id) VALUES(?,?)', e.id, req.user.id);
     res.json(eventOut(e, req.user.id));
+  });
+  // Event check-in by card (committee or guard at the door). A repeat tap answers 200 with already: true.
+  const eventDesk = role(['admin', 'guard']);
+  app.post('/api/events/:id/checkin', auth, eventDesk, (req, res) => {
+    const e = one('SELECT * FROM events WHERE id=?', req.params.id); if (!e) return res.status(404).json({ error: 'Event not found' });
+    if (e.cancelled) return res.status(409).json({ error: 'This event was cancelled' });
+    const got = app.locals.resolveCard((req.body || {}).serial);
+    if (got.error) return res.status(got.code).json({ error: got.error });
+    const h = got.h, rsvp = !!one('SELECT 1 AS x FROM event_rsvps WHERE event_id=? AND user_id=?', e.id, h.id);
+    const out = { name: h.name, flat: h.flat || null, rsvp };
+    if (one('SELECT 1 AS x FROM event_checkins WHERE event_id=? AND user_id=?', e.id, h.id)) return res.json({ ...out, already: true });
+    run('INSERT INTO event_checkins(event_id,user_id,by_user) VALUES(?,?,?)', e.id, h.id, req.user.id);
+    log(req.user.id, 'event', e.id, 'checked_in', `${h.name}${h.flat ? ' (' + h.flat + ')' : ''} by card`);
+    res.status(201).json({ ...out, already: false });
+  });
+  app.get('/api/events/:id/checkins', auth, eventDesk, (req, res) => {
+    const e = one('SELECT id FROM events WHERE id=?', req.params.id); if (!e) return res.status(404).json({ error: 'Event not found' });
+    res.json(q(`SELECT c.user_id, u.name, u.role, u.flat, c.at, b.name AS by_name,
+      EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id=c.event_id AND r.user_id=c.user_id) AS rsvp
+      FROM event_checkins c JOIN users u ON u.id=c.user_id LEFT JOIN users b ON b.id=c.by_user WHERE c.event_id=? ORDER BY c.at DESC, u.name`, e.id).map(r => ({ ...r, rsvp: !!r.rsvp })));
   });
 
   // Small counts for the dashboards' "For you" list.

@@ -84,6 +84,26 @@ window.API = (() => {
       removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
+    // Community card wallet (docs/card-wallet-api.md): prepaid ledger per flat, frozen cards, one lookup for every counter. Amounts are rupees.
+    wallet: {
+      mine: () => call('GET', '/api/wallet'), // resident with a flat: { flat, balance, tx: [{ id, amount (+in, -out), kind: 'topup'|'shop'|'laundry'|'refund'|'adjust', method: 'cash'|'upi'|null, note, created_at }] } (last 50, newest first)
+      all: () => call('GET', '/api/admin/wallets'), // committee: [{ flat, balance, last_at }] every flat with an approved resident (balance 0 if none)
+      flat: f => call('GET', `/api/admin/wallets/${id(f)}`), // committee: same shape as mine()
+      topup: body => call('POST', '/api/admin/wallet/topup', body), // committee: { flat? | serial?, amount (1..50000), method: 'cash'|'upi', reference? } -> 201 { flat, balance, tx_id }; 404 unknown card
+      adjust: body => call('POST', '/api/admin/wallet/adjust', body), // head or sysadmin: { flat, amount (±, not 0), note } -> 201 { flat, balance }; 409 if it would go below 0
+    },
+    card: {
+      me: () => call('GET', '/api/me/card'), // { cards: [{ id, serial, frozen, created_at }], frozen, wallet: { balance }|null, money, activity: [{ at, kind (… 'wallet'), icon, text, amount }] }
+      freeze: frozen => call('POST', '/api/me/card/freeze', { frozen: !!frozen }), // any signed-in user with an active card -> { frozen }
+      lookup: serial => call('POST', '/api/card/lookup', { serial }), // guard, committee, shop, laundry: { id, name, role, flat, department, frozen, wallet: { balance }|null, credit: { used, limit }|null, parcels_waiting: n|null }; 404 unknown, 403 frozen or not approved
+      shopCard: serial => call('POST', '/api/shop/card', { serial }), // shop: { name, flat, credit_used, credit_limit, wallet_balance }
+      shopCounter: body => call('POST', '/api/shop/counter', body), // shop: { serial, items: [{ id, qty }], payment: 'cash'|'upi'|'account'|'wallet' } -> 201 { id, total, payment, name, flat }; 409 short wallet
+      laundryCounter: body => call('POST', '/api/laundry/counter', body), // laundry: { serial, lines: [{ item: rateId, qty }], payment } -> 201 { id, total, payment, name, flat } (order is picked_up today)
+      parcels: serial => call('GET', `/api/parcels/card/${id(serial)}`), // guard, staff, committee: waiting parcels of the card's flat [{ id, flat, carrier, note, status, created_at, logged_by_name }]
+      collectParcel: (pid, serial) => call('POST', `/api/parcels/${id(pid)}/collect`, { serial }), // guard, committee: 409 'This card is not from flat X'
+      checkin: (eid, serial) => call('POST', `/api/events/${id(eid)}/checkin`, { serial }), // committee, guard: 201 { name, flat, rsvp, already: false } or 200 { …, already: true }
+      checkins: eid => call('GET', `/api/events/${id(eid)}/checkins`), // committee, guard: [{ user_id, name, role, flat, at, by_name, rsvp }]
+    },
     vendors: {
       list: () => call('GET', '/api/vendors'),
       create: body => call('POST', '/api/vendors', body),

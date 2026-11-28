@@ -112,3 +112,88 @@ test('community card: issued at onboarding, tied to money and activity, used at 
     assert.equal((await admin('GET', `/api/admin/users/${asha.id}/card`)).body.money.credit_used, 700);
   } finally { server.close(); }
 });
+
+// docs/card-wallet-api.md: frozen cards and the one card lookup for every counter.
+const bootCards = async name => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portal-' + name + '-'));
+  const app = createApp({ dbFile: path.join(dir, 'f.db'), uploadDir: path.join(dir, 'up'), noTimers: true });
+  const server = await new Promise(r => { const s = app.listen(0, () => r(s)); });
+  const base = `http://localhost:${server.address().port}`;
+  const client = () => { let cookie = ''; return async (method, url, body) => {
+    const res = await fetch(base + url, { method, headers: { cookie, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const sc = res.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
+    return { status: res.status, body: await res.json() };
+  }; };
+  const admin = client(); await admin('POST', '/api/login', ADMIN);
+  const mk = async (kind, email) => { const r = await admin('POST', '/api/admin/accounts', { name: kind, email, password: PW, kind }); const c = client(); await c('POST', '/api/login', { email, password: PW }); c.id = r.body.id; return c; };
+  return { server, client, admin, mk };
+};
+
+test('frozen card: the holder freezes it, every card place refuses it, gate taps are logged as denied; unfreeze restores it', async () => {
+  const FROZEN = 'This card is frozen. Its owner can unfreeze it under Profile > My community card.';
+  const { server, client, admin, mk } = await bootCards('frozen');
+  try {
+    const guard = await mk('guard', 'g@x.test'), shop = await mk('shop', 's@x.test'), laundry = await mk('laundry', 'l@x.test'), it = await mk('it', 'i@x.test');
+    await client()('POST', '/api/register', { name: 'Asha', email: 'a@x.test', flat: 'A-1', resident_type: 'owner', password: PW, consent: true });
+    const asha = (await admin('GET', '/api/admin/users?status=pending')).body.find(u => u.email === 'a@x.test');
+    await admin('POST', `/api/admin/users/${asha.id}/approve`);
+    const res = client(); await res('POST', '/api/login', { email: 'a@x.test', password: PW });
+    // no card yet: nothing to freeze
+    assert.equal((await res('POST', '/api/me/card/freeze', { frozen: true })).status, 404);
+    assert.equal((await admin('POST', `/api/admin/users/${asha.id}/card`, { serial: 'AB:CD:01' })).status, 201);
+    const item = (await shop('POST', '/api/shop/items', { name: 'Tea', category: 'groceries', price: 10, stock: 9 })).body.id;
+    const rate = (await laundry('POST', '/api/laundry/rates', { item: 'Shirt', price: 20 })).body.id;
+    const parcel = (await guard('POST', '/api/parcels', { flat: 'A-1', carrier: 'Amazon' })).body.id;
+    const ev = (await admin('POST', '/api/events', { title: 'Yoga', starts_at: '2099-01-01T07:00' })).body.id;
+    assert.equal((await guard('POST', '/api/card/lookup', { serial: 'ABCD01' })).body.frozen, false);
+
+    assert.equal((await res('POST', '/api/me/card/freeze', { frozen: 'yes' })).status, 400);
+    const fr = await res('POST', '/api/me/card/freeze', { frozen: true });
+    assert.equal(fr.status, 200); assert.deepEqual(fr.body, { frozen: true });
+    const me = (await res('GET', '/api/me/card')).body;
+    assert.equal(me.frozen, true); assert.equal(me.cards[0].frozen, true);
+    assert.ok((await guard('GET', '/api/gate/cards')).body.find(c => c.serial === 'ABCD01').frozen);
+    // refused everywhere a card is accepted
+    const checks = [
+      await guard('POST', '/api/gate/tap', { serial: 'ABCD01' }),
+      await guard('POST', '/api/card/lookup', { serial: 'ABCD01' }),
+      await shop('POST', '/api/card/lookup', { serial: 'ABCD01' }),
+      await shop('POST', '/api/shop/card', { serial: 'ABCD01' }),
+      await shop('POST', '/api/shop/counter', { serial: 'ABCD01', items: [{ id: item, qty: 1 }], payment: 'cash' }),
+      await laundry('POST', '/api/laundry/counter', { serial: 'ABCD01', lines: [{ item: rate, qty: 1 }], payment: 'cash' }),
+      await guard('POST', `/api/parcels/${parcel}/collect`, { serial: 'ABCD01' }),
+      await guard('GET', '/api/parcels/card/ABCD01'),
+      await guard('POST', `/api/events/${ev}/checkin`, { serial: 'ABCD01' }),
+    ];
+    for (const r of checks) { assert.equal(r.status, 403, JSON.stringify(r.body)); assert.equal(r.body.error, FROZEN); }
+    const log = (await guard('GET', '/api/gate/log')).body;
+    assert.ok(log.some(l => l.kind === 'card' && l.result === 'denied' && l.reason === 'Card frozen'));
+    assert.equal((await guard('GET', '/api/gate/presence')).body.inside.length, 0, 'a frozen tap does not check anyone in');
+    // unfreeze: works again; both changes audited
+    assert.deepEqual((await res('POST', '/api/me/card/freeze', { frozen: false })).body, { frozen: false });
+    assert.equal((await guard('POST', '/api/gate/tap', { serial: 'ABCD01' })).body.direction, 'in');
+    assert.equal((await guard('POST', '/api/card/lookup', { serial: 'ABCD01' })).status, 200);
+    const audit = (await admin('GET', '/api/admin/audit')).body;
+    assert.ok(audit.some(a => a.action === 'card_frozen') && audit.some(a => a.action === 'card_unfrozen'));
+    // any signed-in account may call it (IT has no card here)
+    assert.equal((await it('POST', '/api/me/card/freeze', { frozen: true })).status, 404);
+  } finally { server.close(); }
+});
+
+test('card lookup: unknown 404, holder not approved 403, staff card has no wallet or credit', async () => {
+  const { server, client, admin, mk } = await bootCards('lookup');
+  try {
+    const guard = await mk('guard', 'g@x.test'), mo = await mk('maintenance', 'mo@x.test');
+    await client()('POST', '/api/register', { name: 'Pia', email: 'p@x.test', flat: 'C-3', resident_type: 'owner', password: PW, consent: true });
+    const pia = (await admin('GET', '/api/admin/users?status=pending')).body.find(u => u.email === 'p@x.test');
+    // a card issued while onboarding, before approval
+    assert.equal((await admin('POST', `/api/admin/users/${pia.id}/card`, { serial: 'F1A1' })).status, 201);
+    assert.equal((await guard('POST', '/api/card/lookup', { serial: 'B1A1' })).status, 404);
+    assert.equal((await guard('POST', '/api/card/lookup', { serial: 'F1A1' })).status, 403, 'holder not approved yet');
+    await admin('POST', `/api/admin/users/${pia.id}/approve`);
+    assert.equal((await guard('POST', '/api/card/lookup', { serial: 'f1-a1' })).body.wallet.balance, 0);
+    assert.equal((await admin('POST', `/api/admin/users/${mo.id}/card`, { serial: 'A0A0' })).status, 201);
+    const m = (await guard('POST', '/api/card/lookup', { serial: 'A0A0' })).body;
+    assert.deepEqual([m.role, m.department, m.wallet, m.credit, m.parcels_waiting], ['staff', 'maintenance', null, null, 0]);
+  } finally { server.close(); }
+});

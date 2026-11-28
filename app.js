@@ -138,7 +138,7 @@ function createApp(opts = {}) {
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
-  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && p === '/api/me/password') || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && (p === '/api/me/password' || p === '/api/me/card/freeze')) || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -150,20 +150,22 @@ function createApp(opts = {}) {
       const okGuard = (m === 'GET' && p === '/api/me') || (m === 'POST' && (p === '/api/me/password' || p === '/api/gate/verify')) ||
         (m === 'GET' && (p === '/api/gate/log' || p === '/api/gate/overview' || p === '/api/pulse')) || p === '/api/notifications' || p.startsWith('/api/notifications/') ||
         p === '/api/parcels' || /^\/api\/parcels\/\d+\/collect$/.test(p) ||
+        // community card wallet (docs/card-wallet-api.md): card lookup, parcels by card, event check-in at the door
+        p === '/api/card/lookup' || /^\/api\/parcels\/card\/[^/]+$/.test(p) || /^\/api\/events\/\d+\/checkins?$/.test(p) ||
         ['/api/gate/people', '/api/gate/cards', '/api/gate/tap', '/api/gate/presence'].includes(p) || /^\/api\/gate\/cards\/\d+$/.test(p);
       if (!okGuard && !COMMON_PATH(p, m)) return res.status(403).json({ error: 'Not allowed for guard accounts' });
     }
     // Service providers: the tuck shop owner and the laundry service see only their own shop or laundry.
     if (u.role === 'shop' || u.role === 'laundry') {
       const p = req.path, mine = u.role === 'shop' ? '/api/shop/' : '/api/laundry/';
-      if (!COMMON_PATH(p, req.method) && !p.startsWith(mine)) return res.status(403).json({ error: 'Not allowed for this account' });
+      if (!COMMON_PATH(p, req.method) && !p.startsWith(mine) && p !== '/api/card/lookup') return res.status(403).json({ error: 'Not allowed for this account' });
     }
     // Staff and IT accounts: their own pages, the requests assigned to them (staff), help and support. Nothing else.
     if (u.role === 'staff' || u.role === 'it') {
       const p = req.path;
       // Department decides the rest: maintenance gets inventory, cleaning gets waste. Nothing else.
       const dept = u.department || 'maintenance';
-      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') ||
+      const ok = COMMON_PATH(p, req.method) || (u.role === 'staff' && (p.startsWith('/api/staff/') || (req.method === 'GET' && /^\/api\/parcels\/card\/[^/]+$/.test(p)) ||
         (dept === 'maintenance' && (p === '/api/inventory' || p.startsWith('/api/inventory/'))) || (dept === 'cleaning' && (p === '/api/waste/logs' || p === '/api/waste/schedule')) || /^\/api\/requests(\/\d+(\/(comments|photo|updates(\/\d+\/photo)?|estimate))?)?$/.test(p))) ||
         (u.role === 'it' && p.startsWith('/api/it/'));
       if (!ok) return res.status(403).json({ error: 'Not allowed for this account' });
@@ -1438,6 +1440,7 @@ function createApp(opts = {}) {
   require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, can, clock: opts.clock });
   require('./nfc')(app, { q, one, run, log, notify, auth, str, creditLimit });
   require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./wallet')(app, { q, one, run, log, notify, auth, admin, governance, str, creditLimit });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
   app.use(express.static(path.join(__dirname, 'public')));
