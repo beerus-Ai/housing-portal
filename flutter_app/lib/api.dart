@@ -257,4 +257,93 @@ class Api {
   /// A missed pickup becomes a housekeeping request; returns its id.
   Future<int> reportMissedPickup(String kind, {String note = ''}) async =>
       (_map(await post('/api/waste/missed', {'kind': kind, 'note': note})))['id'] as int;
+
+  // ---- community card and wallet (docs/card-wallet-api.md). Money is per flat; payment is cash, upi, wallet or account.
+  static String _seg(String s) => Uri.encodeComponent(s);
+  static List<Map<String, int>> _lines(Map<int, int> qty) => [for (final e in qty.entries) if (e.value > 0) {'id': e.key, 'qty': e.value}];
+
+  /// Resident with a flat: `{flat, balance, tx: [{id, amount, kind, method, note, created_at}]}` (last 50, newest first).
+  Future<Map<String, dynamic>> wallet() async => _map(await get('/api/wallet'));
+
+  /// Committee: `[{flat, balance, last_at}]` for every flat with an approved resident.
+  Future<List<dynamic>> adminWallets() async => await get('/api/admin/wallets') as List<dynamic>;
+
+  /// Committee: one flat's wallet, same shape as [wallet].
+  Future<Map<String, dynamic>> adminWallet(String flat) async => _map(await get('/api/admin/wallets/${_seg(flat)}'));
+
+  /// Committee top-up by flat or by a tapped resident card: `{flat, balance, tx_id}`. Method is cash or upi.
+  Future<Map<String, dynamic>> topUpWallet({String? flat, String? serial, required num amount, required String method, String reference = ''}) async =>
+      _map(await post('/api/admin/wallet/topup', {
+        if (flat != null) 'flat': flat,
+        if (serial != null) 'serial': serial,
+        'amount': amount,
+        'method': method,
+        if (reference.isNotEmpty) 'reference': reference,
+      }));
+
+  /// Head of committee or sysadmin: `amount` is ± (not 0) and `note` is required. `{flat, balance}`; 409 below 0.
+  Future<Map<String, dynamic>> adjustWallet(String flat, num amount, String note) async =>
+      _map(await post('/api/admin/wallet/adjust', {'flat': flat, 'amount': amount, 'note': note}));
+
+  /// Guard, committee, shop, laundry: `{id, name, role, flat, department, frozen, wallet: {balance} | null,
+  /// credit: {used, limit} | null, parcels_waiting | null}`. 404 unknown card, 403 frozen or not approved.
+  Future<Map<String, dynamic>> cardLookup(String serial) async => _map(await post('/api/card/lookup', {'serial': serial}));
+
+  /// The older shop-only lookup (now with `wallet_balance`).
+  Future<Map<String, dynamic>> shopCard(String serial) async => _map(await post('/api/shop/card', {'serial': serial}));
+
+  Future<List<dynamic>> shopItems() async => await get('/api/shop/items') as List<dynamic>;
+
+  /// Resident order; `qty` maps item id to quantity. 409 when stock or the wallet is short.
+  Future<Map<String, dynamic>> shopOrder(Map<int, int> qty, {String payment = 'cash', String fulfilment = 'delivery', String note = ''}) async =>
+      _map(await post('/api/shop/orders', {'items': _lines(qty), 'payment': payment, 'fulfilment': fulfilment, if (note.isNotEmpty) 'note': note}));
+
+  /// Shop owner sells at the counter to a tapped resident card: `{id, total, payment, name, flat}`.
+  Future<Map<String, dynamic>> shopCounter(String serial, Map<int, int> qty, String payment) async =>
+      _map(await post('/api/shop/counter', {'serial': serial, 'items': _lines(qty), 'payment': payment}));
+
+  Future<List<dynamic>> laundryRates() async => await get('/api/laundry/rates') as List<dynamic>;
+
+  /// Resident pickup booking; `qty` maps rate id to quantity.
+  Future<Map<String, dynamic>> laundryOrder({required String pickupDate, required String pickupSlot, required Map<int, int> qty, String payment = 'cash', String note = ''}) async =>
+      _map(await post('/api/laundry/orders', {
+        'pickup_date': pickupDate,
+        'pickup_slot': pickupSlot,
+        'items': _lines(qty),
+        'payment': payment,
+        if (note.isNotEmpty) 'note': note,
+      }));
+
+  /// Laundry service takes clothes at the counter from a tapped resident card: `{id, total, payment, name, flat}`.
+  /// Each line is `{item: rate id, qty}` (the rate id is also sent as `id`).
+  Future<Map<String, dynamic>> laundryCounter(String serial, Map<int, int> qty, String payment) async =>
+      _map(await post('/api/laundry/counter', {
+        'serial': serial,
+        'lines': [for (final l in _lines(qty)) {'item': l['id'], 'id': l['id'], 'qty': l['qty']}],
+        'payment': payment,
+      }));
+
+  /// Guard, staff, committee: waiting parcels for the flat of the card's holder.
+  Future<List<dynamic>> parcelsForCard(String serial) async {
+    final r = await get('/api/parcels/card/${_seg(serial)}');
+    return r is List ? r : ((r is Map ? r['parcels'] as List? : null) ?? const []);
+  }
+
+  /// Hand a parcel over, either to a tapped card of the parcel's flat (`serial`) or to a named person.
+  Future<void> collectParcel(int id, {String? serial, String? collectedBy}) => post('/api/parcels/$id/collect', {
+        if (serial != null) 'serial': serial,
+        if (collectedBy != null) 'collected_by': collectedBy,
+      });
+
+  /// Committee or guard: `{name, flat, rsvp, already}`.
+  Future<Map<String, dynamic>> eventCheckin(int eventId, String serial) async =>
+      _map(await post('/api/events/$eventId/checkin', {'serial': serial}));
+
+  Future<List<dynamic>> eventCheckins(int eventId) async => await get('/api/events/$eventId/checkins') as List<dynamic>;
+
+  /// The signed-in person's card: `{cards, frozen, wallet: {balance} | null, money, activity: [{at, kind, icon, text, amount?, payment?}]}`.
+  Future<Map<String, dynamic>> myCard() async => _map(await get('/api/me/card'));
+
+  /// Freeze (lost card) or unfreeze; returns the new state.
+  Future<bool> freezeCard(bool frozen) async => (_map(await post('/api/me/card/freeze', {'frozen': frozen})))['frozen'] == true;
 }

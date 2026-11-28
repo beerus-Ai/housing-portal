@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
+import 'counter.dart';
 import 'gate_desk.dart';
 import 'home.dart';
 import 'profile.dart';
@@ -38,6 +39,10 @@ class _ShellState extends State<Shell> {
     // Guards: the gate desk (tap NFC cards to check people in and out, register new cards), as on the web.
     if (role == 'guard') {
       tabs.add((label: 'Gate desk', icon: Icons.contactless_outlined, selected: Icons.contactless, page: const GateDeskScreen()));
+    }
+    // Tuck shop owner and laundry service: the card counter (tap a resident card, sell or take clothes in, pay).
+    if (role == 'shop' || role == 'laundry') {
+      tabs.add((label: 'Counter', icon: Icons.point_of_sale_outlined, selected: Icons.point_of_sale, page: const CounterScreen()));
     }
     if (role == 'resident' || role == 'admin') {
       tabs.add((label: 'Notices', icon: Icons.campaign_outlined, selected: Icons.campaign, page: const NoticesScreen()));
