@@ -8,7 +8,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const PUB = path.join(ROOT, 'public');
 const WEB_FILES = ['web.js', 'dash.js', 'estate.js', 'admin-settings.js', 'web-roles.js', 'web-modules.js', 'web-services.js', 'web-nfc.js', 'common.js'];
-const SERVER_FILES = ['app.js', 'roles.js', 'modules.js', 'services.js', 'nfc.js', 'wallet.js', 'carpool.js', 'email-desk.js'];
+const SERVER_FILES = ['app.js', 'roles.js', 'modules.js', 'services.js', 'nfc.js', 'wallet.js', 'carpool.js', 'bulk.js', 'email-desk.js'];
 const read = f => fs.readFileSync(f, 'utf8');
 const SRC = Object.fromEntries(WEB_FILES.map(f => [f, read(path.join(PUB, f))]));
 const lineOf = (text, idx) => text.slice(0, idx).split('\n').length;
