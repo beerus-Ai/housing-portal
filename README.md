@@ -36,6 +36,7 @@ Word, PDF, PowerPoint and Excel versions of the requirements are in [`Requiremen
 | [product and technology architecture](docs/architecture/product-and-technology-architecture.md) | Modules and stack from the faculty whiteboard |
 | [ADR 0001](docs/architecture/adr-0001-java-react.md) | Java/React migration decision |
 | [roles-api](docs/roles-api.md) | Roles API contract |
+| [auth-api](docs/auth-api.md) | Two-factor sign-in (TOTP) and passkeys: contract and security notes |
 | [modules-api](docs/modules-api.md) | Society modules API contract |
 | [services-api](docs/services-api.md) | Tuck shop, laundry, parcels, events API |
 | [nfc-api](docs/nfc-api.md) | NFC gate cards and staff departments |
