@@ -39,25 +39,21 @@ class _RequestsScreenState extends State<RequestsScreen> {
               )
             : null,
         body: Column(children: [
-          SizedBox(
-            height: 52,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                for (final s in [null, ...statusOrder])
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                    child: ChoiceChip(
-                      label: Text(s == null ? 'All' : statusLabel(s)),
-                      selected: _status == s,
-                      onSelected: (_) {
-                        _status = s;
-                        _refresh();
-                      },
-                    ),
-                  ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: DropdownButtonFormField<String>(
+              initialValue: _status ?? '',
+              decoration: const InputDecoration(labelText: 'Status', prefixIcon: Icon(Icons.filter_list)),
+              items: [
+                for (final s in ['', ...statusOrder])
+                  DropdownMenuItem<String>(value: s, child: Text(s.isEmpty ? 'All' : statusLabel(s))),
               ],
+              onChanged: (v) {
+                final next = (v == null || v.isEmpty) ? null : v;
+                if (next == _status) return;
+                _status = next;
+                _refresh();
+              },
             ),
           ),
           Expanded(
