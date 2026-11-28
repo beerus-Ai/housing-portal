@@ -1,4 +1,3 @@
-import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:nfc_manager/nfc_manager.dart';
@@ -12,7 +11,7 @@ import '../theme.dart';
 /// Gate desk (guards; the committee can open it too), the app version of the web gate desk (`public/web-nfc.js`).
 /// A tap checks the card holder in or out; "Register a card" links a new card to a person. The card is read with the
 /// phone's NFC (its serial number, the same value Web NFC gives) or typed in, e.g. by a USB reader on OTG.
-/// In register mode the guard can tap the card first or choose the person first. Contract: docs/nfc-api.md.
+/// Register opens a full-screen scanner: scan the card, then choose who carries it from a dropdown. Contract: docs/nfc-api.md.
 class GateDeskScreen extends StatefulWidget {
   const GateDeskScreen({super.key, this.nfc = true});
 
@@ -25,18 +24,16 @@ class GateDeskScreen extends StatefulWidget {
 class GateDeskState extends State<GateDeskScreen> {
   bool register = false;
   Map<String, dynamic>? last; // tap result, or {error, serial, unknown}
-  Map<String, dynamic>? person; // register: who will carry the card
-  String pending = ''; // register: a card tapped before the person was chosen
+  String card = ''; // register: the card number read by the scanner
+  int? whoId; // register: the person chosen in the dropdown
   String err = '';
-  List<dynamic> people = [];
+  List<dynamic> people = []; // everyone who can carry a card (GET /api/gate/people without q)
   Map<String, dynamic>? presence;
   List<dynamic> cards = [];
   bool? nfcOn; // null while checking; false: no NFC or switched off
   bool busy = false;
   final _serial = TextEditingController();
-  final _search = TextEditingController();
   final _serialFocus = FocusNode();
-  Timer? _debounce;
 
   @override
   void initState() {
@@ -47,10 +44,8 @@ class GateDeskState extends State<GateDeskScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     if (nfcOn == true) NfcManager.instance.stopSession();
     _serial.dispose();
-    _search.dispose();
     _serialFocus.dispose();
     super.dispose();
   }
@@ -95,10 +90,7 @@ class GateDeskState extends State<GateDeskScreen> {
     if (busy) return;
     setState(() => err = '');
     if (serial.length < 4) return setState(() => err = 'Tap the card, or type its number (4 to 40 hex characters)');
-    if (register) {
-      if (person == null) return setState(() => pending = serial); // registered as soon as a person is chosen
-      return _register(serial);
-    }
+    if (register) return setState(() { card = serial; whoId = null; }); // next: choose who carries it
     busy = true;
     try {
       final r = await app.run((a) => a.tapCard(serial));
@@ -111,56 +103,32 @@ class GateDeskState extends State<GateDeskScreen> {
     await load();
   }
 
-  Future<void> _register(String serial) async {
-    final p = person!;
+  Future<void> _register() async {
+    final p = people.cast<Map>().firstWhere((x) => x['id'] == whoId);
     busy = true;
     try {
-      await app.run((a) => a.registerCard(serial, p['id'] as int));
+      await app.run((a) => a.registerCard(card, whoId!));
       if (!mounted) return;
       toast(context, 'Card registered for ${p['name']}');
-      setState(() {
-        register = false;
-        person = null;
-        pending = '';
-        people = [];
-        last = null;
-        _search.clear();
-      });
+      setState(() { register = false; card = ''; whoId = null; last = null; });
     } on ApiException catch (e) {
-      if (mounted) setState(() { err = e.message; pending = ''; });
+      if (mounted) setState(() => err = e.message);
     } finally {
       busy = false;
     }
     await load();
   }
 
-  void setMode(bool reg, {String card = ''}) => setState(() {
-        register = reg;
-        person = null;
-        pending = card;
-        err = '';
-        last = null;
-      });
-
-  void pick(Map<String, dynamic> p) {
-    setState(() { person = p; err = ''; });
-    if (pending.isNotEmpty) {
-      _register(pending);
-    } else {
-      _serialFocus.requestFocus(); // a USB reader types into the card box
+  /// Register opens the full-screen scanner; once a card is read, a dropdown asks who carries it.
+  Future<void> setMode(bool reg, {String card = ''}) async {
+    setState(() { register = reg; this.card = normSerial(card); whoId = null; err = ''; last = null; });
+    if (!reg) return;
+    try {
+      final r = await app.run((a) => a.gatePeople(''));
+      if (mounted) setState(() => people = r);
+    } catch (e) {
+      if (mounted) setState(() => err = '$e');
     }
-  }
-
-  void _onSearch(String q) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), () async {
-      try {
-        final r = q.trim().isEmpty ? <dynamic>[] : await app.run((a) => a.gatePeople(q.trim()));
-        if (mounted) setState(() => people = r);
-      } catch (_) {
-        if (mounted) setState(() => people = []);
-      }
-    });
   }
 
   @override
@@ -169,6 +137,7 @@ class GateDeskState extends State<GateDeskScreen> {
     final inside = (pr?['inside'] as List?) ?? const [];
     final recent = (pr?['recent'] as List?) ?? const [];
     final active = cards.where((c) => c['active'] == true).toList();
+    if (register) return _scanner();
     return Scaffold(
       appBar: AppBar(title: const Text('Gate desk')),
       body: RefreshIndicator(
@@ -182,9 +151,9 @@ class GateDeskState extends State<GateDeskScreen> {
           Row(children: [
             Expanded(
               child: FilledButton.icon(
-                onPressed: () => setMode(!register),
-                icon: Icon(register ? Icons.close : Icons.add_card),
-                label: Text(register ? 'Cancel registering' : 'Register a card'),
+                onPressed: () => setMode(true),
+                icon: const Icon(Icons.add_card),
+                label: const Text('Register a card'),
               ),
             ),
           ]),
@@ -203,7 +172,7 @@ class GateDeskState extends State<GateDeskScreen> {
           ),
           if (err.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(err, style: const TextStyle(color: Palette.errorText, fontWeight: FontWeight.w600))),
           const SizedBox(height: 20),
-          if (register) _registerPanel() else ...[
+          ...[
             const Text('Inside now', style: sectionStyle),
             if (inside.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Nobody checked in.', style: TextStyle(color: Colors.black54))),
             for (final p in inside)
@@ -279,38 +248,72 @@ class GateDeskState extends State<GateDeskScreen> {
     );
   }
 
-  Widget _registerPanel() => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Register a card', style: sectionStyle),
-            const SizedBox(height: 8),
-            Text(
-              pending.isNotEmpty
-                  ? 'Card $pending read. Now choose who carries it.'
-                  : person != null
-                      ? 'Now tap ${person!['name']}\'s card (or type its number above).'
-                      : 'Tap the card first or choose the person first, in either order.',
-              key: const Key('regHint'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: const Key('search'),
-              controller: _search,
-              decoration: const InputDecoration(labelText: 'Who carries this card?', hintText: 'Search a name or flat', prefixIcon: Icon(Icons.search)),
-              onChanged: _onSearch,
-            ),
-            for (final p in people)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                selected: person?['id'] == p['id'],
-                leading: Icon(p['role'] == 'resident' ? Icons.home_outlined : Icons.engineering_outlined),
-                title: Text('${p['name']}'),
-                subtitle: Text(personSub(Map<String, dynamic>.from(p as Map))),
-                onTap: () => pick(Map<String, dynamic>.from(p)),
+  /// Full-screen scanner for registering, the same steps as the web: scan the card, then choose who carries it.
+  Widget _scanner() {
+    final status = nfcOn == null
+        ? 'Checking NFC…'
+        : nfcOn == true
+            ? 'Listening… hold the card to the back of the phone.'
+            : 'NFC is off or missing on this phone. Type the card number below.';
+    final done = card.isNotEmpty;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Register a card'),
+        leading: IconButton(tooltip: 'Close the scanner', icon: const Icon(Icons.close), onPressed: () => setState(() { register = false; card = ''; whoId = null; err = ''; })),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              CircleAvatar(
+                radius: 76,
+                backgroundColor: done ? const Color(0xFFE3F5EC) : Palette.accent100,
+                child: Icon(done ? Icons.badge_outlined : Icons.contactless_outlined, size: 76, color: done ? const Color(0xFF12402C) : Palette.accent700),
               ),
-            if (people.isEmpty && _search.text.trim().isNotEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Nobody matches.', style: TextStyle(color: Colors.black54))),
-          ]),
+              const SizedBox(height: 16),
+              Text(done ? 'Card detected' : 'Tap the new card', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              if (done) ...[
+                Text(card, key: const Key('cardNo'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 1.5)),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<int>(
+                  key: const Key('who'),
+                  value: whoId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Who carries this card?'),
+                  hint: const Text('Choose a person'),
+                  items: [
+                    for (final p in people)
+                      DropdownMenuItem(value: p['id'] as int, child: Text('${p['name']} · ${personSub(Map<String, dynamic>.from(p as Map))}', overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => setState(() => whoId = v),
+                ),
+                if (people.isEmpty) const Padding(padding: EdgeInsets.only(top: 8), child: Text('Nobody can get a card yet: residents and staff must be approved first.', style: TextStyle(color: Colors.black54))),
+                const SizedBox(height: 20),
+                SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: whoId == null ? null : _register, icon: const Icon(Icons.check_circle_outline), label: const Text('Register card'))),
+                TextButton.icon(onPressed: () => setState(() { card = ''; whoId = null; err = ''; }), icon: const Icon(Icons.refresh), label: const Text('Scan a different card')),
+              ] else ...[
+                Text(status, textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+                const SizedBox(height: 20),
+                TextField(
+                  key: const Key('serial'),
+                  controller: _serial,
+                  autofocus: true,
+                  textInputAction: TextInputAction.go,
+                  decoration: const InputDecoration(labelText: 'Card number', hintText: 'Or type it (a USB reader types it here)', suffixIcon: Icon(Icons.keyboard_return)),
+                  onSubmitted: (v) {
+                    _serial.clear();
+                    if (v.trim().isNotEmpty) handleSerial(v);
+                  },
+                ),
+              ],
+              if (err.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(err, style: const TextStyle(color: Palette.errorText, fontWeight: FontWeight.w600))),
+            ]),
+          ),
         ),
-      );
+      ),
+    );
+  }
 }

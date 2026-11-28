@@ -202,3 +202,22 @@
 .em-alarm .btn { background: #fff; color: #b42318; border: 0; flex-shrink: 0; }
 @keyframes em-alarm-pulse { 50% { box-shadow: 0 10px 40px rgba(180, 35, 24, .6); } }
 @media (prefers-reduced-motion: reduce) { .em-alarm { animation: none; } }
+
+/* Gate desk: full-screen NFC scanner (public/web-nfc.js). Covers the whole page, top bar and sidebar included. */
+body:has(.nfc-scan) { overflow: hidden; }
+.nfc-scan { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background: var(--color-bg, #f3f2f2); animation: calm-rise .2s ease both; }
+.nfc-scan-body { width: min(520px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.nfc-scan-body h2 { margin: 0; font-size: 26px; }
+.nfc-scan-body .nfc-res, .nfc-scan-body .nfc-who, .nfc-scan-body .nfc-type { width: 100%; }
+.nfc-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; }
+.nfc-ring.big { width: 168px; height: 168px; font-size: 84px; }
+.nfc-ring.big.on { animation: nfc-pulse 1.6s ease-out infinite; }
+.nfc-ring.big.done { background: #e3f5ec; color: #12402c; }
+@keyframes nfc-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent, #0088b0) 45%, transparent); } 100% { box-shadow: 0 0 0 34px transparent; } }
+@media (prefers-reduced-motion: reduce) { .nfc-ring.big.on { animation: none; } }
+.nfc-serial { margin: 0; font: 700 22px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; }
+.nfc-who { text-align: left; } .nfc-who select { width: 100%; font-size: 17px; min-height: 48px; }
+.nfc-type { gap: 8px; flex-wrap: nowrap; } .nfc-type .input { flex: 1; min-width: 0; }
+.nfc-actions { gap: 10px; flex-wrap: wrap; justify-content: center; }

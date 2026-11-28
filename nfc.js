@@ -12,10 +12,11 @@ module.exports = function mountNfc(app, c) {
   const WORKERS = ['staff', 'shop', 'laundry'];
 
   // People the guard can give a card to: approved residents and staff (minimum fields only).
+  // With q: the 20 best matches (search). Without q: everyone, up to 500, for the "Who carries this card?" dropdown.
   app.get('/api/gate/people', auth, desk, (req, res) => {
-    const term = `%${str(req.query.q, 60).toLowerCase()}%`;
+    const s = str(req.query.q, 60).toLowerCase(), term = `%${s}%`;
     res.json(q(`SELECT ${PERSON} FROM users u WHERE u.status='approved' AND u.role IN ('resident','staff','shop','laundry')
-      AND (lower(u.name) LIKE ? OR lower(COALESCE(u.flat,'')) LIKE ?) ORDER BY u.name LIMIT 20`, term, term));
+      AND (lower(u.name) LIKE ? OR lower(COALESCE(u.flat,'')) LIKE ?) ORDER BY u.name LIMIT ${s ? 20 : 500}`, term, term));
   });
   app.get('/api/gate/cards', auth, desk, (req, res) => {
     res.json(q(`SELECT u.id AS user_id, u.name, u.role, u.flat, u.department, u.resident_type, g.id, g.serial, g.label, g.active, g.created_at FROM gate_cards g JOIN users u ON u.id=g.user_id ORDER BY g.active DESC, u.name`)
