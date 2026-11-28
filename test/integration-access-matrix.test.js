@@ -200,6 +200,11 @@ const ROWS = [
   ['POST daycare enrolment', 'POST', () => '/api/daycare/enrolments', f => ({ provider_id: f.care, child_name: 'Kid', child_age: 3, start_date: '2026-11-26', days: ['mon'] }), only(RES, 201),
     async (t, f, r) => ({ care: (await t.c.sysadmin('POST', '/api/daycare/providers', { name: 'Care ' + r, age_min: 1, age_max: 5, capacity: 5, hours: '9-5', fee_month: 0, location: 'Gate 2', phone: '9800000000' })).body.id })],
   ['GET daycare today', 'GET', () => '/api/daycare/today', null, only(COM, 200)],
+  // ---------- chat (everyone writes to the committee desk; neighbour messages are resident to resident)
+  ['GET chat', 'GET', () => '/api/chat', null, expect(200)],
+  ['POST chat desk', 'POST', () => '/api/chat/desk', (f, r) => ({ body: 'Hello from ' + r }), expect(201, { member: 403, head: 403, sysadmin: 403 })],
+  ['GET chat residents', 'GET', () => '/api/chat/residents', null, only(RES, 200)],
+  ['POST chat direct', 'POST', () => '/api/chat/direct', (f, r) => ({ user_id: f.ownerId, body: 'Hi from ' + r }), expect(403, { owner: 400, tenant: 201, family: 201 })],
   // ---------- amenities
   ['GET amenities', 'GET', () => '/api/amenities', null, only([...RES, ...COM], 200)],
   ['POST amenities', 'POST', () => '/api/amenities', (f, r) => ({ name: 'Court ' + r }), only(COM, 201)],

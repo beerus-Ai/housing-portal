@@ -31,23 +31,23 @@
   // request lifecycle; committee dashboard, verification, broadcast, reports, monitoring), extras under "More".
   const NAV = {
     owner: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'], ['household', 'Household', 'users-three'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['chat', 'Chat', 'chats-circle'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     tenant: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track my requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['lease', 'My lease', 'file-text'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['chat', 'Chat', 'chats-circle'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['lease', 'My lease', 'file-text'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     family: [['home', 'Home', 'house'], ['raise', 'Raise a request', 'plus-circle'], ['requests', 'Track flat requests', 'list-checks'], ['notices', 'Notices', 'megaphone'], ['emergency', 'Emergency', 'siren'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['chat', 'Chat', 'chats-circle'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
       ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['bulk', 'Bulk upload', 'upload-simple'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'], ['wallets', 'Card wallets', 'wallet'], ['carpool', 'Carpool', 'car'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'], ['wallets', 'Card wallets', 'wallet'], ['carpool', 'Carpool', 'car'], ['chat', 'Chat', 'chats-circle'], ['business', 'Local businesses', 'briefcase'], ['daycare', 'Daycare', 'baby'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
       ['gate', 'Visitor management', 'shield-check'], ['cards', 'NFC gate cards', 'identification-card'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
-    guard: [['cards', 'Gate desk', 'identification-card'], ['gate', 'Visitor passes', 'qr-code'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste collection', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    shop: [['shop', 'Orders and stock', 'storefront'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    laundry: [['laundry', 'Laundry orders', 't-shirt'], ['lcounter', 'Card counter', 'identification-card'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['profile', 'Profile', 'user-circle']],
+    guard: [['cards', 'Gate desk', 'identification-card'], ['gate', 'Visitor passes', 'qr-code'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ['chat', 'Chat', 'chats-circle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste collection', 'recycle'], ['chat', 'Chat', 'chats-circle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    shop: [['shop', 'Orders and stock', 'storefront'], ['chat', 'Chat', 'chats-circle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    laundry: [['laundry', 'Laundry orders', 't-shirt'], ['lcounter', 'Card counter', 'identification-card'], ['chat', 'Chat', 'chats-circle'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['chat', 'Chat', 'chats-circle'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
@@ -55,7 +55,7 @@
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', bulk: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
-    cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services', carpool: 'services', business: 'services', daycare: 'services', wallets: 'services', lcounter: 'services',
+    cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services', carpool: 'services', chat: 'services', business: 'services', daycare: 'services', wallets: 'services', lcounter: 'services',
     help: 'help', support: 'help', profile: 'help' };
   // The required items (Requirements Document / faculty whiteboard) sit in the top bar for every role;
   // the sidebar only holds the extras.
@@ -85,7 +85,7 @@
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
     accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => ['resident', 'admin', 'shop'].includes(S.me.role), laundry: () => ['resident', 'admin', 'laundry'].includes(S.me.role), parcels: () => !isIT() && !isStaff(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || (isStaff() && dept() === 'maintenance'),
-    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin(), wallets: () => isAdmin(), business: () => ['resident', 'admin'].includes(S.me.role), daycare: () => ['resident', 'admin'].includes(S.me.role), bulk: () => isAdmin(), lcounter: () => S.me.role === 'laundry' };
+    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin(), wallets: () => isAdmin(), chat: () => !!S.me, business: () => ['resident', 'admin'].includes(S.me.role), daycare: () => ['resident', 'admin'].includes(S.me.role), bulk: () => isAdmin(), lcounter: () => S.me.role === 'laundry' };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const dept = () => (S.me && S.me.department) || 'maintenance';
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => (flatNav() && !isStaff()) || allowed(k));
@@ -103,10 +103,12 @@
       try { activeEm = (await API.emergencies.list()).filter(e => e.status === 'active').length; } catch (e) { activeEm = 0; }
       try { const ov = await API.admin.overview(); unassigned = (ov.requests && ov.requests.unassigned) || 0; } catch (e) { unassigned = 0; }
     }
+    let chatN = 0; try { chatN = (await API.auth.pulse()).chat_unread || 0; } catch (e) { chatN = 0; } // unread chat messages (chat.js)
     const navBtn = (k, label, icon, extra = '', cls = '') => `<button class="btn side-link ${cls} ${S.page === k ? 'on' : ''}" data-act="nav" data-page="${k}" title="${esc(label)}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span class="side-t">${esc(label)}</span>${extra}</button>`;
     const extra = k => k === 'approvals' && pending ? { n: pending, h: `<span class="tag tag-accent-2">${pending}</span>` }
       : k === 'emergencies' && activeEm ? { n: activeEm, danger: true, h: `<span class="tag tag-danger" aria-label="${activeEm} active emergencies">${activeEm}</span>` }
       : k === 'costs' && costPending ? { n: costPending, h: `<span class="tag tag-accent-2" aria-label="${costPending} costs waiting for approval">${costPending}</span>` }
+      : k === 'chat' && chatN ? { n: chatN, h: `<span class="tag tag-accent-2" aria-label="${chatN} unread messages">${chatN}</span>` }
       : k === 'requests' && unassigned ? { n: unassigned, h: `<span class="tag tag-accent-2" aria-label="${unassigned} unassigned requests">${unassigned}</span>` }
       : { n: 0, h: '' };
     const all = navFor(), col = loadCollapsed(), core = coreKeys();
@@ -115,7 +117,7 @@
     const topBtn = ([k, label, icon]) => `<button class="btn core-link ${S.page === k ? 'on' : ''} ${extra(k).danger ? 'nav-danger' : ''}" data-act="nav" data-page="${k}" ${S.page === k ? 'aria-current="page"' : ''}>${ic(icon)}<span>${esc(label)}</span>${extra(k).h}</button>`;
     const topbar = `<nav class="core-bar" aria-label="Main">${coreItems.map(topBtn).join('')}<span class="core-sp"></span>${['admin', 'guard', 'staff', 'shop', 'laundry'].includes(S.me.role) ? HP.soundBtn('btn core-link') : ''}${topBtn(['alerts', 'Alerts', 'bell'])}</nav>`;
     let nav;
-    if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon)).join('');
+    if (flatNav()) nav = items.map(([k, label, icon]) => navBtn(k, label, icon, extra(k).h)).join('');
     else nav = GROUPS.map(([g, gl, gi]) => {
       const its = items.filter(([k]) => GROUP_OF[k] === g); if (!its.length) return '';
       const ex = its.map(([k]) => extra(k)), n = ex.reduce((x, y) => x + y.n, 0), danger = ex.some(x => x.danger), on = its.some(([k]) => k === S.page), c = col.includes(g) && !on;

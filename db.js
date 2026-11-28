@@ -224,6 +224,21 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS event_checkins(
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), at TEXT NOT NULL DEFAULT (datetime('now')),
     by_user INTEGER, PRIMARY KEY(event_id, user_id));`);
+  // Chat (chat.js, docs/chat-api.md): desk = a person's thread with the committee (user_b NULL); direct = two residents (user_a < user_b).
+  db.exec(`CREATE TABLE IF NOT EXISTS chat_conversations(
+    id INTEGER PRIMARY KEY, kind TEXT NOT NULL, user_a INTEGER NOT NULL REFERENCES users(id), user_b INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), last_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE UNIQUE INDEX IF NOT EXISTS chat_conv_pair ON chat_conversations(kind, user_a, COALESCE(user_b, 0));
+  CREATE TABLE IF NOT EXISTS chat_messages(
+    id INTEGER PRIMARY KEY, conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id), sender_id INTEGER NOT NULL REFERENCES users(id),
+    body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE INDEX IF NOT EXISTS chat_messages_conv ON chat_messages(conversation_id, id);
+  CREATE TABLE IF NOT EXISTS chat_reads(
+    conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id), user_id INTEGER NOT NULL REFERENCES users(id),
+    last_read_id INTEGER NOT NULL DEFAULT 0, notified INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(conversation_id, user_id));
+  CREATE TABLE IF NOT EXISTS chat_blocks(
+    blocker_id INTEGER NOT NULL REFERENCES users(id), blocked_id INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(blocker_id, blocked_id));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };
