@@ -26,6 +26,7 @@
   W.noRedraw = (prev => () => (prev && prev()) || (S.page === 'cards' && (!!N.scan || document.activeElement === $('#nfcin'))))(W.noRedraw);
 
   async function handleSerial(raw) {
+    if (P.done) return pickSerial(raw); // a card picker is open (issuing a card anywhere else in the app)
     if (S.page !== 'cards') return; // the NFC reader keeps listening after the guard leaves the gate desk
     const serial = norm(raw);
     N.err = '';
@@ -44,8 +45,48 @@
       r.onreading = e => handleSerial(e.serialNumber || '');
       r.onreadingerror = () => { N.nfcErr = 'The phone saw a card but could not read it. Hold it flat against the back of the phone for a second. Some cards (MIFARE Classic) cannot be read by Chrome: use a USB reader or type the number.'; render(); };
     } catch (x) { N.nfcErr = x && x.name === 'NotAllowedError' ? 'NFC permission was refused. Allow NFC for this site in Chrome (site settings), then try again.' : (x && x.message) || 'Could not start NFC.'; }
-    render();
+    if (P.done) drawPick(); else if (S.page === 'cards') render();
   }
+
+  // ---------- card picker: the same full-screen scanner wherever a card is issued (Settings > Users, Verification,
+  // Accounts). W.scanCard({ title, name, userId }) resolves with the card number, or null when cancelled. It reads Web NFC,
+  // the Windows card reader or a USB reader (both type into the focused box), or typing; a card that belongs to someone
+  // else is caught before anything is saved. It lives on <body>, so page redraws do not touch it.
+  const P = { done: null, opts: {}, cards: [], err: '' };
+  W.noRedraw = (prev => () => (prev && prev()) || !!P.done)(W.noRedraw);
+  function drawPick() {
+    const o = P.opts, el = $('#nfcpick'); if (!el) return;
+    const typed = ($('#nfcpickin') || {}).value || '';
+    const status = nfcWhy() || N.nfcErr || (N.scanning ? 'Listening… hold the card to the back of the phone.' : 'Starting NFC…');
+    el.innerHTML = `<button type="button" class="btn btn-secondary nfc-close" data-act="nfcpickclose" aria-label="Cancel">${ic('x')}Cancel</button>
+      <div class="nfc-scan-body"><span class="nfc-ring big ${N.scanning ? 'on' : ''}">${ic('contactless-payment')}</span>
+        <h2>${esc(o.title || 'Tap the card')}</h2>${o.name ? `<p style="margin:0">for <b>${esc(o.name)}</b></p>` : ''}
+        <p class="muted">${esc(status)}</p>${winApp()}
+        <form id="nfcpickform" class="row nfc-type"><label class="sr" for="nfcpickin">Card number</label><input class="input" id="nfcpickin" name="serial" autocomplete="off" placeholder="Or type the card number" title="A USB reader or the Windows card reader types the number here"><button class="btn btn-primary">${ic('check-circle')}Use this card</button></form>
+        <p class="err" role="alert">${esc(P.err)}</p></div>`;
+    const b = $('#nfcpickin'); b.value = typed; b.focus();
+  }
+  function closePick(serial) {
+    const done = P.done; P.done = null; P.err = '';
+    const el = $('#nfcpick'); if (el) el.remove();
+    if (done) done(serial);
+  }
+  function pickSerial(raw) {
+    const serial = norm(raw);
+    if (serial.length < 4 || serial.length > 40 || !/^[0-9A-F]+$/.test(serial)) { P.err = 'That is not a card number: use 4 to 40 hex characters (0-9, A-F).'; return drawPick(); }
+    const c = P.cards.find(x => x.active && x.serial === serial);
+    if (c && c.user_id !== P.opts.userId) { P.err = `Card ${serial} already belongs to ${c.name}. Deactivate it at the gate desk first, or tap another card.`; return drawPick(); }
+    closePick(serial);
+  }
+  W.scanCard = (opts = {}) => new Promise(resolve => {
+    if (P.done) closePick(null);
+    P.done = resolve; P.opts = opts; P.err = '';
+    document.body.insertAdjacentHTML('beforeend', '<div class="nfc-scan" id="nfcpick" role="dialog" aria-modal="true" aria-label="Tap the card"></div>');
+    drawPick();
+    startNfc(); // the click that opened the picker is the user gesture Web NFC needs
+    api('GET', '/api/gate/cards').then(cs => { P.cards = cs || []; }).catch(() => { P.cards = []; });
+  });
+  ACT.nfcpickclose = () => closePick(null);
   async function openScan(kind, card = '') {
     Object.assign(N, { scan: kind, card: norm(card), who: '', err: '', last: kind === 'tap' ? N.last : null });
     startNfc(); // the click that opened the scanner is the user gesture Web NFC needs
@@ -143,6 +184,12 @@
     const b = $('[data-act="nfcsave"]'); if (b) b.disabled = !N.who; // no redraw: keep the dropdown as it is
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && N.scan && S.page === 'cards') ACT.nfcclose(); });
+  document.addEventListener('submit', e => {
+    if (e.target.id !== 'nfcpickform') return;
+    e.preventDefault(); const v = e.target.serial.value.trim(); e.target.serial.value = '';
+    if (v) pickSerial(v); else { P.err = 'Tap the card, or type its number.'; drawPick(); }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && P.done) closePick(null); });
   document.addEventListener('submit', e => {
     if (e.target.id !== 'nfcform') return;
     e.preventDefault(); const v = e.target.serial.value.trim(); e.target.serial.value = '';

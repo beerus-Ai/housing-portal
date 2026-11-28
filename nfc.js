@@ -5,8 +5,14 @@
 // Separators (space : - .) are dropped; anything else that is not hex makes the number invalid (no silent collisions).
 const normSerial = s => { const v = String(s || '').toUpperCase().replace(/[\s:.\-]/g, ''); return /^[0-9A-F]*$/.test(v) ? v : ''; };
 
+// A frozen card (its owner froze it, e.g. when lost) is refused everywhere a card is accepted (docs/card-wallet-api.md).
+const FROZEN = 'This card is frozen. Its owner can unfreeze it under Profile > My community card.';
+const { ledger } = require('./wallet');
+const WALLET_TEXT = w => ({ topup: `Top-up (${w.method === 'upi' ? 'UPI' : 'cash'})`, shop: 'Paid at the tuck shop', laundry: 'Paid for laundry', refund: 'Refund to the wallet', adjust: 'Wallet adjusted by the committee' }[w.kind] || 'Wallet');
+
 module.exports = function mountNfc(app, c) {
   const { q, one, run, log, notify, auth, str } = c;
+  const W = ledger(c);
   const desk = (req, res, next) => (['guard', 'admin'].includes(req.user.role) ? next() : res.status(403).json({ error: 'Guards and the committee only' }));
   const PERSON = "u.id, u.name, u.role, u.flat, u.department, u.resident_type";
   const WORKERS = ['staff', 'shop', 'laundry'];
@@ -19,8 +25,8 @@ module.exports = function mountNfc(app, c) {
       AND (lower(u.name) LIKE ? OR lower(COALESCE(u.flat,'')) LIKE ?) ORDER BY u.name LIMIT ${s ? 20 : 500}`, term, term));
   });
   app.get('/api/gate/cards', auth, desk, (req, res) => {
-    res.json(q(`SELECT u.id AS user_id, u.name, u.role, u.flat, u.department, u.resident_type, g.id, g.serial, g.label, g.active, g.created_at FROM gate_cards g JOIN users u ON u.id=g.user_id ORDER BY g.active DESC, u.name`)
-      .map(x => ({ ...x, active: !!x.active })));
+    res.json(q(`SELECT u.id AS user_id, u.name, u.role, u.flat, u.department, u.resident_type, g.id, g.serial, g.label, g.active, g.frozen, g.created_at FROM gate_cards g JOIN users u ON u.id=g.user_id ORDER BY g.active DESC, u.name`)
+      .map(x => ({ ...x, active: !!x.active, frozen: !!x.frozen })));
   });
   app.post('/api/gate/cards', auth, desk, (req, res) => {
     const b = req.body || {}, serial = normSerial(b.serial);
@@ -47,7 +53,11 @@ module.exports = function mountNfc(app, c) {
   // A tap toggles in/out for the card holder.
   app.post('/api/gate/tap', auth, desk, (req, res) => {
     const serial = normSerial((req.body || {}).serial);
-    const g = serial && one(`SELECT g.id AS card_id, u.status, ${PERSON} FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1`, serial);
+    const g = serial && one(`SELECT g.id AS card_id, g.frozen, u.status, ${PERSON} FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1`, serial);
+    if (g && g.frozen) {
+      run("INSERT INTO gate_log(kind,subject,flat,result,reason,guard_id) VALUES('card',?,?,'denied','Card frozen',?)", g.name, g.flat || null, req.user.id);
+      return res.status(403).json({ error: FROZEN, serial });
+    }
     // Only approved people get in: a suspended, removed or not-yet-approved holder is refused and logged.
     if (g && g.status !== 'approved') {
       run("INSERT INTO gate_log(kind,subject,flat,result,reason,guard_id) VALUES('card',?,?,'denied',?,?)", g.name, g.flat || null, g.status === 'pending' ? 'Not yet approved' : 'Account ' + g.status, req.user.id);
@@ -104,6 +114,7 @@ module.exports = function mountNfc(app, c) {
       for (const o of q('SELECT id, total, payment, fulfilment, status, created_at FROM shop_orders WHERE flat=? ORDER BY id DESC LIMIT 10', u.flat)) ev.push({ at: o.created_at, kind: 'shop', icon: 'shopping-bag', text: `Tuck shop #${o.id} (${o.fulfilment === 'counter' ? 'at the counter' : o.status})`, amount: o.total, payment: o.payment });
       for (const o of q('SELECT id, total, payment, status, created_at FROM laundry_orders WHERE flat=? ORDER BY id DESC LIMIT 10', u.flat)) ev.push({ at: o.created_at, kind: 'laundry', icon: 't-shirt', text: `Laundry #${o.id} (${o.status.replace('_', ' ')})`, amount: o.total, payment: o.payment });
       for (const p of q('SELECT p.amount, p.method, p.created_at, d.title FROM due_payments p JOIN dues d ON d.id=p.due_id WHERE d.flat=? ORDER BY p.id DESC LIMIT 10', u.flat)) ev.push({ at: p.created_at, kind: 'payment', icon: 'receipt', text: `Paid: ${p.title}`, amount: p.amount, payment: p.method });
+      for (const w of q('SELECT amount, kind, method, created_at FROM wallet_tx WHERE flat=? ORDER BY id DESC LIMIT 10', u.flat)) ev.push({ at: w.created_at, kind: 'wallet', icon: 'wallet', text: WALLET_TEXT(w), amount: w.amount });
       for (const b of q("SELECT b.date, b.start, a.name, b.created_at FROM amenity_bookings b JOIN amenities a ON a.id=b.amenity_id WHERE b.flat=? AND b.status='booked' ORDER BY b.id DESC LIMIT 5", u.flat)) ev.push({ at: b.created_at, kind: 'booking', icon: 'calendar-check', text: `Booked ${b.name} for ${b.date} ${b.start}` });
     }
     ev.sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -113,24 +124,47 @@ module.exports = function mountNfc(app, c) {
       const credit = dues.filter(d => /^(Tuck shop order|Laundry) #/.test(d.title)).reduce((t, d) => t + Math.max(0, d.amount - d.paid), 0);
       return { balance: Math.round(bal * 100) / 100, credit_used: Math.round(credit * 100) / 100, credit_limit: c.creditLimit ? c.creditLimit() : null };
     })() : null;
-    return { cards: q('SELECT id, serial, created_at FROM gate_cards WHERE user_id=? AND active=1', u.id), money, activity: ev.slice(0, 30) };
+    const cards = q('SELECT id, serial, frozen, created_at FROM gate_cards WHERE user_id=? AND active=1', u.id).map(x => ({ ...x, frozen: !!x.frozen }));
+    return { cards, frozen: cards.some(x => x.frozen), wallet: u.role === 'resident' && u.flat ? { balance: W.balance(u.flat) } : null, money, activity: ev.slice(0, 30) };
   };
   app.get('/api/me/card', auth, (req, res) => res.json(activity(req.user)));
+  // The holder freezes (lost card) or unfreezes their own active card.
+  app.post('/api/me/card/freeze', auth, (req, res) => {
+    const f = (req.body || {}).frozen;
+    if (typeof f !== 'boolean') return res.status(400).json({ error: 'Say frozen: true or false' });
+    const cards = q('SELECT id, serial FROM gate_cards WHERE user_id=? AND active=1', req.user.id);
+    if (!cards.length) return res.status(404).json({ error: 'You have no active community card' });
+    run('UPDATE gate_cards SET frozen=? WHERE user_id=? AND active=1', f ? 1 : 0, req.user.id);
+    for (const x of cards) log(req.user.id, 'gate_card', x.id, f ? 'card_frozen' : 'card_unfrozen', x.serial);
+    res.json({ frozen: f });
+  });
   app.get('/api/admin/users/:id/card', auth, (req, res, next) => (req.user.role === 'admin' ? next() : res.status(403).json({ error: 'Committee only' })), (req, res) => {
     const u = one(`SELECT id, name, role, flat FROM users WHERE id=? AND role IN ${ISSUE_ROLES}`, req.params.id);
     if (!u) return res.status(404).json({ error: 'Person not found' });
     res.json({ name: u.name, ...activity(u) });
   });
   // Card lookup for the shop counter: who is this, and how much credit is left for the flat.
-  const holder = serial => one(`SELECT u.id, u.name, u.role, u.flat FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1 AND u.status='approved'`, normSerial(serial));
+  // Approved holder of an active card; `frozen` is included so every caller that accepts cards can refuse it with FROZEN.
+  const holder = serial => { const s = normSerial(serial); return s ? one(`SELECT u.id, u.name, u.role, u.flat, u.department, g.frozen FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1 AND u.status='approved'`, s) : undefined; };
+  // Strict resolver for the counters: { h } or { code, error } (unknown 404, frozen 403, holder not approved 403).
+  const resolveCard = serial => {
+    const s = normSerial(serial);
+    const g = s && one('SELECT u.id, u.name, u.role, u.flat, u.department, u.status, g.frozen FROM gate_cards g JOIN users u ON u.id=g.user_id WHERE g.serial=? AND g.active=1', s);
+    if (!g) return { code: 404, error: 'Unknown card. Register it at the gate desk.' };
+    if (g.frozen) return { code: 403, error: FROZEN };
+    if (g.status !== 'approved') return { code: 403, error: `${g.name}'s account is ${g.status === 'pending' ? 'not approved yet' : g.status}. This card cannot be used.` };
+    return { h: g };
+  };
   app.post('/api/shop/card', auth, (req, res) => {
     if (req.user.role !== 'shop') return res.status(403).json({ error: 'Tuck shop only' });
     const h = holder((req.body || {}).serial);
     if (!h || h.role !== 'resident' || !h.flat) return res.status(404).json({ error: 'No resident card with that number' });
+    if (h.frozen) return res.status(403).json({ error: FROZEN });
     const m = activity(h).money;
-    res.json({ name: h.name, flat: h.flat, credit_used: m.credit_used, credit_limit: m.credit_limit });
+    res.json({ name: h.name, flat: h.flat, credit_used: m.credit_used, credit_limit: m.credit_limit, wallet_balance: W.balance(h.flat) });
   });
   app.locals.cardHolder = holder;
+  app.locals.resolveCard = resolveCard;
   // Called when someone is removed: their cards stop working and they are no longer counted inside.
   app.locals.retireCards = (userId, byId) => {
     const n = run('UPDATE gate_cards SET active=0 WHERE user_id=? AND active=1', userId).changes;
@@ -148,3 +182,4 @@ module.exports = function mountNfc(app, c) {
   });
 };
 module.exports.normSerial = normSerial;
+module.exports.FROZEN = FROZEN;

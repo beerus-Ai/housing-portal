@@ -10,6 +10,8 @@
   const isAdmin = () => S.me.role === 'admin';
   const isGuard = () => S.me.role === 'guard';
   const isStaff = () => S.me.role === 'staff';
+  // tuck shop owner and laundry service: a card counter (docs/card-wallet-api.md)
+  const isProv = () => ['shop', 'laundry'].includes(S.me.role);
   // Roles this app does not lay out (IT) get a short note and a link to the web app.
   const webOnly = () => S.me.role === 'it';
   const { RAPI, costTag, updatesList, positionLabel, PROGRESS, TICKET_KINDS, ticketTag } = HP;
@@ -19,11 +21,13 @@
   const feat = k => !S.me.features || S.me.features[k] !== false;
   S.set = { access: null, matrix: null, features: null, users: [], q: '', open: null, confirm: null, reset: false, guards: [], gconfirm: null };
   S.gp = { view: null, confirm: null, list: [] }; S.gRes = null;
+  S.ct = { holder: null, serial: '', cart: {}, pay: 'cash', items: [], err: '', done: null, busy: false }; S.pc = { holder: null, serial: '', list: [], err: '' }; S.mc = { confirm: false };
   S.veh = { type: 'car', q: '', list: [], confirm: null }; S.pk = { data: null, vehicles: [], flats: [], sel: null, confirm: null }; S.wk = { list: [], edit: null, confirm: null };
   const TABBY = ['approvals', 'requests', 'emergency', 'notices'];
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['menu', 'Menu', 'squares-four']],
-    guard: () => [['gate', 'Gate', 'shield-check'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['help', 'Help', 'question'], ['profile', 'Profile', 'user-circle']],
+    guard: () => [['gate', 'Gate', 'shield-check'], ['parcels', 'Parcels', 'package'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['help', 'Help', 'question'], ['profile', 'Profile', 'user-circle']],
+    counter: () => [['counter', 'Counter', 'contactless-payment'], ['help', 'Help', 'question'], ['profile', 'Profile', 'user-circle']],
     staff: () => [['jobs', 'My jobs', 'toolbox'], ['shift', 'Shift', 'clock-user'], ['help', 'Help', 'question'], ['support', 'Support', 'lifebuoy'], ['profile', 'Profile', 'user-circle']],
     admin: () => [['home', 'Dashboard', 'chart-bar'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['approvals', 'Approvals', 'user-check'], ['menu', 'Menu', 'squares-four']],
   };
@@ -36,7 +40,7 @@
   };
   // consistent sub-screen header: back arrow + large title
   const head = (title, to, act = 'tab') => `<div class="sub-head"><button class="back-ic" data-act="${act}" data-tab="${esc(to)}" aria-label="Back">${ic('arrow-left')}</button><h1 class="am-h1">${esc(title)}</h1></div>`;
-  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.mj.form = null; S.mj.ticket = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
+  const go = (tab, selId = null, sub = null) => { stopScan(); S.gp.confirm = null; S.mc.confirm = false; S.ct.holder = S.ct.done = null; S.ct.err = S.pc.err = ''; S.pc.holder = null; S.mj.form = null; S.mj.ticket = null; S.veh.confirm = S.pk.confirm = S.pk.sel = S.wk.confirm = S.wk.edit = null; S.tab = tab; S.selId = selId; S.sub = sub; render(); window.scrollTo(0, 0); };
   const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
   const dateShort = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const back = (label, to) => `<button class="back" data-act="tab" data-tab="${to}">${ic('caret-left')}${esc(label)}</button>`;
@@ -114,9 +118,10 @@
         <a class="btn btn-primary btn-lg" href="/?web">${ic('browser')}Open the web app</a></div><button class="btn btn-secondary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button></main></div>`;
       return;
     }
-    if (isGuard() && !['gate', 'gatelog', 'profile', 'help', 'support'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
-    if (isStaff() && !['jobs', 'shift', 'help', 'support', 'profile'].includes(S.tab)) { S.tab = 'jobs'; S.sub = null; S.selId = null; }
-    const tabs = TABS[isGuard() ? 'guard' : isStaff() ? 'staff' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
+    if (isGuard() && !['gate', 'parcels', 'gatelog', 'profile', 'help', 'support', 'mycard'].includes(S.tab)) { S.tab = 'gate'; S.sub = null; }
+    if (isStaff() && !['jobs', 'shift', 'help', 'support', 'profile', 'mycard'].includes(S.tab)) { S.tab = 'jobs'; S.sub = null; S.selId = null; }
+    if (isProv() && !['counter', 'help', 'support', 'profile', 'mycard'].includes(S.tab)) { S.tab = 'counter'; S.sub = null; S.selId = null; }
+    const tabs = TABS[isGuard() ? 'guard' : isStaff() ? 'staff' : isProv() ? 'counter' : isAdmin() ? 'admin' : 'resident']().filter(t => t[0] !== 'emergency' || isAdmin() || (feat('emergency') && can('emergency.raise')));
     let pending = 0;
     if (isAdmin()) {
       pending = (await API.admin.users('pending').catch(() => [])).length;
@@ -124,7 +129,7 @@
     }
     const cur = activeTab(tabs);
     const bar = tabs.map(([k, l, i]) => `<button class="tab ${cur === k ? 'on' : ''}" data-act="tab" data-tab="${k}" ${cur === k ? 'aria-current="page"' : ''}>${ic(i)}${esc(l)}${k === 'approvals' && pending ? `<span class="badge-pink">${pending}</span>` : ''}${k === 'emergency' && S.emgActive ? `<span class="badge-red">${S.emgActive}</span>` : ''}</button>`).join('');
-    const fab = !isAdmin() && !isGuard() && !isStaff() && !S.sub && !S.selId && ['home', 'requests', 'emergency', 'alerts', 'menu'].includes(S.tab) ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
+    const fab = !isAdmin() && !isGuard() && !isStaff() && !isProv() && !S.sub && !S.selId && ['home', 'requests', 'emergency', 'alerts', 'menu'].includes(S.tab) ? `<button class="fab" data-act="quick" data-k="raise" aria-label="New request">${ic('plus')}</button>` : '';
     app.innerHTML = `<div class="phone">${HP.liveBadge()}<main class="screen" id="screen"></main>${fab}<nav class="tabbar ${tabs.length > 4 ? 'five' : tabs.length < 4 ? 'three' : ''}" aria-label="Main">${bar}</nav></div>`;
     try { await (S.sub ? SUB[S.sub] : SCREENS[S.tab])(); } catch (e) { $('#screen').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
@@ -296,7 +301,7 @@
       const rows = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 6)];
       screen(`<h1 class="am-h1">Approvals</h1><span class="muted sm">Check against the flat register before approving.</span>${rows.map(u => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span>
         <span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(u.name)}</span><span class="muted xs">${esc(u.flat)} · ${esc(TYPE[u.resident_type] || '')} · ${esc(day(u.created_at))}</span></span></div>
-        ${u.status === 'pending' ? `<div class="two"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></div>`
+        ${u.status === 'pending' ? `<button class="btn btn-primary" data-act="issuecard" data-id="${u.id}" data-name="${esc(u.name)}" data-approve="1">${ic('contactless-payment')}Approve + card</button><div class="two"><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></div>`
           : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}" style="align-self:flex-start">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</div>`).join('') || '<p class="muted">No residents yet.</p>'}`);
     },
 
@@ -406,7 +411,7 @@
         <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="support">${ic('lifebuoy')}Report a portal problem</button>`);
     },
     async support() {
-      const back = isStaff() ? '' : head('Support', isGuard() ? 'help' : 'menu');
+      const back = isStaff() ? '' : head('Support', isGuard() || isProv() ? 'help' : 'menu');
       if (S.mj.ticket) {
         const t = await RAPI.support.get(S.mj.ticket);
         return screen(`<div class="sub-head"><button class="back-ic" data-act="mjtback" aria-label="Back">${ic('arrow-left')}</button><h1 class="am-h1">Ticket #${esc(t.id)}</h1></div>
@@ -422,9 +427,44 @@
         <h2 class="am-h2">Your tickets</h2>${list.map(t => `<button class="m-card" data-act="mjticket" data-id="${t.id}" style="text-align:left;border:0;font:inherit;color:inherit;width:100%"><span class="muted xs">#${esc(t.id)} · ${esc(day(t.updated_at || t.created_at))}</span><b>${esc(t.subject)}</b>${ticketTag(t.status)}</button>`).join('') || '<p class="muted">No tickets yet.</p>'}`);
     },
 
+    // ---------- community card (docs/card-wallet-api.md): counter, parcels by card, My card
+    async counter() {
+      S.ct.items = await api('GET', S.me.role === 'shop' ? '/api/shop/items' : '/api/laundry/rates').catch(() => []);
+      screen(`<h1 class="am-h1">${S.me.role === 'shop' ? 'Tuck shop counter' : 'Laundry counter'}</h1><div id="ctbody" class="col" style="gap:16px"></div>`);
+      drawCounter();
+    },
+    async parcels() {
+      screen(`${isAdmin() ? head('Parcels by card', 'menu') : '<h1 class="am-h1">Parcels</h1>'}<span class="muted sm">Tap the resident's card to see what is waiting for their flat.</span><div id="pcbody" class="col" style="gap:16px"></div>`);
+      drawParcels();
+    },
+    // Issue a community card (committee): approve if asked, then tap the card (NFC, the Android app, or typing).
+    async issuecard() {
+      const I = S.iss || {};
+      screen(`${head('Community card', 'approvals')}<div class="m-card col" style="gap:4px"><span class="muted xs">${I.approve ? 'Approve and hand a card to' : 'Hand a card to'}</span><b style="font-size:18px">${esc(I.name || '')}</b></div>${cardBox('issue')}${cardErrBox(I.err)}`);
+      focusCard();
+    },
+    async mycard() {
+      const res = S.me.role === 'resident' && !!S.me.flat;
+      const [c, w] = await Promise.all([api('GET', '/api/me/card'), res ? api('GET', '/api/wallet').catch(() => null) : null]);
+      const cards = (c && c.cards) || [], frozen = !!(c && c.frozen), conf = S.mc.confirm;
+      const bal = w ? w.balance : c && c.wallet ? c.wallet.balance : null;
+      const wallet = bal != null ? `<div class="hero m-hero cw-hero"><div class="soft sm" style="font-weight:600">${ic('wallet')} Wallet · Flat ${esc((w && w.flat) || S.me.flat)}</div><div class="fig cw-bal">${esc(inr(bal))}</div>
+        <div class="soft sm">Shared by your flat. Pay at the tuck shop and laundry with your card. Top up with cash or UPI at the committee office.</div></div>` : '';
+      const fz = cards.length ? `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="am-li">${ic(frozen ? 'snowflake' : 'identification-card')}</span><span class="col grow" style="gap:0"><b>${frozen ? 'Card frozen' : 'Card active'}</b><span class="muted xs">${cards.map(x => 'Card ending ' + esc(String(x.serial || '').slice(-4))).join(', ')}</span></span><span class="tag ${frozen ? 'tag-accent-2' : 'tag-accent'}">${frozen ? 'Frozen' : 'Active'}</span></div>
+        <span class="sm">${frozen ? 'Nobody can use it at the gate, the tuck shop, laundry or the parcel desk until you unfreeze it.' : 'Lost your card? Freeze it so nobody else can use it.'}</span>
+        ${conf ? `<div class="callout col" style="gap:8px" role="alertdialog" aria-label="Confirm"><b class="sm">${frozen ? 'Unfreeze your card? It works everywhere again.' : 'Freeze your card? It stops working at the gate, the tuck shop, laundry and the parcel desk.'}</b><div class="two"><button class="btn btn-primary" data-act="mcyes" data-f="${frozen ? '0' : '1'}">${frozen ? 'Yes, unfreeze' : 'Yes, freeze'}</button><button class="btn btn-secondary" data-act="mcno">Cancel</button></div></div>`
+          : `<button class="btn ${frozen ? 'btn-primary' : 'btn-secondary'} btn-lg" data-act="mcask">${ic(frozen ? 'sun' : 'snowflake')}${frozen ? 'Unfreeze my card' : 'Freeze my card'}</button>`}</div>`
+        : '<p class="callout">You have no community card yet. The guard at the gate desk registers one for you.</p>';
+      const tx = w ? `<h2 class="am-h2">Wallet history</h2><div class="m-card col" style="gap:4px">${(w.tx || []).map(t => cwRow(TX_ICON[t.kind] || 'wallet', (TX_KIND[t.kind] || t.kind) + (t.method ? ` (${t.method === 'upi' ? 'UPI' : 'Cash'})` : ''), t.note, t.created_at, t.amount, true)).join('') || '<span class="muted sm">No wallet activity yet.</span>'}</div>` : '';
+      const act = (c && c.activity) || [];
+      const acts = `<h2 class="am-h2">Card activity</h2><div class="m-card col" style="gap:4px">${act.map(a => cwRow(a.icon || 'clock', a.text, a.payment && a.kind !== 'wallet' ? payLabel(a.payment) : '', a.at, a.amount, a.kind === 'wallet')).join('') || '<span class="muted sm">Nothing yet.</span>'}</div>`;
+      screen(`${head('My community card', isGuard() || isStaff() || isProv() ? 'profile' : 'menu')}${wallet}${fz}${tx}${acts}`);
+    },
+
     async profile() {
-      if (isGuard() || isStaff()) return screen(`<h1 class="am-h1">Profile</h1><div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">${esc(positionLabel(S.me))}</span></div>
-        ${isGuard() ? `<button class="btn btn-secondary btn-lg" data-act="tab" data-tab="support">${ic('lifebuoy')}Report a portal problem</button>` : ''}
+      if (isGuard() || isStaff() || isProv()) return screen(`<h1 class="am-h1">Profile</h1><div class="col" style="align-items:center;gap:6px;text-align:center"><span class="avatar" style="width:84px;height:84px;font-size:30px">${esc(initials(S.me.name))}</span><h2 style="margin:0">${esc(S.me.name)}</h2><span class="muted sm">${esc(positionLabel(S.me))}</span></div>
+        <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="mycard">${ic('identification-card')}My community card</button>
+        ${isGuard() || isProv() ? `<button class="btn btn-secondary btn-lg" data-act="tab" data-tab="support">${ic('lifebuoy')}Report a portal problem</button>` : ''}
         <button class="btn btn-primary btn-lg" data-act="logout">${ic('sign-out')}Sign out</button>`);
       const m = S.me, ms = await API.household.list().catch(() => []);
       const pct = Math.round([m.name, m.phone, m.flat, m.email].filter(v => v && String(v).trim()).length / 4 * 100);
@@ -441,6 +481,7 @@
         ${f || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="edit">' + ic('pencil-simple') + 'Edit details</button>'}
         <div class="m-card"><h3>Household</h3>${ms.map(x => `<div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar blue" style="width:36px;height:36px;font-size:13px">${esc(initials(x.name))}</span><span class="sm">${esc(x.name)} · ${esc(TYPE[x.resident_type] || '')}</span></div>`).join('') || '<span class="muted sm">No other members yet.</span>'}
           <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="household">${ic('users-three')}Manage household</button></div>
+        <button class="btn btn-secondary btn-lg" data-act="tab" data-tab="mycard">${ic('identification-card')}My community card</button>
         ${isAdmin() ? `<button class="btn btn-secondary btn-lg" data-act="quick" data-k="settings-sub">${ic('gear-six')}Settings</button>` : ''}
         <button class="btn btn-secondary btn-lg" data-act="quick" data-k="contacts-sub">${ic('address-book')}Who to call</button>
         ${pw || '<button class="btn btn-secondary btn-lg" data-act="pform" data-f="pw">' + ic('lock-key') + 'Change password</button>'}
@@ -557,7 +598,8 @@
         ['list-checks', 'Requests', adm ? 'Assign and resolve' : 'Track your requests', 'requests', true],
         ['plus-circle', 'Raise', 'Report a problem', 'raise', !adm && can('request.create')],
         ['siren', 'Emergency', adm ? 'Active alerts' : 'Send an alert', 'emergency', feat('emergency') && (adm || can('emergency.raise'))],
-        ['shield-check', 'Gate', 'Live entries and denials', 'gate', adm && feat('gate')]]],
+        ['shield-check', 'Gate', 'Live entries and denials', 'gate', adm && feat('gate')],
+        ['package', 'Parcels by card', 'Tap a card, hand over parcels', 'parcels', adm]]],
       ['Community', [
         ['megaphone', 'Notices', 'News from the committee', adm ? 'notices' : 'notices-sub', noteOn],
         ['address-book', 'Contacts', 'Who to call', 'contacts-sub', feat('contacts') && (adm || can('contacts.read'))],
@@ -567,7 +609,7 @@
         ['garage', 'Parking', adm ? 'Slots and assignments' : 'Your slots', 'parking', park && (adm || can('parking.view'))],
         ['file-text', 'Leases', adm ? 'Tenant leases' : 'Your lease', adm ? 'leases-sub' : 'lease', adm || S.me.resident_type === 'tenant'],
         ['qr-code', 'Gate pass', 'Invite a visitor', 'gatepass', !adm && gateOn]]],
-      ['Account', [['user-circle', 'Profile', 'Your details and password', 'profile', true], ['question', 'Help', 'How-to guides', 'help', true], ['lifebuoy', 'Report a portal problem', 'Tell IT support', 'support', true]]],
+      ['Account', [['user-circle', 'Profile', 'Your details and password', 'profile', true], ['identification-card', 'My community card', adm ? 'Freeze, activity' : 'Wallet, freeze, activity', 'mycard', true], ['question', 'Help', 'How-to guides', 'help', true], ['lifebuoy', 'Report a portal problem', 'Tell IT support', 'support', true]]],
       ['Administration', [
         ['user-check', 'Approvals', 'New residents', 'approvals', adm],
         ['users-three', 'Residents', 'Search, edit, suspend', 'set-users', adm],
@@ -703,6 +745,117 @@
     }
   }
 
+  // ---------- community card reading: the Capacitor app's NFC (tag UID as `serial`), Web NFC in Chrome on Android, or a typed box
+  // (a USB or the Windows card reader types into it). Card numbers follow nfc.js normSerial: upper-case hex, separators dropped.
+  const normSerial = s => { const v = String(s || '').toUpperCase().replace(/[\s:.\-]/g, ''); return /^[0-9A-F]*$/.test(v) ? v : ''; };
+  const WEBNFC = !NATIVE && 'NDEFReader' in window;
+  const inr = n => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const PAYS = [['cash', 'Cash'], ['upi', 'UPI'], ['wallet', 'Wallet'], ['account', 'Maintenance account']];
+  const payLabel = k => (PAYS.find(x => x[0] === k) || [k, String(k || '').toUpperCase()])[1];
+  const TX_KIND = { topup: 'Top-up', shop: 'Tuck shop', laundry: 'Laundry', refund: 'Refund', adjust: 'Adjustment' };
+  const TX_ICON = { topup: 'hand-coins', shop: 'shopping-bag', laundry: 't-shirt', refund: 'arrow-counter-clockwise', adjust: 'receipt' };
+  const cwRow = (icon, title, sub, at, amount, signed) => `<div class="cw-row"><span class="am-li">${ic(icon)}</span><span class="col grow" style="gap:0;min-width:0"><b class="sm">${esc(title || '')}</b>${sub ? `<span class="muted xs">${esc(sub)}</span>` : ''}<span class="muted xs">${esc(stamp(at))}</span></span>${amount == null ? '' : `<b class="cw-amt ${signed ? (Number(amount) < 0 ? 'out' : 'in') : ''}">${signed ? (Number(amount) < 0 ? '−' : '+') : ''}${esc(inr(Math.abs(Number(amount))))}</b>`}</div>`;
+  const cwStat = (n, l, v) => `<div class="am-stat ${v}"><span class="am-num">${esc(n)}</span><span class="am-t">${esc(l)}</span></div>`;
+  const cardErrBox = m => (m ? `<p class="err" role="alert">${esc(m)}</p>` : '');
+  const cardBox = p => `<div class="m-card col cw-read" style="gap:12px"><span class="cw-ic">${ic('contactless-payment')}</span><b style="text-align:center">Tap the community card</b>
+    ${NFC ? `<button class="btn btn-primary btn-lg" data-act="cardnative" data-p="${p}">${ic('contactless-payment')}Read card</button>` : WEBNFC ? `<button class="btn btn-primary btn-lg" data-act="cardweb" data-p="${p}">${WEB_LABEL()}</button>` : '<span class="muted sm" style="text-align:center">Type the card number, or let a USB card reader type it.</span>'}
+    <form class="col" id="cardform" data-p="${p}" style="gap:8px"><div class="field"><label for="cardin">Card number</label><input class="input" id="cardin" name="serial" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60" placeholder="04A1B2C3"${NFC || WEBNFC ? '' : ' autofocus'}></div><button class="btn btn-secondary btn-lg">${ic('magnifying-glass')}Look up</button></form></div>`;
+  const focusCard = () => { const i = $('#cardin'); if (i && !NFC && !WEBNFC) i.focus(); };
+  const holderCard = (h, extra) => `<div class="m-card cw-holder"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="avatar" style="width:52px;height:52px">${esc(initials(h.name))}</span><span class="col grow" style="gap:2px;min-width:0"><b class="list-title" style="font-size:18px">${esc(h.name)}</b><span class="muted sm">${h.flat ? 'Flat ' + esc(h.flat) : esc(h.role || '')}</span></span>${h.frozen ? '<span class="tag tag-accent-2">Frozen</span>' : ''}</div>${extra || ''}</div>`;
+  let webScan = null; // AbortController of the running Web NFC scan
+  const WEB_LABEL = () => `${ic('contactless-payment')}Read card with NFC`;
+  const stopWebNfc = () => { if (webScan) { try { webScan.abort(); } catch { /* ignore */ } webScan = null; } };
+  async function webNfcRead(btn, p) {
+    if (webScan) { stopWebNfc(); btn.innerHTML = WEB_LABEL(); return; }
+    const ctl = new AbortController(); webScan = ctl;
+    try {
+      const reader = new window.NDEFReader();
+      reader.onreading = e => {
+        if (webScan !== ctl) return;
+        stopWebNfc(); if (btn.isConnected) btn.innerHTML = WEB_LABEL();
+        const s = normSerial(e.serialNumber);
+        if (!s) return toast('Could not read that card. Hold it still and try again.', 'error');
+        guard(() => onCard(p, s))();
+      };
+      reader.onreadingerror = () => toast('Could not read that card. Hold it still and try again.', 'error');
+      await reader.scan({ signal: ctl.signal });
+      if (webScan === ctl) btn.innerHTML = `${ic('x-circle')}Hold the card to the back of the phone. Tap to stop`;
+    } catch (x) {
+      if (webScan === ctl) webScan = null;
+      if (btn.isConnected) btn.innerHTML = WEB_LABEL();
+      if (x && x.name === 'AbortError') return;
+      toast(x && x.name === 'NotAllowedError' ? 'Allow NFC for this site to read cards, or type the card number.' : 'NFC is not available here. Type the card number.', 'error');
+    }
+  }
+  // a card was read or typed: p is 'counter' (shop, laundry) or 'parcel' (guard, committee)
+  async function onCard(p, raw) {
+    const serial = normSerial(raw), bad = serial.length < 4 || serial.length > 40 ? 'Tap the card, or type its number (4 to 40 hex characters).' : '';
+    if (p === 'issue') {
+      const I = S.iss || {}; I.err = bad;
+      if (!bad) {
+        try {
+          if (I.approve) { await API.admin.decide(I.id, 'approve'); I.approve = false; }
+          await api('POST', `/api/admin/users/${I.id}/card`, { serial });
+          toast(`Card ${serial} issued to ${I.name}`); S.iss = null; S.tab = 'approvals'; return render();
+        } catch (x) { I.err = x.message; }
+      }
+      return render();
+    }
+    if (p === 'counter') {
+      const C = S.ct; C.err = bad; C.done = null; C.holder = null;
+      if (!bad) {
+        try {
+          const h = await api('POST', '/api/card/lookup', { serial });
+          if (h.role !== 'resident' || !h.flat) C.err = `${h.name} is not a resident. Only a resident's card can buy here.`;
+          else if (h.frozen) C.err = 'This card is frozen. Its owner can unfreeze it under Profile > My community card.';
+          else { C.holder = h; C.serial = serial; C.cart = {}; C.pay = 'cash'; }
+        } catch (x) { C.err = x.message; }
+      }
+      return drawCounter();
+    }
+    const P = S.pc; P.err = bad; P.holder = null; P.list = [];
+    if (!bad) {
+      try {
+        const [h, list] = await Promise.all([api('POST', '/api/card/lookup', { serial }), api('GET', '/api/parcels/card/' + encodeURIComponent(serial))]);
+        P.holder = h; P.serial = serial; P.list = Array.isArray(list) ? list : (list && list.parcels) || [];
+      } catch (x) { P.err = x.message; }
+    }
+    drawParcels();
+  }
+  const ctName = it => it.name || it.item || '';
+  const ctTotal = () => Math.round(S.ct.items.reduce((t, it) => t + (S.ct.cart[it.id] || 0) * (Number(it.price) || 0), 0) * 100) / 100;
+  function drawCounter() {
+    const box = $('#ctbody'); if (!box) return;
+    const C = S.ct, h = C.holder, shop = S.me.role === 'shop';
+    const done = C.done ? `<div class="callout col cw-done" role="status" style="gap:4px"><b>${ic('check-circle')} ${esc(inr(C.done.total))} from ${esc(C.done.name || '')}${C.done.flat ? ', Flat ' + esc(C.done.flat) : ''}</b><span class="sm">${esc(payLabel(C.done.payment))}${C.done.id ? ' · order #' + esc(C.done.id) : ''}</span></div>` : '';
+    if (!h) { box.innerHTML = `${done}${cardBox('counter')}${cardErrBox(C.err)}`; focusCard(); return; }
+    const w = h.wallet, cr = h.credit, total = ctTotal();
+    const money = w || cr ? `<div class="am-stats">${w ? cwStat(inr(w.balance), 'Wallet', 'dk') : ''}${cr ? cwStat(inr(cr.used) + (cr.limit != null ? ' of ' + inr(cr.limit) : ''), 'On account', 'wh') : ''}</div>` : '';
+    const items = C.items.filter(it => it.active !== false && (!shop || Number(it.stock) > 0 || C.cart[it.id]));
+    const rows = items.map(it => {
+      const n = C.cart[it.id] || 0, nm = ctName(it);
+      return `<div class="cw-line ${n ? 'on' : ''}"><span class="col grow" style="gap:0;min-width:0"><b>${esc(nm)}</b><span class="muted xs">${esc(inr(it.price))}${it.unit ? ' / ' + esc(it.unit) : ''}${shop ? ' · ' + esc(it.stock) + ' left' : ''}</span></span>
+        <button class="btn btn-secondary btn-icon" data-act="ctqty" data-id="${esc(it.id)}" data-d="-1" aria-label="One less ${esc(nm)}" ${n ? '' : 'disabled'}>${ic('minus')}</button><b class="cw-qty">${n}</b>
+        <button class="btn btn-secondary btn-icon" data-act="ctqty" data-id="${esc(it.id)}" data-d="1" aria-label="One more ${esc(nm)}" ${shop && n >= Number(it.stock) ? 'disabled' : ''}>${ic('plus')}</button></div>`;
+    }).join('') || `<p class="muted">${shop ? 'Nothing in stock.' : 'No laundry rates yet.'}</p>`;
+    const pays = PAYS.map(([k, l]) => `<button type="button" class="am-seg ${C.pay === k ? 'on' : ''}" data-act="ctpaykind" data-k="${k}" aria-pressed="${C.pay === k}" ${k === 'wallet' && !w ? 'disabled' : ''}>${l}</button>`).join('');
+    const short = C.pay === 'wallet' && w && total > Number(w.balance);
+    box.innerHTML = `${holderCard(h, money)}<button class="btn btn-secondary" data-act="ctclear">${ic('arrow-counter-clockwise')}Next customer</button>
+      <h2 class="am-h2">${shop ? 'Items' : 'Clothes handed over'}</h2><div class="m-card col" style="gap:8px">${rows}</div>
+      <div class="m-card col"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b>Total</b><b class="cw-total">${esc(inr(total))}</b></div>
+      <div class="am-segs cw-pays" role="group" aria-label="Payment">${pays}</div>
+      ${short ? `<p class="callout sm" style="margin:0">Wallet balance is ${esc(inr(w.balance))}. Choose another way, or the resident tops up with the committee.</p>` : ''}${cardErrBox(C.err)}
+      <button class="btn btn-primary btn-lg" data-act="ctpay" ${total > 0 && !short ? '' : 'disabled'}>${ic('check-circle')}${shop ? 'Sell' : 'Hand over'} for ${esc(inr(total))}</button></div>`;
+  }
+  function drawParcels() {
+    const box = $('#pcbody'); if (!box) return;
+    const P = S.pc, h = P.holder;
+    if (!h) { box.innerHTML = `${cardBox('parcel')}${cardErrBox(P.err)}`; focusCard(); return; }
+    const rows = P.list.map(x => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span class="am-li">${ic('package')}</span><span class="col grow" style="gap:0;min-width:0"><b>${esc(x.carrier || 'Parcel')}</b><span class="muted xs">#${esc(x.id)}${x.flat ? ' · Flat ' + esc(x.flat) : ''} · ${esc(stamp(x.created_at))}</span>${x.note ? `<span class="sm">${esc(x.note)}</span>` : ''}</span></div>
+      <button class="btn btn-primary btn-lg" data-act="pccollect" data-id="${esc(x.id)}">${ic('hand-arrow-down')}Hand over to ${esc(firstName(h.name))}</button></div>`).join('') || '<p class="callout" style="margin:0">No parcels waiting for this flat.</p>';
+    box.innerHTML = `${holderCard(h)}${cardErrBox(P.err)}<h2 class="am-h2">Waiting parcels</h2>${rows}<button class="btn btn-secondary btn-lg" data-act="pcclear">${ic('arrow-counter-clockwise')}Next card</button>`;
+  }
+
   // ---------- gate helpers
   const gpTag = st => `<span class="tag ${st === 'active' ? 'tag-accent' : 'tag-neutral'}">${esc({ active: 'Active', used: 'Used', cancelled: 'Cancelled', expired: 'Expired' }[st] || st)}</span>`;
   const REASONS = { expired: 'This pass has expired.', used: 'This pass was already used.', cancelled: 'This pass was cancelled by the resident.', not_found: 'Code not recognised.', unknown: 'Code not recognised.', invalid: 'Code not recognised.', not_yet_valid: 'This pass is not valid yet.', inactive: 'This resident is not active.' };
@@ -725,7 +878,7 @@
     const i = $('#gcode'); if (i) { i.value = ''; i.focus(); }
   }
   function stopScan() {
-    clearInterval(ovTimer);
+    clearInterval(ovTimer); stopWebNfc();
     if (!cam) return;
     clearTimeout(cam.t); if (cam.stream) cam.stream.getTracks().forEach(t => t.stop());
     cam = null; const b = $('#gcam'); if (b) b.innerHTML = '';
@@ -753,7 +906,36 @@
   const flipSw = (el, on) => { el.classList.toggle('on', on); el.setAttribute('aria-checked', String(on)); el.querySelector('.am-st').textContent = on ? 'On' : 'Off'; };
   const ACT = {
     gscan: () => (MLK ? nativeScan() : startScan()),
-    nfcread: el => nfcRun(el, async () => { const r = await NFC.read(); const t = (r && r.text || '').trim(); if (!t) return toast('That tag is empty.', 'error'); await doVerify({ token: t }); }),
+    nfcread: el => nfcRun(el, async () => { const r = await NFC.read(); const t = (r && r.text || '').trim(); if (!t) return toast(r && r.ndef_error ? NFC_ERR.read_failed : 'That tag is empty.', 'error'); await doVerify({ token: t }); }),
+    cardnative: el => nfcRun(el, async () => { const r = await NFC.read(); const s = normSerial(r && r.serial); if (!s) return toast('Could not read that card. Hold it still and try again.', 'error'); await onCard(el.dataset.p, s); }),
+    cardweb: el => webNfcRead(el, el.dataset.p),
+    ctqty: el => { const C = S.ct, id = el.dataset.id, it = C.items.find(x => String(x.id) === id); if (!it) return; const n = Math.max(0, (C.cart[id] || 0) + Number(el.dataset.d)); C.cart[id] = S.me.role === 'shop' ? Math.min(n, Number(it.stock) || 0) : n; C.err = ''; drawCounter(); },
+    ctpaykind: el => { S.ct.pay = el.dataset.k; S.ct.err = ''; drawCounter(); },
+    ctclear: () => { Object.assign(S.ct, { holder: null, serial: '', cart: {}, pay: 'cash', err: '', done: null }); drawCounter(); },
+    ctpay: async el => {
+      const C = S.ct, shop = S.me.role === 'shop'; if (C.busy || !C.holder) return;
+      const lines = Object.entries(C.cart).filter(([, n]) => n > 0).map(([id, qty]) => ({ id: Number(id), qty }));
+      if (!lines.length) return toast('Add at least one item', 'error');
+      C.busy = true; el.disabled = true; C.err = '';
+      try {
+        const r = shop ? await api('POST', '/api/shop/counter', { serial: C.serial, items: lines, payment: C.pay })
+          : await api('POST', '/api/laundry/counter', { serial: C.serial, lines: lines.map(l => ({ item: l.id, id: l.id, qty: l.qty })), payment: C.pay });
+        C.done = { id: r.id, total: r.total != null ? r.total : ctTotal(), payment: r.payment || C.pay, name: r.name || C.holder.name, flat: r.flat || C.holder.flat };
+        toast(`${inr(C.done.total)} paid by ${payLabel(C.done.payment)}`);
+        Object.assign(C, { holder: null, serial: '', cart: {}, pay: 'cash' });
+        if (shop) C.items = await api('GET', '/api/shop/items').catch(() => C.items);
+      } catch (x) { C.err = x.message; } finally { C.busy = false; }
+      drawCounter();
+    },
+    pcclear: () => { Object.assign(S.pc, { holder: null, serial: '', list: [], err: '' }); drawParcels(); },
+    pccollect: async el => {
+      const P = S.pc; el.disabled = true; P.err = '';
+      try { await api('POST', `/api/parcels/${encodeURIComponent(el.dataset.id)}/collect`, { serial: P.serial }); P.list = P.list.filter(x => String(x.id) !== el.dataset.id); toast(`Parcel handed to ${P.holder.name}`); } catch (x) { P.err = x.message; }
+      drawParcels();
+    },
+    mcask: () => { S.mc.confirm = true; render(); },
+    mcno: () => { S.mc.confirm = false; render(); },
+    mcyes: async el => { const r = await api('POST', '/api/me/card/freeze', { frozen: el.dataset.f === '1' }); S.mc.confirm = false; toast(r && r.frozen ? 'Card frozen. Nobody can use it until you unfreeze it.' : 'Card unfrozen'); render(); },
     nfcwrite: el => nfcRun(el, async () => { if (!nfcWriteText) return; await NFC.write({ text: nfcWriteText }); toast('Written to NFC tag'); }),
     catgo: el => { if (isAdmin()) return go('requests'); S.cat = el.dataset.c; go('raise'); },
     vtype: el => { S.veh.type = el.dataset.t; document.querySelectorAll('[data-act=vtype]').forEach(b => b.classList.toggle('on', b === el)); },
@@ -818,6 +1000,7 @@
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thank you. Request closed.'); render(); },
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
+    issuecard: el => { S.iss = { id: Number(el.dataset.id), name: el.dataset.name, approve: el.dataset.approve === '1', err: '' }; S.tab = 'issuecard'; render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
     mjaccept: async el => { await RAPI.staff.accept(el.dataset.id); toast('Job taken up'); render(); },
     mjform: el => { S.mj.form = { id: Number(el.dataset.id), kind: el.dataset.k }; render(); },
@@ -856,6 +1039,9 @@
       fd.set('description', [d.where ? 'Where: ' + d.where : '', d.description].filter(Boolean).join('\n'));
       if (S.photo) fd.set('photo', S.photo);
       const r = await API.requests.create(fd); S.photo = null; toast('Request ' + rid({ id: r.id }) + ' raised'); go('requests', r.id);
+    } else if (f.id === 'cardform') {
+      const i = $('#cardin'); if (i) i.value = '';
+      await onCard(f.dataset.p, d.serial);
     } else if (f.id === 'gateform') {
       const code = (d.code || '').replace(/\D/g, ''); if (code.length !== 6) { toast('Enter the 6-digit code', 'error'); return; }
       await doVerify({ code });
@@ -925,6 +1111,7 @@
     if (S.mj.form || (!S.sub && ['shift', 'support'].includes(S.tab))) return; // a job, shift or ticket form is open
     if (!S.sub && (S.pk.sel || S.wk.edit)) return;
     if (!S.sub && (S.tab === 'gate' || S.tab === 'gatepass' || S.gRes || cam)) return;
+    if (!S.sub && (['counter', 'parcels'].includes(S.tab) || S.mc.confirm || webScan)) return; // a card is being read or a sale is open
     const sc = $('#screen'), top = sc ? sc.scrollTop : 0;
     await render();
     const n = $('#screen'); if (n) n.scrollTop = top;

@@ -221,6 +221,20 @@ const ROWS = [
   ['GET me/card', 'GET', () => '/api/me/card', null, ALL(200)],
   ['GET admin user card', 'GET', f => `/api/admin/users/${f.ownerId}/card`, null, only(COM, 200)],
   ['POST admin user card', 'POST', f => `/api/admin/users/${f.familyId}/card`, (f, r) => ({ serial: 'FA' + hex(r) }), only(COM, 201)],
+  // ---------- community card wallet (docs/card-wallet-api.md)
+  ['GET wallet', 'GET', () => '/api/wallet', null, only(RES, 200)],
+  ['GET admin wallets', 'GET', () => '/api/admin/wallets', null, only(COM, 200)],
+  ['GET admin wallet of A-101', 'GET', () => '/api/admin/wallets/A-101', null, only(COM, 200)],
+  ['POST wallet topup', 'POST', () => '/api/admin/wallet/topup', () => ({ flat: 'A-101', amount: 10, method: 'cash' }), only(COM, 201)],
+  ['POST wallet adjust', 'POST', () => '/api/admin/wallet/adjust', () => ({ flat: 'A-101', amount: 1, note: 'correction' }), only(GOV, 201)],
+  ['POST card lookup', 'POST', () => '/api/card/lookup', () => ({ serial: '04A1B2C3' }), only([...COM, 'guard', 'shop', 'laundry'], 200)],
+  ['POST laundry counter', 'POST', () => '/api/laundry/counter', f => ({ serial: '04A1B2C3', lines: [{ item: f.rate, qty: 1 }], payment: 'cash' }), only(['laundry'], 201)],
+  ['GET parcels by card', 'GET', () => '/api/parcels/card/04A1B2C3', null, only([...COM, 'guard', ...STAFF], 200)],
+  ['POST event checkin', 'POST', f => `/api/events/${f.cev}/checkin`, () => ({ serial: '04A1B2C3' }), only([...COM, 'guard'], 201),
+    async (t, f, r) => ({ cev: (await t.c.sysadmin('POST', '/api/events', { title: 'Check-in ' + r, starts_at: '2026-12-03T18:00' })).body.id })],
+  ['GET event checkins', 'GET', f => `/api/events/${f.event}/checkins`, null, only([...COM, 'guard'], 200)],
+  // the owner carries 04A1B2C3; tenant and family cards come and go in the rows above, so they are not asserted
+  ['POST me/card/freeze (unfreeze)', 'POST', () => '/api/me/card/freeze', () => ({ frozen: false }), expect(404, { owner: 200, tenant: null, family: null })],
 ];
 
 test('access matrix: every role against a representative route in every module', async () => {

@@ -182,3 +182,26 @@ jobs:
           tags: portal-frontend:ci
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
+
+  windows-reader:
+    name: Windows card reader (build + smoke test)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows-reader
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with the .NET Framework compiler that ships with Windows
+        run: .\build.ps1
+      - name: Card checker runs (no reader on CI, so it must say so and exit 3)
+        run: |
+          $out = & .\dist\SahyadriCardCheck.exe --read-once 1
+          Write-Host $out
+          if ($LASTEXITCODE -ne 3 -and $LASTEXITCODE -ne 2) { throw "unexpected exit $LASTEXITCODE" }
+          exit 0
+      - name: Download zip has the installer, both programs and the README
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $names = [IO.Compression.ZipFile]::OpenRead((Resolve-Path ..\public\downloads\SahyadriCardReader.zip)).Entries.Name
+          foreach ($n in 'SahyadriCardReader.exe','SahyadriCardCheck.exe','install.ps1','README.txt') { if ($names -notcontains $n) { throw "zip is missing $n" } }

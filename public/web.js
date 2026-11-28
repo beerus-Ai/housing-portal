@@ -39,14 +39,14 @@
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
       ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'], ['wallets', 'Card wallets', 'wallet'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
       ['gate', 'Visitor management', 'shield-check'], ['cards', 'NFC gate cards', 'identification-card'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     guard: [['cards', 'Gate desk', 'identification-card'], ['gate', 'Visitor passes', 'qr-code'], ['gatelog', 'Log', 'clock-counter-clockwise'], ['parcels', 'Parcels', 'package'], ...HELP, ['profile', 'Profile', 'user-circle']],
     staff: [['myjobs', 'Assigned work', 'toolbox'], ['shift', 'Punch in and hand-over', 'clock-user'], ['inventory', 'Inventory', 'package'], ['waste', 'Waste collection', 'recycle'], ...HELP, ['profile', 'Profile', 'user-circle']],
     shop: [['shop', 'Orders and stock', 'storefront'], ...HELP, ['profile', 'Profile', 'user-circle']],
-    laundry: [['laundry', 'Laundry orders', 't-shirt'], ...HELP, ['profile', 'Profile', 'user-circle']],
+    laundry: [['laundry', 'Laundry orders', 't-shirt'], ['lcounter', 'Card counter', 'identification-card'], ...HELP, ['profile', 'Profile', 'user-circle']],
     it: [['itoverview', 'IT overview', 'gauge'], ['support', 'Support queries', 'lifebuoy'], ['help', 'Training guides', 'graduation-cap'], ['health', 'Upgrades and maintenance', 'wrench'], ['profile', 'Profile', 'user-circle']],
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
@@ -55,13 +55,13 @@
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
-    cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services',
+    cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services', wallets: 'services', lcounter: 'services',
     help: 'help', support: 'help', profile: 'help' };
   // The required items (Requirements Document / faculty whiteboard) sit in the top bar for every role;
   // the sidebar only holds the extras.
   const CORE = { resident: ['home', 'raise', 'requests', 'notices', 'emergency', 'household'],
     admin: ['dashboard', 'approvals', 'requests', 'notices', 'reports', 'audit', 'emergencies', 'costs'],
-    staff: ['myjobs', 'shift', 'inventory', 'waste'], it: ['itoverview', 'support', 'help', 'health'], guard: ['cards', 'gate', 'gatelog', 'parcels'], shop: ['shop'], laundry: ['laundry'] };
+    staff: ['myjobs', 'shift', 'inventory', 'waste'], it: ['itoverview', 'support', 'help', 'health'], guard: ['cards', 'gate', 'gatelog', 'parcels'], shop: ['shop'], laundry: ['laundry', 'lcounter'] };
   // The committee's top bar differs by position: head = governance, admin = system, member = operations.
   const CORE_POS = { head: ['dashboard', 'costs', 'reports', 'requests', 'emergencies', 'notices', 'audit'],
     sysadmin: ['dashboard', 'approvals', 'users', 'accounts', 'settings', 'health', 'audit'],
@@ -85,7 +85,7 @@
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
     accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => ['resident', 'admin', 'shop'].includes(S.me.role), laundry: () => ['resident', 'admin', 'laundry'].includes(S.me.role), parcels: () => !isIT() && !isStaff(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || (isStaff() && dept() === 'maintenance'),
-    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin() };
+    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin(), wallets: () => isAdmin(), lcounter: () => S.me.role === 'laundry' };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const dept = () => (S.me && S.me.department) || 'maintenance';
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => (flatNav() && !isStaff()) || allowed(k));
@@ -409,7 +409,7 @@
       page(`<div class="col" style="max-width:none;gap:var(--space-4)"><h2>Verification: approval queue</h2><p style="margin:0">Check each person against the flat register before approving.</p>
         <div class="table-wrap"><table class="table"><thead><tr><th>Resident</th><th>Flat</th><th>Type</th><th>Submitted</th><th></th></tr></thead><tbody>${ordered.map(u => `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(u.name))}</span><span class="col" style="gap:0"><strong style="font-weight:600">${esc(u.name)}</strong><span class="muted xs">${esc(u.email)}</span></span></span></td>
           <td>${esc(u.flat)}</td><td>${esc(TYPE[u.resident_type] || '')}</td><td>${esc(day(u.created_at))}</td>
-          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end;flex-wrap:nowrap"><label class="sr" for="card${u.id}">Card number for ${esc(u.name)}</label><input class="input" id="card${u.id}" placeholder="Card number (tap or type)" style="width:190px" autocomplete="off"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
+          <td>${u.status === 'pending' ? `<span class="row" style="gap:var(--space-1);justify-content:flex-end;flex-wrap:nowrap"><button class="btn btn-primary" data-act="decidecard" data-id="${u.id}" data-name="${esc(u.name)}" title="Approve, then tap the card you hand them">${ic('contactless-payment')}Approve + card</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></span>` : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No residents yet.</td></tr>'}</tbody></table></div></div>`);
     },
 
     async leases() {
@@ -575,8 +575,16 @@
     gmrot: async () => { S.gmRot = false; try { await API.gate.rotate(); toast('Your gate QR was reset. Re-write any NFC tag.'); } catch (x) { toast(x.message, 'error'); } render(); },
     gscan: () => startScan(),
     gscanstop: () => stopScan(),
+    // Approve + card: tap the card in the shared full-screen scanner first, so a card that belongs to someone else is
+    // caught before anything is saved; then approve and issue it.
+    decidecard: async el => {
+      const serial = await window.HPWeb.scanCard({ title: 'Tap the card to hand over', name: el.dataset.name, userId: Number(el.dataset.id) });
+      if (!serial) return;
+      el.dataset.card = serial; el.dataset.d = 'approve';
+      await ACT.decide(el);
+    },
     decide: async el => {
-      const card = el.dataset.d === 'approve' && document.getElementById('card' + el.dataset.id) ? document.getElementById('card' + el.dataset.id).value.trim() : '';
+      const card = el.dataset.card || '';
       await API.admin.decide(el.dataset.id, el.dataset.d);
       if (card) { try { await HP.api('POST', `/api/admin/users/${el.dataset.id}/card`, { serial: card }); toast('Approved and community card issued'); } catch (x) { toast('Approved, but the card was not issued: ' + x.message, 'error'); } }
       else toast(el.dataset.d === 'approve' ? 'Approved. Issue a card from Residents when you have one.' : 'Rejected');

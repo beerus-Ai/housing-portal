@@ -187,6 +187,15 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS gate_presence(
     id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), card_id INTEGER, direction TEXT NOT NULL, guard_id INTEGER,
     at TEXT NOT NULL DEFAULT (datetime('now')));`);
+  // Community card wallet (docs/card-wallet-api.md): a frozen card is refused everywhere; a prepaid ledger per flat; event check-in by card.
+  if (!db.prepare('PRAGMA table_info(gate_cards)').all().some(c => c.name === 'frozen')) db.exec('ALTER TABLE gate_cards ADD COLUMN frozen INTEGER NOT NULL DEFAULT 0');
+  db.exec(`CREATE TABLE IF NOT EXISTS wallet_tx(
+    id INTEGER PRIMARY KEY, flat TEXT NOT NULL, amount REAL NOT NULL, kind TEXT NOT NULL, method TEXT, ref_type TEXT, ref_id INTEGER, note TEXT,
+    by_user INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE INDEX IF NOT EXISTS wallet_tx_flat ON wallet_tx(flat);
+  CREATE TABLE IF NOT EXISTS event_checkins(
+    event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), at TEXT NOT NULL DEFAULT (datetime('now')),
+    by_user INTEGER, PRIMARY KEY(event_id, user_id));`);
   // Insert any missing role/permission row with its default; never touches rows the committee already edited.
   const ins = db.prepare('INSERT OR IGNORE INTO role_permissions(role,permission,allowed) VALUES(?,?,?)');
   const off = { owner: [], tenant: ['household.manage'], family: ['household.manage', 'lease.view', 'vehicle.manage'] };

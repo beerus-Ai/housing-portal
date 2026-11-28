@@ -217,7 +217,7 @@
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
     const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
       committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
-      { label: 'Issue card', icon: 'identification-card', act: 'rlcard', data: { id: a.id } },
+      { label: 'Issue card', icon: 'identification-card', act: 'rlcard', data: { id: a.id, name: a.name } },
       { label: a.status === 'suspended' ? 'Reactivate' : 'Suspend', icon: a.status === 'suspended' ? 'play-circle' : 'pause-circle', act: 'rlsus', data: { id: a.id, to: a.status === 'suspended' ? 'approved' : 'suspended' } },
       { label: 'Remove', icon: 'trash', act: 'rldel', data: { id: a.id }, danger: true },
     ]);
@@ -236,7 +236,7 @@
       <form id="rlacc" class="form-card col" style="max-width:720px"><h3>Add an account</h3>
         <div class="two">${field('rlan', 'Full name', '<input class="input" id="rlan" name="name" required maxlength="100">')}${field('rlak', 'Role', `<select class="input" id="rlak" name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>`)}</div>
         <div class="two">${field('rlae', 'Email', '<input class="input" id="rlae" name="email" type="email" required autocomplete="off">')}${field('rlap', 'Temporary password (8+ characters)', '<input class="input" id="rlap" name="password" type="password" required minlength="8" autocomplete="new-password">')}</div>
-        ${field('rlac', 'Community card number', '<input class="input" id="rlac" name="card" autocomplete="off" placeholder="Tap or type the card you hand them" style="max-width:360px">', 'Staff tap it at the gate to punch in and out.')}
+        ${field('rlac', 'Community card number', `<span class="row" style="gap:8px;flex-wrap:nowrap"><input class="input" id="rlac" name="card" readonly placeholder="No card yet" style="max-width:240px"><button type="button" class="btn btn-secondary" data-act="rlacscan">${ic('contactless-payment')}Tap card</button><button type="button" class="btn btn-ghost" data-act="rlacclear" aria-label="Remove the card">${ic('x')}</button></span>`, 'Optional. Staff tap it at the gate to punch in and out.')}
         <div class="row"><button class="btn btn-primary">${ic('user-plus')}Add account</button><span class="muted sm">Ask them to change the password after signing in.</span></div></form></div>`);
   };
   const accRun = fn => async el => { R.err = ''; try { await fn(el); } catch (x) { R.err = x.message; toast(x.message, 'error'); } render(); };
@@ -244,7 +244,21 @@
   ACT.rldel = el => { R.accDel = Number(el.dataset.id); R.accPos = null; render(); };
   ACT.rlposopen = el => { R.accPos = Number(el.dataset.id); R.accDel = null; render(); };
   ACT.rlposclose = () => { R.accPos = R.accCard = null; render(); };
-  ACT.rlcard = el => { R.accCard = Number(el.dataset.id); R.accPos = R.accDel = null; render().then(() => { const i = document.getElementById('rlci' + el.dataset.id); if (i) i.focus(); }); };
+  // Issue a card: the shared full-screen card scanner (web-nfc.js): NFC, the Windows card reader, a USB reader or typing.
+  ACT.rlcard = async el => {
+    R.accPos = R.accDel = R.accCard = null;
+    const id = Number(el.dataset.id), serial = await W.scanCard({ title: 'Tap the card to issue', name: el.dataset.name, userId: id });
+    if (!serial) return;
+    try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial }); toast(`Community card ${serial} issued${el.dataset.name ? ' to ' + el.dataset.name : ''}`); } catch (x) { toast(x.message, 'error'); }
+    render();
+  };
+  // New account: tap the card into the read-only field (the scanner fills it).
+  ACT.rlacscan = async () => {
+    const nm = (document.getElementById('rlan') || {}).value || '';
+    const serial = await W.scanCard({ title: 'Tap the card you hand them', name: nm.trim() });
+    const i = document.getElementById('rlac'); if (serial && i) { i.value = serial; }
+  };
+  ACT.rlacclear = () => { const i = document.getElementById('rlac'); if (i) i.value = ''; };
   document.addEventListener('submit', async e => {
     const f = e.target.closest && e.target.closest('.rl-card-issue'); if (!f) return;
     e.preventDefault();
@@ -254,10 +268,39 @@
   ACT.rldelno = () => { R.accDel = null; render(); };
   ACT.rldelok = accRun(async el => { R.accDel = null; await RAPI.admin.removeAccount(el.dataset.id); toast('Account removed'); });
 
+  // ---------- community card wallet (docs/card-wallet-api.md): history rows, shared with the committee Wallets page
+  const WTX = { topup: ['Top-up', 'plus-circle'], shop: ['Paid at the tuck shop', 'storefront'], laundry: ['Paid for laundry', 't-shirt'], refund: ['Refund', 'arrow-counter-clockwise'], adjust: ['Adjustment by the committee', 'scales'] };
+  W.walletHistory = (tx, empty = 'No wallet activity yet.') => (tx || []).length ? `<div class="wl-tx">${tx.map(t => {
+    const [label, icon] = WTX[t.kind] || [String(t.kind || 'Wallet'), 'wallet'], amt = Number(t.amount) || 0;
+    return `<div class="cardp-row"><span class="ntf-ic">${ic(icon)}</span><span class="col" style="gap:0;flex:1;min-width:0"><b>${esc(label)}${t.method ? ` (${t.method === 'upi' ? 'UPI' : 'cash'})` : ''}</b><span class="muted sm">${esc(stamp(t.created_at))}${t.note ? ' · ' + esc(t.note) : ''}</span></span><b class="wl-amt ${amt < 0 ? 'out' : 'in'}">${amt < 0 ? '−' : '+'}${esc(rupees(Math.abs(amt)))}</b></div>`;
+  }).join('')}</div>` : `<p class="muted">${esc(empty)}</p>`;
+  // Balance, freeze toggle (with an in-page confirm) and history for the signed-in card holder.
+  const walletBlock = (card, wallet) => {
+    const hasCard = !!(card && card.cards && card.cards.length), frozen = !!(card && card.frozen);
+    const bal = wallet ? `<div class="form-card col wl-bal ${frozen ? 'frozen' : ''}"><span class="muted sm">${ic('wallet')} Wallet for flat ${esc(wallet.flat)}</span><b class="wl-big">${esc(rupees(wallet.balance))}</b><span class="muted sm">Top up with cash or UPI at the committee office. Pay with your card at the tuck shop and the laundry counter.</span></div>` : '';
+    const ask = R.freezeAsk;
+    const freeze = !hasCard ? '' : `<div class="form-card col wl-freeze ${frozen ? 'frozen' : ''}" aria-live="polite">${frozen
+      ? `<b>${ic('snowflake')} Your card is frozen</b><span class="muted sm">It is refused at the gate, the shop, the laundry, the parcel desk and events until you unfreeze it.</span>`
+      : `<b>${ic('shield-check')} Your card is active</b><span class="muted sm">Lost it? Freeze it here at once. Nobody can use it until you unfreeze it.</span>`}
+      ${ask ? `<div class="callout col wl-confirm" role="alertdialog" aria-label="${frozen ? 'Unfreeze card' : 'Freeze card'}"><b>${frozen ? 'Unfreeze your card?' : 'Freeze your card?'}</b><span class="sm">${frozen ? 'It will work again everywhere.' : 'It will be refused everywhere, including at the gate.'}</span>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-act="rlfreezeok" data-to="${frozen ? 0 : 1}">${ic(frozen ? 'sun' : 'snowflake')}${frozen ? 'Yes, unfreeze' : 'Yes, freeze it'}</button><button type="button" class="btn btn-secondary" data-act="rlfreezeno">Keep it as it is</button></div></div>`
+      : `<div class="row"><button type="button" class="btn ${frozen ? 'btn-primary' : 'btn-secondary'}" data-act="rlfreeze">${ic(frozen ? 'sun' : 'snowflake')}${frozen ? 'Unfreeze card' : 'Freeze card'}</button></div>`}</div>`;
+    const top = bal || freeze ? `<div class="wl-top">${bal}${freeze}</div>` : '';
+    return `${top}${wallet ? `<section class="col" style="gap:var(--space-2)"><h3 style="margin:0">Wallet history</h3>${W.walletHistory(wallet.tx)}</section>` : ''}`;
+  };
+  ACT.rlfreeze = () => { R.freezeAsk = true; render(); };
+  ACT.rlfreezeno = () => { R.freezeAsk = false; render(); };
+  ACT.rlfreezeok = async el => {
+    R.freezeAsk = false;
+    try { const r = await HP.api('POST', '/api/me/card/freeze', { frozen: el.dataset.to === '1' }); toast(r.frozen ? 'Card frozen. Nobody can use it now.' : 'Card unfrozen. It works again.'); }
+    catch (x) { toast(x.message, 'error'); }
+    render();
+  };
+
   // ---------- everyone: Profile
   PAGES.profile = async () => {
     const m = S.me;
-    const myCard = await HP.api('GET', '/api/me/card').catch(() => null);
+    const [myCard, myWallet] = await Promise.all([HP.api('GET', '/api/me/card').catch(() => null), m.role === 'resident' && m.flat ? HP.api('GET', '/api/wallet').catch(() => null) : null]);
     const rows = [['user', 'Name', m.name], ['identification-badge', 'Role', positionLabel(m)], ['envelope-simple', 'Email', m.email], ['phone', 'Phone', m.phone]];
     if (m.flat) rows.splice(2, 0, ['house', 'Flat', m.flat]);
     page(`<div class="rl">${head('Profile', '')}
@@ -268,7 +311,7 @@
         <div class="row"><button class="btn btn-primary">${ic('floppy-disk')}Save</button></div></form>`}
         <form id="rlpw" class="form-card col"><h3>Change password</h3>${field('rlpc', 'Current password', '<input class="input" id="rlpc" name="current" type="password" required autocomplete="current-password">')}${field('rlpx', 'New password (8+ characters)', '<input class="input" id="rlpx" name="next" type="password" required minlength="8" autocomplete="new-password">')}
         ${errLine()}<div class="row"><button class="btn btn-primary">${ic('lock-key')}Change password</button></div></form></div></div>
-      ${myCard ? `<section class="col" style="gap:var(--space-2)"><h2>My community card</h2><p class="muted" style="margin:0">Your card is your ID in the society: tap it at the gate${m.role === 'resident' ? ' and at the tuck shop counter' : m.role === 'staff' || m.role === 'shop' || m.role === 'laundry' ? ' to punch in and out' : ''}.</p>${HP.cardPanel(myCard, { name: m.name })}</section>` : ''}</div>`);
+      ${myCard ? `<section class="col" style="gap:var(--space-2)"><h2>My community card</h2><p class="muted" style="margin:0">Your card is your ID in the society: tap it at the gate${m.role === 'resident' ? ' and at the tuck shop and laundry counters, the parcel desk and events' : m.role === 'staff' || m.role === 'shop' || m.role === 'laundry' ? ' to punch in and out' : ''}.</p>${walletBlock(myCard, myWallet)}${HP.cardPanel(myCard, { name: m.name })}</section>` : myWallet ? `<section class="col" style="gap:var(--space-2)"><h2>My community card</h2>${walletBlock(null, myWallet)}</section>` : ''}</div>`);
   };
 
   // ---------- events
