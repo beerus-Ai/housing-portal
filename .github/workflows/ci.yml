@@ -199,6 +199,7 @@ jobs:
           $out = & .\dist\SahyadriCardCheck.exe --read-once 1
           Write-Host $out
           if ($LASTEXITCODE -ne 3 -and $LASTEXITCODE -ne 2) { throw "unexpected exit $LASTEXITCODE" }
+          exit 0
       - name: Download zip has the installer, both programs and the README
         run: |
           Add-Type -AssemblyName System.IO.Compression.FileSystem
