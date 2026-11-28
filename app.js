@@ -210,8 +210,6 @@ function createApp(opts = {}) {
     const phone = str(b.phone, 20), rtype = b.resident_type, pw = typeof b.password === 'string' ? b.password : '';
     if (!name || !/^\S+@\S+\.\S+$/.test(email) || !flat) return res.status(400).json({ error: 'Name, valid email and flat are required' });
     if (!RESIDENT_TYPES.includes(rtype)) return res.status(400).json({ error: 'Choose owner, tenant or family' });
-    // Family members are added by the flat owner (Household), never through the public form.
-    if (rtype === 'family') return res.status(400).json({ error: 'Family members are added by the flat owner under Household' });
     if (pw.length < 8 || pw.length > 128) return res.status(400).json({ error: 'Password must be 8 to 128 characters' });
     if (b.consent !== true) return res.status(400).json({ error: 'Consent to data processing is required' });
     if (one('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Email already registered' });

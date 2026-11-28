@@ -36,9 +36,6 @@ test('end-to-end: register, approve, raise, assign, close, rate, audit', async (
 
   assert.equal((await anon('GET', '/api/requests')).status, 401);
   assert.equal((await anon('POST', '/api/register', { ...reg, consent: false })).status, 400);
-  // family members are added by the flat owner (Household), not through the public form
-  const fam = await anon('POST', '/api/register', { ...reg, email: 'fam-self@example.test', resident_type: 'family' });
-  assert.equal(fam.status, 400); assert.match(fam.body.error, /added by the flat owner/);
   assert.equal((await anon('POST', '/api/register', reg)).status, 201);
   assert.equal((await anon('POST', '/api/register', reg)).status, 409);
   assert.equal((await res('POST', '/api/login', { email: reg.email, password: reg.password })).status, 403); // pending
