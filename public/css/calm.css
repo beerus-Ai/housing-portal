@@ -298,3 +298,5 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .ch-table summary { cursor: pointer; font-size: 13px; color: var(--color-accent-700, #006786); margin-top: 6px; }
 .ch-table table { margin-top: 8px; font-size: 13px; }
 @media print { .ch-tip, .ch-table summary { display: none; } .ch-table[open] table, .ch-table table { display: table; } }
+.ev-tag { font-size: 11.5px; padding: 1px 8px; align-self: flex-start; display: inline-flex; gap: 4px; align-items: center; margin-top: 2px; }
+.ev-tag { font-size: 11.5px; padding: 1px 8px; align-self: flex-start; display: inline-flex; gap: 4px; align-items: center; margin-top: 2px; }

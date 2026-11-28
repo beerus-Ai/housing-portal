@@ -179,6 +179,8 @@ const ROWS = [
   ['GET events', 'GET', () => '/api/events', null, only([...RES, ...COM], 200)],
   ['POST events', 'POST', () => '/api/events', (f, r) => ({ title: 'Yoga ' + r, starts_at: '2026-12-02T07:00' }), only(COM, 201)],
   ['POST event rsvp', 'POST', f => `/api/events/${f.event}/rsvp`, () => ({ going: true }), only(RES, 200)],
+  ['GET email-verification setting', 'GET', () => '/api/admin/settings/email-verification', null, only(COM, 200)],
+  ['PUT email-verification setting', 'PUT', () => '/api/admin/settings/email-verification', () => ({ required: false }), only(['head', 'sysadmin'], 200)],
   ['GET charts', 'GET', () => '/api/admin/charts', null, only(COM, 200)],
   // ---------- bulk upload (committee; accounts need the head or admin)
   ['GET bulk templates', 'GET', () => '/api/admin/bulk/templates', null, only(COM, 200)],

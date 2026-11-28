@@ -57,7 +57,9 @@
   const signin = () => `<h2>Sign-in</h2><p class="muted">Let residents sign in with their Google account.</p>
     <form id="stsignin" class="col st-form">${field('stg', 'Google client ID', `<input class="input" id="stg" name="google_client_id" maxlength="200" autocomplete="off" spellcheck="false" placeholder="1234-abc.apps.googleusercontent.com" value="${esc(ST.settings.google_client_id || '')}">`, 'Leave empty to turn Google sign-in off.')}
       <ol class="st-how"><li>In Google Cloud Console, create an OAuth client of type "Web application".</li><li>Add this site's address under Authorised JavaScript origins.</li><li>Paste the client ID here and save.</li></ol>
-      <p class="callout st-note">${ic('info')} Google only signs in people who already have an approved account here. It never creates one.</p>${saveRow('Save')}</form>`;
+      <p class="callout st-note">${ic('info')} Google only signs in people who already have an approved account here. It never creates one.</p>${saveRow('Save')}</form>
+    <h2 style="margin-top:var(--space-6)">Email confirmation</h2><p class="muted">Everyone who registers gets a link to confirm their email. The Verification page shows who has confirmed.</p>
+    <div class="row st-evreq" style="gap:10px;align-items:center">${sw('data-evreq', 'Require a confirmed email before approval', !!ST.evreq)}<span><b>Require a confirmed email before approval</b><br><span class="muted sm">When on, a resident cannot be approved until they open the link. Only the head of committee or the admin can change this.</span></span></div>`;
 
   const aiPanel = () => {
     const a = ST.ai, url = location.origin + a.webhook_path;
@@ -125,7 +127,7 @@
       else if (s === 'users') { ST.users = (await API.admin.allUsers()).filter(u => u.role === 'resident'); if (S.suq != null) { ST.q = S.suq; S.suq = null; } }
       else if (s === 'guards') ST.guards = await API.gate.guards();
       else if (s === 'ai') ST.ai = await API.admin.ai();
-      else ST.settings = await API.admin.settings();
+      else { ST.settings = await API.admin.settings(); ST.evreq = (await HP.api('GET', '/api/admin/settings/email-verification').catch(() => ({ required: false }))).required; }
     } catch (x) { loadErr = x.message; }
     const body = loadErr ? '' : { general, access, users, guards, estate, features, signin, ai: aiPanel }[s]();
     page(`<div class="st"><header class="st-head"><h1>Settings</h1></header><div class="st-grid">
@@ -168,6 +170,11 @@
     try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial }); toast(`Community card ${serial} issued to ${el.dataset.name}`); ST.cardData = await HP.api('GET', `/api/admin/users/${id}/card`); drawUsers(); }
     catch (x) { toast(x.message, 'error'); }
   };
+  document.addEventListener('change', async e => {
+    if (!e.target.matches('[data-evreq]')) return;
+    try { ST.evreq = (await HP.api('PUT', '/api/admin/settings/email-verification', { required: e.target.checked })).required; toast(ST.evreq ? 'Approval now needs a confirmed email' : 'Approval no longer needs a confirmed email'); }
+    catch (x) { e.target.checked = !e.target.checked; toast(x.message, 'error'); }
+  });
   document.addEventListener('input', e => {
     if (e.target.id === 'stq') { ST.q = e.target.value; drawUsers(); }
   });
