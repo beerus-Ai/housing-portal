@@ -33,3 +33,23 @@ Severity: C critical, H high, M medium, L low. Fix commits are in the git histor
 | DEF-27 | Money | Bills for listed flats accepted unknown or mis-cased flat codes | L | No match to real flats | Matched case-insensitively; unknown flats refused | Fixed |
 | DEF-28 | Access | A committee member could reset a guard's password | M | No governance check | Head or admin only | Fixed |
 | DEF-29 | Access / web | Resident list showed staff and service accounts; three button handlers had no buttons | L | Filter and dashboard redesign | List filtered; category and channel filters back on the Requests page | Fixed |
+| DEF-30 | Web layout | Bottom ~70 px of every page under the top bar was clipped and could not be scrolled into view | H | `.side-shell > .page { height: 100dvh }` inside a grid row below the top bar | Page height follows its grid row (PR #42) | Fixed |
+| DEF-31 | Phone app | Shop and laundry accounts on /m/ saw "Not allowed" with resident tabs | H | No tabs for these roles | Counter, Help and Profile tabs (PR #43) | Fixed |
+| DEF-32 | Phone app | Guard on /m/ had no parcels and no card registration | M | Not built for /m/ | Parcels tab (PR #43); committee "Approve + card" on /m/; guard card registration on /m/ still missing | Open (partly fixed) |
+| DEF-33 | Web layout | Committee top bar overflowed at 1280 px, hiding Sound and Alerts | M | Too many items in one row | Top bar wraps; tighter links (PR #42) | Fixed |
+| DEF-34 | Onboarding | Public Join form accepts Family, bypassing "only an owner adds family" | M | Register allows any resident type | Refusing it is a Node, Java and api.js contract change; reverted from PR #42 pending a decision | Open |
+| DEF-35 | Governance | The head could approve a cost they had set | H | No separation of duties | Setter cannot decide; the admin decides when the head set it (PR #42) | Fixed |
+| DEF-36 | Requests | Assign panel too narrow at 1280 px; vendor list not grouped by category | L | Layout; list order | – | Open |
+| DEF-37 | Gate desk | List rows wrapped the menu and tags under the icon | L | Two-column grid holding three items | Extra columns for tags and menus (PR #42) | Fixed |
+| DEF-38 | Tuck shop | Item edit row unlabelled; name and category not editable | L | Minimal inline editor | Full labelled edit form (PR #44) | Fixed |
+| DEF-39 | Laundry | Existing rates could only be hidden, not edited | M | No edit control | – | Open |
+| DEF-40 | Inventory | Unit prefilled "pcs" as a value ("pcsroll") | L | Value instead of placeholder | Unit is a dropdown (PR #42) | Fixed |
+| DEF-41 | Gate desk | First keystrokes after "Register a card" lost; an already registered card noticed only after choosing a person | M | Scanner focused after a redraw; no early check | Scanner focused at once and typing kept; taken card caught at the tap (PR #42) | Fixed |
+| DEF-42 | Web layout (408 px) | Rows overflow in Residents, Settings, Broadcast and Contacts at phone width with ?web | L | Wide rows | – | Open |
+| DEF-43 | Navigation | First committee sidebar group had no heading (only a caret) | L | Empty group name | Named "Daily tasks" (PR #50) | Fixed |
+| DEF-44 | Laundry | Booking allows today's slot after it has passed | L | Slot not checked against the clock | – | Open |
+| DEF-45 | Feedback | Silent actions: empty gate code, empty AI draft; unclear amenity-hours error | L | Missing messages | – | Open |
+| DEF-46 | Wording | Raw status values in a filter, "1 pickups", greeting uses the first word of account names, duplicate Residents/Settings link | L | Copy | – | Open |
+| DEF-47 | Cards | Card issuing used plain text boxes: no NFC, Windows reader typed nowhere unless focused, taken cards refused only on save | M | Separate ad-hoc inputs | One shared full-screen scanner for every place that issues a card (PR #43) | Fixed |
+| DEF-48 | CI | Windows reader smoke step failed on the expected exit code | L | PowerShell step returns the last native exit code | Explicit `exit 0` after the check (PR #43) | Fixed |
+| DEF-49 | Flutter | `DropdownButtonFormField.value` deprecated (analyzer failure) | L | Flutter 3.33+ | `initialValue` with a key per card (PR #41) | Fixed |

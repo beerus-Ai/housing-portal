@@ -40,7 +40,7 @@ Word, PDF, PowerPoint and Excel versions of the requirements are in [`Requiremen
 | [services-api](docs/services-api.md) | Tuck shop, laundry, parcels, events API |
 | [nfc-api](docs/nfc-api.md) | NFC gate cards and staff departments |
 | [deploy](docs/deploy.md) | Hosting, Docker, database export |
-| [test plan](docs/testing/test-plan.md), [test cases](docs/testing/test-cases.md), [results](docs/testing/test-results.md), [defects](docs/testing/defect-log.md), [acceptance](docs/testing/acceptance-plan.md) | Testing |
+| [test plan](docs/testing/test-plan.md), [test cases](docs/testing/test-cases.md), [results](docs/testing/test-results.md), [defects](docs/testing/defect-log.md), [acceptance](docs/testing/acceptance-plan.md), [agent test log](docs/testing/agent-test-log.md), [agent test report 28 Nov](docs/testing/agent-test-report-2026-11-28.md) | Testing |
 | [process-flows](docs/process-flows/README.md) | BPMN for Signavio |
 | [demo-script](docs/demo-script.md) | Demo walk-through |
 | [privacy-and-consent](docs/privacy-and-consent.md) | DPDP notes |
