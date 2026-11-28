@@ -27,7 +27,7 @@ Two stacks run side by side (ADR: `docs/architecture/adr-0001-java-react.md`, st
 - Java: `cd backend && ./gradlew test` (JUnit, 81 tests); `./gradlew bootRun` for port 8080. Needs JDK 17+.
 - React: `cd frontend && npm install && npm run dev`; `npm test` (Vitest, 67), `npm run lint`, `npm run build`.
 - Mobile: see `mobile/README.md` (Capacitor, Android). Flutter: `cd flutter_app && flutter pub get && flutter test && flutter run` (see `flutter_app/README.md`).
-- CI (`.github/workflows/ci.yml`) runs 6 jobs on every PR: Node, Java (H2), Java (PostgreSQL 16 + packaged boot), React, Docker image build, Flutter. Docker Compose (`docker-compose.yml`) has not been run end to end.
+- CI (`.github/workflows/ci.yml`) runs 7 jobs on every PR: Node, Java (H2), Java (PostgreSQL 16 + packaged boot), React, Docker image build, Flutter, Windows card reader (build + smoke test). Docker Compose (`docker-compose.yml`) has not been run end to end.
 - Docs: `docs/` (index in `README.md`). Word copies in `docs/word/` are generated with `node E:\tools\md2docx\md2docx.js <docsRoot> <outDir> <md files...>` (run from that folder).
 - Env: `PORT`, `SESSION_SECRET` (required in production), `DB_FILE`, `NODE_ENV=production` (secure cookies, trust proxy).
 
