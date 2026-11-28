@@ -315,3 +315,5 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .dc-days label { display: inline-flex; align-items: center; gap: 6px; }
 .dc-row { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; cursor: default; }
 .dc-now { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; } .dc-now.in { color: var(--color-accent-700, #006d8d); } .dc-now.done { color: #12663f; }
+.ev-tag { font-size: 11.5px; padding: 1px 8px; align-self: flex-start; display: inline-flex; gap: 4px; align-items: center; margin-top: 2px; }
+.ev-tag { font-size: 11.5px; padding: 1px 8px; align-self: flex-start; display: inline-flex; gap: 4px; align-items: center; margin-top: 2px; }

@@ -134,7 +134,7 @@ function createApp(opts = {}) {
   };
   if (!opts.noTimers) setInterval(() => { try { escalateOverdue(); } catch { /* db closed */ } }, 10 * 60e3).unref();
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, position: u.role === 'admin' ? (u.position || 'sysadmin') : null, department: u.role === 'staff' ? (u.department || 'maintenance') : null, status: u.status };
+  const publicUser = u => u && { id: u.id, name: u.name, email: u.email, phone: u.phone, flat: u.flat, resident_type: u.resident_type, role: u.role, position: u.role === 'admin' ? (u.position || 'sysadmin') : null, department: u.role === 'staff' ? (u.department || 'maintenance') : null, status: u.status, email_verified: !!u.email_verified_at };
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
@@ -220,7 +220,9 @@ function createApp(opts = {}) {
     log(r.lastInsertRowid, 'user', r.lastInsertRowid, 'registered', `${rtype} flat ${flat}`);
     for (const id of committeeIds()) notify(id, `New registration awaiting approval: ${name} (flat ${flat})`);
     desk.alert('user', Number(r.lastInsertRowid));
-    res.status(201).json({ message: 'Registered. An admin will review your account.' });
+    // Email verification (verify.js): a confirmation link goes to the address; the answer says whether it was sent.
+    Promise.resolve(app.locals.sendVerification ? app.locals.sendVerification(Number(r.lastInsertRowid), req) : 'unavailable').catch(() => 'unavailable')
+      .then(ev => res.status(201).json({ message: 'Registered. An admin will review your account.', email_verification: ev }));
   });
 
   const statusBlock = u => ({
@@ -306,7 +308,7 @@ function createApp(opts = {}) {
       const like = '%' + term.replace(/[\\%_]/g, m => '\\' + m) + '%';
       where.push("(name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR flat LIKE ? ESCAPE '\\')"); p.push(like, like, like);
     }
-    res.json(q(`SELECT id,name,email,phone,flat,resident_type,role,status,created_at FROM users WHERE ${where.join(' AND ')} ORDER BY id DESC`, ...p));
+    res.json(q(`SELECT id,name,email,phone,flat,resident_type,role,status,created_at,email_verified_at FROM users WHERE ${where.join(' AND ')} ORDER BY id DESC`, ...p).map(u => ({ ...u, email_verified: !!u.email_verified_at })));
   });
   app.get('/api/admin/users/:id', auth, admin, (req, res) => {
     const u = one('SELECT id,name,email,phone,flat,resident_type,role,status,consent_at,created_at FROM users WHERE id=?', req.params.id);
@@ -317,6 +319,7 @@ function createApp(opts = {}) {
     app.post(`/api/admin/users/:id/${act}`, auth, admin, (req, res) => {
       const u = one('SELECT * FROM users WHERE id=?', req.params.id);
       if (!u || u.role !== 'resident') return res.status(404).json({ error: 'User not found' });
+      if (status === 'approved' && !u.email_verified_at && app.locals.emailVerificationRequired && app.locals.emailVerificationRequired()) return res.status(409).json({ error: 'This person has not confirmed their email yet. Send them a new link, or turn off "Require a confirmed email" in Settings.' });
       run('UPDATE users SET status=? WHERE id=?', status, u.id);
       log(req.user.id, 'user', u.id, act);
       res.json({ ok: true });
@@ -721,6 +724,7 @@ function createApp(opts = {}) {
     const r = run("INSERT INTO users(name,email,phone,flat,resident_type,password_hash,consent_at) VALUES(?,?,?,?,?,?,datetime('now'))",
       name, email, phone, req.user.flat, rtype, bcrypt.hashSync(pw, 10));
     log(req.user.id, 'user', r.lastInsertRowid, 'household_added', `${rtype} flat ${req.user.flat}`);
+    if (app.locals.sendVerification) app.locals.sendVerification(Number(r.lastInsertRowid), req).catch(() => {});
     for (const id of committeeIds()) notify(id, `${req.user.name} added ${name} (${rtype}) to flat ${req.user.flat}: awaiting approval`);
     desk.alert('user', Number(r.lastInsertRowid));
     res.status(201).json({ id: Number(r.lastInsertRowid) });
@@ -1440,6 +1444,7 @@ function createApp(opts = {}) {
   require('./modules')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, applyTriage, desk, can, clock: opts.clock });
   require('./nfc')(app, { q, one, run, log, notify, auth, str, creditLimit });
   require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./verify')(app, { db, q, one, run, log, auth, admin, governance, getSetting, mailer: opts.mailer });
   require('./charts')(app, { q, auth, admin, slaHours: SLA_HOURS, clock: opts.clock });
   require('./bulk')(app, { q, one, run, log, notify, auth, admin, str, bcrypt, isGov, desk });
   require('./carpool')(app, { q, one, run, log, notify, auth, str, istNow: require('./modules').istNow, clock: opts.clock });
