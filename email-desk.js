@@ -210,5 +210,14 @@ button.primary{background:#0088b0;color:#fff}textarea{width:100%;box-sizing:bord
     return one("SELECT * FROM users WHERE id=? AND role='admin' AND status='approved'", Number(req.get('x-desk-user'))) || null;
   };
 
-  return { alert, mount, replayUser, seen: () => { adminSeen = Date.now(); }, token, readToken };
+  // Replays one API route as a committee member over loopback (bulk upload uses it, so every imported row goes through
+  // the same validation, audit and notifications as one entered by hand). Returns { status, body }.
+  const replay = async (userId, port, method, path, body) => {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: { 'content-type': 'application/json', 'x-desk-key': loopKey, 'x-desk-user': String(userId) }, body: body ? JSON.stringify(body) : undefined });
+      return { status: r.status, body: await r.json().catch(() => ({})) };
+    } catch (e) { return { status: 502, body: { error: 'Could not run the import: ' + (e.message || e) } }; }
+  };
+
+  return { alert, mount, replayUser, replay, seen: () => { adminSeen = Date.now(); }, token, readToken };
 };
