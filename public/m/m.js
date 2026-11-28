@@ -155,6 +155,7 @@
       ${login ? '' : `<label class="consent sm"><input type="checkbox" name="consent" required>I consent to my details being stored (DPDP Act, 2023).</label>`}
       <p class="err" id="autherr" role="alert"></p>
       <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
+      ${login && window.HPAuth ? HPAuth.passkeyButton() : ''}
       <p class="am-switch">${login ? 'New here?' : 'Have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p></form></div>`;
   }
 
@@ -1029,7 +1030,7 @@
     if (f.id === 'authform') {
       const err = $('#autherr'); err.textContent = ''; f.classList.remove('shake'); f.classList.add('busy'); const btn = f.querySelector('button.auth-go'); if (btn) btn.disabled = true;
       try {
-        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.tab = 'home'; return render(); }
+        if (S.mode === 'login') { const u = await API.auth.login(d.email, d.password); if (u && u.needs_2fa) return HPAuth.codeStep(f); S.me = u; S.tab = 'home'; return render(); } // needs_2fa: docs/auth-api.md
         d.consent = f.consent.checked; d.resident_type = S.regType;
         const r = await API.auth.register(d); S.mode = 'login'; authView(); toast(r.message + ' You will be able to sign in once approved.');
       } catch (x) { err.textContent = x.message; f.classList.remove('busy'); if (btn) btn.disabled = false; void f.offsetWidth; f.classList.add('shake'); }
@@ -1101,6 +1102,7 @@
     } else if (f.id === 'mreopen') { await RAPI.requests.reopen(f.dataset.id, (d.reason || '').trim()); toast('Request reopened'); render(); }
   }));
 
+  if (window.HPAuth) HPAuth.onSignedIn = u => { S.me = u; S.mode = 'login'; S.tab = 'home'; render(); }; // passkey or 2FA step done (auth-extra.js)
   HP.live(async () => {
     if (!S.me) return;
     // never wipe a half-typed field, an open gate form or a visible verify result

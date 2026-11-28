@@ -13,6 +13,21 @@ window.API = (() => {
       register: body => call('POST', '/api/register', body),
       pulse: () => call('GET', '/api/pulse'), // { v: version string, a: { rq, ru, em, em_on } } sound cues: newest request/order id, newest urgent or security request id, newest active emergency id, active emergency count
       google: credential => call('POST', '/api/auth/google', { credential }), // Google Identity Services ID token; signs in an EXISTING approved account matched by verified email
+      // login and google answer { needs_2fa: true } (not signed in yet) for a user with two-factor on; see docs/auth-api.md
+      login2fa: code => call('POST', '/api/login/2fa', { code }), // 6-digit authenticator code or a recovery code -> user
+      passkeyOptions: () => call('POST', '/api/login/passkey/options'), // WebAuthn request options (JSON, base64url)
+      passkeyVerify: response => call('POST', '/api/login/passkey/verify', { response }), // -> user (same session as password login)
+    },
+    security: { // sign-in security on the profile (auth-2fa.js)
+      status: () => call('GET', '/api/me/2fa'), // { enabled, enabled_at, recovery_codes_left, passkeys }
+      setup: () => call('POST', '/api/me/2fa/setup'), // { secret, otpauth_uri }
+      enable: code => call('POST', '/api/me/2fa/enable', { code }), // { ok, recovery_codes[10] } shown once
+      disable: (password, code) => call('POST', '/api/me/2fa/disable', { password, code }),
+      reset: uid => call('POST', `/api/admin/users/${id(uid)}/2fa/reset`), // committee sysadmin, lost phone
+      passkeys: () => call('GET', '/api/me/passkeys'), // [{ id, name, created_at, last_used_at, transports }]
+      passkeyOptions: () => call('POST', '/api/me/passkeys/register/options'),
+      passkeyAdd: (response, name) => call('POST', '/api/me/passkeys/register/verify', { response, name }),
+      passkeyRemove: pid => call('DELETE', `/api/me/passkeys/${id(pid)}`),
     },
     profile: {
       update: body => call('PATCH', '/api/me', body), // { name, phone }

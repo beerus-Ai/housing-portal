@@ -158,7 +158,7 @@
       await loadGsi(); if (!$('#gbtn') || !window.google || !google.accounts) throw new Error('Google sign-in could not load');
       google.accounts.id.initialize({ client_id: S.gid, callback: async resp => {
         const err = $('#autherr'); if (err) err.textContent = '';
-        try { S.me = await API.auth.google(resp.credential); S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message, 'error'); }
+        try { const u = await API.auth.google(resp.credential); if (u && u.needs_2fa) return HPAuth.codeStep($('#authform')); S.me = u; S.page = home0(); await render(); } catch (x) { const e2 = $('#autherr'); if (e2) e2.textContent = x.message; else toast(x.message, 'error'); }
       } });
       google.accounts.id.renderButton($('#gbtn'), { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(360, box.clientWidth || 360) });
     } catch (x) { const b = $('#gbtn'); if (b) { b.textContent = x.message; b.classList.add('err'); } }
@@ -185,6 +185,7 @@
         <p class="err" id="autherr" role="alert"></p>
         <button class="btn btn-primary btn-lg auth-go">${login ? 'Sign in' : 'Send for approval'}${ic('arrow-right')}<span class="auth-spin" data-lottie="loader" aria-hidden="true"></span></button>
       </form>
+      ${login && window.HPAuth ? HPAuth.passkeyButton() : ''}
       <p class="am-switch">${login ? 'New here?' : 'Already have an account?'} <button type="button" class="link-btn" data-act="mode">${login ? 'Join' : 'Sign in'}</button></p>
       ${login ? `<a class="am-app" href="/app/sahyadri-heights.apk" download>${ic('device-mobile')}Get the Android app<span>APK, 27 MB</span></a>` : ''}</div></div>`;
     initGoogle();
@@ -619,7 +620,7 @@
     if (f.id === 'authform') {
       const err = $('#autherr'); err.textContent = ''; f.classList.remove('shake'); f.classList.add('busy'); const btn = f.querySelector('button.auth-go'); if (btn) btn.disabled = true;
       try {
-        if (S.mode === 'login') { S.me = await API.auth.login(d.email, d.password); S.page = home0(); return render(); }
+        if (S.mode === 'login') { const u = await API.auth.login(d.email, d.password); if (u && u.needs_2fa) return HPAuth.codeStep(f); S.me = u; S.page = home0(); return render(); } // needs_2fa: docs/auth-api.md
         d.consent = f.consent.checked; d.resident_type = S.regType;
         const r = await API.auth.register(d); S.mode = 'login'; S.regDone = { email: d.email, ev: r.email_verification }; await render(); toast(r.message);
       } catch (x) { err.textContent = x.message; f.classList.remove('busy'); if (btn) btn.disabled = false; void f.offsetWidth; f.classList.add('shake'); }
@@ -645,6 +646,7 @@
     else if (f.classList.contains('reopenform')) { await RAPI.requests.reopen(f.dataset.id, (d.reason || '').trim()); toast('Request reopened. The committee has been told.'); render(); }
   }));
 
+  if (window.HPAuth) HPAuth.onSignedIn = u => { S.me = u; S.mode = 'login'; S.page = home0(); render(); }; // passkey or 2FA step done (auth-extra.js)
   window.HPWeb = { catPic, S, PAGES, ACT, render, go, page, can, feat, allowed, isAdmin, isGuard, isStaff, isIT, isGov, flatNav, home0, reqRow, noticeRow, emType, emCard, vendorOptions, noRedraw: null };
 
   // Live: redraw quietly (keeping the scroll position) when the server reports a change.
