@@ -29,6 +29,14 @@
 | 25 | Flutter app and whiteboard architecture doc (2026-11-25) | `flutter_app/` (8 tests), `docs/architecture/product-and-technology-architecture.md`, PR #23 | Flutter SDK not installed: installed. `material.dart` deprecated in Flutter 3.47+: `material_ui` package. Kotlin incremental cache bug on Windows: `kotlin.incremental=false`. Jira issue creation blocked by a safety check |
 | 26 | Society modules on web (2026-11-25): amenities, dues, inventory, waste | `modules.js`, `public/web-modules.js`, `docs/modules-api.md`, PR #24, deployed | Tests passed first try; SQL keyword clash (`AS by`, `end` column) caught before tests |
 | 27 | Documentation refresh, minimal (2026-11-25) | Docs updated to current facts | None |
+| 28 | Gate desk: register cards in either order; Flutter gate desk (2026-11-28) | PR #40 | Flutter SDK missing locally: CI was the first compile; one menu test updated |
+| 29 | Full-screen card scanner, "who carries it" dropdown; Windows card reader for PC/SC readers | PR #41, `windows-reader/` | Browsers on a PC have no Web NFC and PC/SC readers type nothing: tray app types the UID. Not yet tested with a real card |
+| 30 | "Deploy agents": UI agent (dropdowns) and tester agent (every page, every role) | PR #42: 11 dropdowns, 17 tester findings, fixes | Family self-registration block reverted (Node, Java and api.js contract change on its own); head-sets-cost rule narrowed after CI |
+| 31 | Card as a wallet for shop, laundry, parcels, events: contract first, then backend, web and mobile agents in parallel | `docs/card-wallet-api.md`, PR #43 | Agents could not share one branch (worktrees); lead merged their branches; Windows CI step exit code fixed |
+| 32 | Card registration everywhere through one scanner | `W.scanCard`, PR #43 | A redraw wiped the early scanner; moved to <body> |
+| 33 | Shop information and photos from the internet | PRs #44, #46; `public/img/shop/CREDITS.md` | Only free-licence Wikimedia photos; branded or unclear photos dropped (oil, noodles, dal) |
+| 34 | Architecture slide and Word document to match the real stack (Node on Render, not Dart) | Deck slides 16-18, 21; PR #47 | Deck lives outside the repo |
+| 35 | Highlight agents, prompt types, guardrails and testing agents | Deck slides 22-23; section 8 of the requirements document | None |
 
 ## AI use disclosure
 Claude Code (Anthropic) wrote most of the code, tests and documents from the team's prompts; the team directed, reviewed and ran it. Claude Design produced the first UI handoff. This log is a summary, not a transcript. No real resident data was given to Claude. The product's AI features strip names, phones, emails and flat numbers before any model call and only suggest; a committee member decides. Each student must be able to defend any part of the work; the contribution matrix records who did what.
