@@ -53,7 +53,14 @@ Add one row per run, newest at the bottom. Defects found get an ID in [`defect-l
 | 21 | Lead | Bulk upload | `test/bulk.test.js` (3); Chrome: paste 5 rows, 3 ready and 2 errors, import, sign-in sheet | 1 test expectation corrected; the page's results table was garbled, fixed before merge; pass | – | PR #52 |
 | 22 | Lead | Charts | `test/charts.test.js` (1); Chrome: 5 charts, hover tooltip | Text too small at first (scaled drawing); fixed; pass | – | PR #53 |
 | 23 | CI | PRs #44 to #53 | 7 checks each | All pass (one PR re-opened because a branch conflicted after a squash merge) | – | PRs #44–#53 |
-| 24 | Chat, business and daycare, sign-in security agents (Builder) | Chat; business directory and daycare; 2FA and passkeys | In progress | – | – | – |
+| 24 | Email verification (Lead) | Confirmation link at onboarding, resend, committee setting | `test/verify.test.js`; live check that the resend route answers after deploy | Pass; the sign-in test that pins the answer keys was updated for `email_verified` | – | PR #55 |
+| 25 | Business and daycare agent (Builder) | Neighbourhood business directory and daycare services | `npm test` | 154/154 | – | PR #56 |
+| 26 | Lead | Business and daycare | Chrome: a resident lists a business, the committee approves it; a parent asks for a daycare place | Pass | – | PR #56 |
+| 27 | Sign-in security agent (Builder) | Two-factor (authenticator app), recovery codes, passkeys | `npm test` with a mocked WebAuthn verifier | 157/157 | – | PR #57 |
+| 28 | Lead | 2FA in the browser | Turned on 2FA for a test account, then signed in with a generated authenticator code | Pass | – | PR #57 |
+| 29 | Chat agent (Builder) | Committee desk and neighbour messages | `test/chat.test.js` (4), wiring (10), access matrix (5) | All pass; the full suite was stopped by the machine running out of memory (36 passed, 0 failed at that point) | – | PR #58 |
+| 30 | Lead | Chat merged with main | Conflicts in 6 files resolved (kept the 2FA allow-list line); chat, 2FA, wiring and matrix suites 26/26; Chrome: owner writes to the committee and a neighbour, the committee sees only the desk thread with 1 unread | Pass. Sending from the page was checked with script events because the browser tool could not type that session | – | PR #58 |
+| 31 | CI | PRs #55 to #58 | 7 checks each | All pass | – | PRs #55–#58 |
 
 ## Template
 
