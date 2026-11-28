@@ -39,7 +39,7 @@
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
       ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
-      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'],
+      ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'], ['wallets', 'Card wallets', 'wallet'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
       ['gate', 'Visitor management', 'shield-check'], ['cards', 'NFC gate cards', 'identification-card'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
       ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['leases', 'Leases', 'file-text'], ['vendors', 'Vendors', 'toolbox'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
