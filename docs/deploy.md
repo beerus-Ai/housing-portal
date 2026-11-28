@@ -33,7 +33,8 @@ Open http://localhost:8081. Services: `postgres` (16, volume `pgdata`), `backend
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | Node | Telegram intake; if the URL changes, call `POST /api/admin/telegram/set-webhook` as head or sysadmin (no button) |
 | `CLASSIFY_WEBHOOK_URL` | Node | n8n message classifier (LLM gate); unset = rules |
 | `ADMIN_EMAIL_WEBHOOK_URL` | Node | n8n admin email desk; unset = no emails |
-| `PUBLIC_URL`, `EMAIL_ACTION_SECRET` | Node | base for email links (else `RENDER_EXTERNAL_URL`); signing key (else `ADMIN_PASSWORD`) |
+| `PUBLIC_URL`, `EMAIL_ACTION_SECRET` | Node | base for email links (else `RENDER_EXTERNAL_URL`); signing key (else `ADMIN_PASSWORD`). `PUBLIC_URL` / `RENDER_EXTERNAL_URL` also set the passkey RP ID and origin; without them passkeys work on localhost only |
+| `TOTP_KEY` | Node | optional key for the authenticator-app secrets (AES-256-GCM, HKDF); else `SESSION_SECRET`. Set it before rotating `SESSION_SECRET`, or every 2FA user needs a recovery code or a reset. See `docs/auth-api.md` |
 | `ANTHROPIC_API_KEY`, `SLA_HOURS` | Node | optional LLM triage; escalation hours (default 48) |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_WEBHOOK_SECRET` | Node | WhatsApp intake (built, not connected) |
 | `SEED_PASSWORD`, `SEED_TELEGRAM_PHONE`, `SEED_TELEGRAM_ID` | Node | demo only: role accounts, vendors and the Telegram tester are recreated at every start |
@@ -58,7 +59,7 @@ Google sign-in is off by default; to enable it, swap in the Google CSP lines in 
 - Keep backups off the host; they hold personal data and password hashes. Test a restore on a scratch database.
 
 ## Cutover checklist: Node to Java
-Only after Java covers every `test/*.test.js` behaviour (Telegram, email desk, roles and modules are not ported yet) and the stack has run in staging.
+Only after Java covers every `test/*.test.js` behaviour (Telegram, email desk, roles, modules and two-factor sign-in are not ported yet) and the stack has run in staging. Java has no 2FA or passkeys: until it does, users with two-factor on must not be able to sign in there with a password alone (`docs/auth-api.md`).
 1. Rehearse the export and import on staging and time it. Announce a maintenance window.
 2. Freeze Node (stop it or return 503). Back up `portal.db` and `uploads/`.
 3. Start the backend once on a fresh Postgres so Flyway creates the schema; stop it.

@@ -37,6 +37,7 @@
 | 33 | Shop information and photos from the internet | PRs #44, #46; `public/img/shop/CREDITS.md` | Only free-licence Wikimedia photos; branded or unclear photos dropped (oil, noodles, dal) |
 | 34 | Architecture slide and Word document to match the real stack (Node on Render, not Dart) | Deck slides 16-18, 21; PR #47 | Deck lives outside the repo |
 | 35 | Highlight agents, prompt types, guardrails and testing agents | Deck slides 22-23; section 8 of the requirements document | None |
+| 36 | Stronger sign-in: TOTP two-factor and passkeys, `/api/login` unchanged without 2FA | `auth-2fa.js`, `public/auth-extra.js`, `docs/auth-api.md`, `test/auth-2fa.test.js` | Node only; WebAuthn signatures mocked at the library boundary in tests (no real authenticator in `node:test`) |
 
 ## AI use disclosure
 Claude Code (Anthropic) wrote most of the code, tests and documents from the team's prompts; the team directed, reviewed and ran it. Claude Design produced the first UI handoff. This log is a summary, not a transcript. No real resident data was given to Claude. The product's AI features strip names, phones, emails and flat numbers before any model call and only suggest; a committee member decides. Each student must be able to defend any part of the work; the contribution matrix records who did what.

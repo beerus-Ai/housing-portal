@@ -21,8 +21,10 @@ The society (committee) decides why and how resident data is used, so it is the 
 | Amenity bookings per flat (only the flat and the committee see who booked) | `amenity_bookings` |
 | Dues and recorded payments per flat: amount, method, optional reference, date | `dues`, `due_payments` |
 | Inventory and waste logs: quantities and weights, no personal data | `inventory_*`, `waste_*` |
+| Two-factor sign-in (optional): authenticator secret encrypted with AES-256-GCM, recovery codes as salted hashes, last used time step | `user_2fa`, `user_recovery_codes` |
+| Passkeys (optional): credential id, public key, counter, device name chosen by the user | `user_passkeys` |
 
-No card, bank-account or gateway data is stored: there is no online payment; the committee records payments received. No biometric or identity-document data.
+No card, bank-account or gateway data is stored: there is no online payment; the committee records payments received. No biometric or identity-document data: a passkey's fingerprint or face check happens on the person's own device, and the portal only receives a signature and stores a public key (`docs/auth-api.md`).
 
 ## 4. Retention and deletion
 No automatic schedule yet. Proposal for the society to decide: remove resident data about 90 days after move-out; audit keeps actor id and action only; trim gate logs on a schedule. The committee can remove a user (`DELETE /api/admin/users/:id`). Backups follow the same schedule.
@@ -33,7 +35,7 @@ No automatic schedule yet. Proposal for the society to decide: remove resident d
 - **Email desk:** request, registration and emergency details (name, flat; email and phone for registrations) go to the society's n8n workflow and its own Gmail. Not a model call. Links are signed and expire after 7 days; protect the committee inbox like the dashboard login.
 
 ## 6. Security measures
-Hashed passwords, role check on every route, HTTPS in production, no secrets in the repo, strict CSP, audit trail, login throttling, webhook secrets, signed expiring email links.
+Hashed passwords, optional two-factor sign-in (authenticator app) and passkeys, role check on every route, HTTPS in production, no secrets in the repo, strict CSP, audit trail, login throttling, webhook secrets, signed expiring email links.
 
 ## 7. Development rule
 No real resident data in prompts, fixtures or tests. Synthetic data only (`CLAUDE.md`).

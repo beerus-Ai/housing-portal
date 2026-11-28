@@ -138,7 +138,7 @@ function createApp(opts = {}) {
 
   // Session is bound to the current password hash, so a password reset signs the user out everywhere.
   const pwFp = u => crypto.createHash('sha256').update(u.password_hash).digest('hex').slice(0, 16);
-  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && (p === '/api/me/password' || p === '/api/me/card/freeze')) || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/');
+  const COMMON_PATH = (p, m) => (m === 'GET' && ['/api/me', '/api/me/card', '/api/pulse', '/api/help/guides'].includes(p)) || (m === 'POST' && (p === '/api/me/password' || p === '/api/me/card/freeze')) || p === '/api/notifications' || p.startsWith('/api/notifications/') || p === '/api/support' || p.startsWith('/api/support/') || /^\/api\/me\/(2fa|passkeys)(\/|$)/.test(p); // sign-in security (auth-2fa.js) is for every role
   const auth = (req, res, next) => {
     const du = desk.replayUser(req);
     if (du) { req.user = du; return next(); }
@@ -204,6 +204,8 @@ function createApp(opts = {}) {
   };
   const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10); // equalise timing for unknown emails
   const pwStr = v => (typeof v === 'string' ? v.slice(0, 128) : '');
+  // Two-factor (TOTP) and passkeys: auth-2fa.js, docs/auth-api.md. Shares the sign-in throttle and session binding.
+  const twofa = require('./auth-2fa')({ db, q, one, run, log, notify, auth, admin, str, throttled, fail, fails, pwFp, pwStr, publicUser, statusBlock: u => statusBlock(u), posOf, getSetting, bcrypt, clock: opts.clock, webauthn: opts.webauthn });
 
   // ---- auth & onboarding
   app.post('/api/register', (req, res) => {
@@ -242,6 +244,7 @@ function createApp(opts = {}) {
     const blocked = statusBlock(u);
     if (blocked) return res.status(403).json({ error: blocked });
     fails.delete(key);
+    if (twofa.enabled(u)) return twofa.begin(req, res, u, 'password'); // 200 { needs_2fa: true }, not signed in until /api/login/2fa
     req.session.regenerate(() => { req.session.uid = u.id; req.session.pf = pwFp(u); log(u.id, 'user', u.id, 'login'); res.json(publicUser(u)); });
   });
 
@@ -271,8 +274,10 @@ function createApp(opts = {}) {
     if (!u) return res.status(404).json({ error: 'No account for this Google email. Join first, then sign in.' });
     const blocked = statusBlock(u);
     if (blocked) return res.status(403).json({ error: blocked });
+    if (twofa.enabled(u)) return twofa.begin(req, res, u, 'google');
     req.session.regenerate(() => { req.session.uid = u.id; req.session.pf = pwFp(u); log(u.id, 'user', u.id, 'login', 'method google'); res.json(publicUser(u)); });
   });
+  twofa.mount(app);
   app.get('/api/settings', (req, res) => res.json(publicSettings()));
   app.patch('/api/me', auth, (req, res) => {
     const name = str(req.body && req.body.name, 100) || req.user.name, phone = req.body && 'phone' in req.body ? str(req.body.phone, 20) : req.user.phone;
