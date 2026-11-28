@@ -207,8 +207,8 @@ Priority: M Must, S Should, C Could (MoSCoW). IDs are stable and traced in [test
 | **API** | One REST API with JSON over HTTPS: Node 22 + Express (system of record). A Java Spring Boot API with the same URLs and JSON is the migration target |
 | **Security** | Session cookie (httpOnly, SameSite, Secure in production) after POST /api/login; role check on every route; strict allow-lists for guard, staff, IT, shop and laundry; CSRF origin check; strict Content Security Policy |
 | **Data** | SQLite (node:sqlite) for the Node API; PostgreSQL 16 for the Java API and production; photos in an upload folder |
-| **Integrations** | Telegram Bot API (message intake), n8n workflows (free LLM gate, Gmail email desk), optional Anthropic API for triage, Web NFC / USB readers for cards |
-| **Hosting** | Render (Docker), deployed from GitHub; CI runs Node, Java (H2 and PostgreSQL), React, Docker and Flutter checks on every pull request |
+| **Integrations** | Telegram Bot API (message intake), n8n workflows (free LLM gate, Gmail email desk), optional Anthropic API for triage, Web NFC / USB readers and the Windows card reader for cards |
+| **Hosting** | Render web service `sahyadri-heights` (Node.js 24, `npm ci`, `node server.js`, health check `/api/settings`), deployed from GitHub; CI runs 7 checks on every pull request: Node, Java (H2), Java (PostgreSQL 16), React, Docker images, Flutter, Windows card reader |
 
 ```
 Web app (/)   Phone app (/m/)   Flutter app   React app
@@ -220,6 +220,12 @@ Web app (/)   Phone app (/m/)   Flutter app   React app
               |                    |                     |
       SQLite / PostgreSQL     Telegram · n8n · Gmail     Web NFC / USB card reader
 ```
+
+**From code to Render** (what runs where, and how a change goes live)
+
+- **Runtime.** Every client reaches one Render web service over HTTPS. One Node.js 24 + Express process serves the web pages and the REST API, checks the session and role on every route, and writes the audit trail. The SQLite file sits on the Render instance disk: on the free plan it is reset on redeploy and after the service sleeps, and the demo accounts are re-created at start-up. Production needs a persistent disk or PostgreSQL 16 (the Java API).
+- **Release path.** (1) One story at a time, with a test; (2) GitHub pull request, no secrets in the repository; (3) CI: the 7 checks above; (4) merged into `main` only when every check passes; (5) the branch Render watches is fast-forwarded to `main`; (6) Render runs `npm ci` and `node server.js`, and the health check confirms the release at https://sahyadri-heights.onrender.com.
+- **Settings and secrets** (session key, admin password, webhook secrets) are set in Render's environment, never in GitHub.
 
 **How a screen gets its data**
 
@@ -240,6 +246,7 @@ Web app (/)   Phone app (/m/)   Flutter app   React app
 | Notices and alerts | `/api/notices, /api/notifications, /api/emergencies, /api/pulse` | All | app.js |
 | Gate and visitors | `/api/gate/passes, /api/gate/verify, /api/gate/log, /api/parcels` | Resident, guard, committee | app.js, services-api.md |
 | Community cards (NFC) | `/api/gate/cards, /api/gate/tap, /api/gate/presence, /api/admin/users/:id/card, /api/me/card` | Guard, committee, everyone (own card) | nfc-api.md |
+| Card wallet | `/api/wallet, /api/admin/wallets, /api/admin/wallet/topup, /api/card/lookup, /api/laundry/counter, /api/parcels/card/:serial, /api/events/:id/checkin, /api/me/card/freeze` | Resident, committee, shop, laundry, guard | card-wallet-api.md |
 | Society modules | `/api/amenities, /api/bookings, /api/dues, /api/admin/dues, /api/inventory, /api/waste/*` | Resident, committee, staff | modules-api.md |
 | Resident services | `/api/shop/*, /api/laundry/*, /api/events, /api/credit, /api/services/summary` | Resident, shop, laundry, committee | services-api.md |
 | Message intake | `/api/telegram/webhook, /api/whatsapp/webhook (secret-checked)` | Telegram, WhatsApp provider | app.js |
