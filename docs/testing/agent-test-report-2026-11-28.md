@@ -14,7 +14,7 @@
   - the Windows card reader build and smoke test.
 - **Shipped today, each with tests:** 14 pull requests (#40 to #53). New suites: `carpool`, `bulk`, `charts` and `wallet`, plus extended `nfc`, access-matrix and web-wiring suites.
 - **The UI tester agent** clicked through every page for 12 accounts. It found no console errors and no role-access leaks, and made 17 findings.
-- **Defects:** 20 logged today (DEF-30 to DEF-49). 11 are fixed and 9 are open. The open ones are mostly layout at phone width and small wording; one needs a decision (family self-registration).
+- **Defects:** 20 logged today (DEF-30 to DEF-49). 12 are fixed and 8 are open. The open ones are mostly layout at phone width and small wording; one needs a decision (family self-registration).
 - **CI caught 5 problems before merge:**
   - a stale Flutter test;
   - a deprecated Flutter API;

@@ -35,7 +35,7 @@ AI tests run with no API key, so they prove the rule-based path, not LLM output.
 | 2026-11-25 | Agent integration testing: 6 testers wrote 53 cross-module tests (onboarding/cards/gate, request lifecycle, money, access matrix of 12 roles x ~90 routes, dashboards, web wiring); 19 bugs confirmed by independent skeptic agents and fixed (DEF-20 to DEF-29), 5 claims refuted | Pass: 139 Node tests, 0 failing |
 | 2026-11-25 | Capacity test (`scripts/load-test/load.js`): about 210 requests/s sustained, roughly 700 people at the same moment; 9 MB for 2,000 residents and 125,000 records | Pass. Not run against the live free plan (0.1 CPU) |
 
-| 2026-11-28 | Agent testing (see `agent-test-log.md`, runs 4 to 24, and `agent-test-report-2026-11-28.md`): UI tester agent over 12 accounts (17 findings, DEF-30 to DEF-46); builder agents' suites; lead-agent Chrome checks of the gate desk, scanner, card registration, request list, carpool, bulk upload and charts | Pass after fixes; 9 defects open |
+| 2026-11-28 | Agent testing (see `agent-test-log.md`, runs 4 to 24, and `agent-test-report-2026-11-28.md`): UI tester agent over 12 accounts (17 findings, DEF-30 to DEF-46); builder agents' suites; lead-agent Chrome checks of the gate desk, scanner, card registration, request list, carpool, bulk upload and charts | Pass after fixes; 8 defects open |
 | 2026-11-28 | CI on `main` after PR #53: Node 151/151, Java (H2 and PostgreSQL 16), React 7 test files, Flutter 28/28, Docker, Windows card reader | Pass |
 
 ## Not verified
