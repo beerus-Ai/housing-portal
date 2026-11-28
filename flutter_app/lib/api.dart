@@ -98,6 +98,9 @@ class Api {
           headers: {..._headers, 'content-type': 'application/json'},
           body: jsonEncode(body ?? {}))));
 
+  Future<dynamic> delete(String path) async =>
+      _decode(await _net(() => _client.delete(uri(path), headers: _headers)));
+
   // ---- auth
   Future<Map<String, dynamic>> login(String email, String password) async {
     cookie = null;
@@ -192,6 +195,18 @@ class Api {
   /// Resident's personal gate token: `{token, qr: "HSP:<token>", nfc}`.
   Future<Map<String, dynamic>> gatePass() async =>
       Map<String, dynamic>.from(await get('/api/gate/me') as Map);
+
+  // ---- gate desk: NFC cards (docs/nfc-api.md; guards and the committee)
+  /// Approved residents and staff matching a name or flat.
+  Future<List<dynamic>> gatePeople(String q) async => await get('/api/gate/people', {'q': q}) as List<dynamic>;
+  Future<List<dynamic>> gateCards() async => await get('/api/gate/cards') as List<dynamic>;
+  /// 409 when the card is active for someone else.
+  Future<void> registerCard(String serial, int userId) => post('/api/gate/cards', {'serial': serial, 'user_id': userId});
+  Future<void> deactivateCard(int id) => delete('/api/gate/cards/$id');
+  /// `{direction: in or out, at, shift: started, ended or null, person}`; 404 for an unknown card, 403 for a holder not approved.
+  Future<Map<String, dynamic>> tapCard(String serial) async => Map<String, dynamic>.from(await post('/api/gate/tap', {'serial': serial}) as Map);
+  /// `{inside, recent, cards}`.
+  Future<Map<String, dynamic>> gatePresence() async => Map<String, dynamic>.from(await get('/api/gate/presence') as Map);
 
   // ---- society modules (docs/modules-api.md)
   static Map<String, dynamic> _map(dynamic v) => Map<String, dynamic>.from(v as Map);

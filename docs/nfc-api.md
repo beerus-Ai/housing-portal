@@ -13,6 +13,8 @@ Gate desk for guards (the committee can open it too), `nfc.js`, 2026-11-25. A ca
 
 Every registration, deactivation and tap is audited; taps also appear in the gate log (kind `card`).
 
+Registering: the guard can tap the card first or choose the person first, in either order (the web and the Flutter gate desk keep the tapped card until a person is chosen). An unknown card at the tap screen offers "Register this card". The Flutter app (`flutter_app/lib/screens/gate_desk.dart`) reads the same serial number with `nfc_manager`, so one card works with both.
+
 ## Staff departments
 
 Staff accounts carry a department, chosen when the account is created (`kind`: `maintenance`, `cleaner`, `shop`, `laundry`). The server enforces what each sees: maintenance gets inventory, cleaning gets waste collection, the tuck shop and laundry staff get only their own service. None of them see the others.
