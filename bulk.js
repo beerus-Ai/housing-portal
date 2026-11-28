@@ -79,6 +79,7 @@ module.exports = function mountBulk(app, c) {
       name, email, phone || null, flat, b.resident_type, bcrypt.hashSync(pw, 10));
     const id = Number(r.lastInsertRowid);
     log(req.user.id, 'user', id, 'created_by_committee', `${b.resident_type} flat ${flat}: ${email}`);
+    if (app.locals.sendVerification) app.locals.sendVerification(id, req).catch(() => {}); // they confirm their own email too
     notify(id, `Welcome to the society portal. Your committee set up your account for flat ${flat}. Please change your password under Profile.`);
     res.status(201).json(given ? { id } : { id, password: pw });
   });
