@@ -427,7 +427,7 @@
     async vendors() {
       const vs = await API.vendors.list();
       page(`<div class="split-eq" style="grid-template-columns:minmax(0,1fr) minmax(0,480px)"><div class="col"><h2>Vendors</h2>${S.vErr ? `<p class="err" role="alert">${esc(S.vErr)}</p>` : ''}${vs.map(vendorRow).join('') || '<p class="muted">No vendors yet.</p>'}</div>
-        <form id="vform" class="col"><h3>Add vendor</h3><div class="field"><label for="vn">Name</label><input class="input" id="vn" name="name" required maxlength="100"></div><div class="field"><label for="vt">Trade</label><input class="input" id="vt" name="trade" required maxlength="50" placeholder="plumbing"></div>
+        <form id="vform" class="col"><h3>Add vendor</h3><div class="field"><label for="vn">Name</label><input class="input" id="vn" name="name" required maxlength="100"></div><div class="field"><label for="vt">Trade</label><select class="input" id="vt" name="trade" required>${tradeOpts('')}</select></div>
         <div class="field"><label for="vp">Phone</label><input class="input" id="vp" name="phone" maxlength="20"></div><div><button class="btn btn-primary">Add vendor</button></div></form></div>`);
     },
 
@@ -437,9 +437,13 @@
     },
   };
   PAGES.adminNotices = PAGES.notices;
+  // A vendor's trade is a request category, so AI triage can match it; a legacy trade outside the list stays as its own option.
+  const tradeOpts = cur => (cur ? '' : '<option value="" selected disabled>Choose a trade</option>')
+    + (cur && !CATS.some(([k]) => k === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : '')
+    + CATS.map(([k, l]) => `<option value="${esc(k)}" ${k === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
   const vendorRow = v => S.editVendor === v.id
     ? `<form class="member veform" data-id="${v.id}" style="grid-template-columns:minmax(0,1fr);gap:var(--space-2)"><div class="three"><div class="field"><label for="ven${v.id}">Name</label><input class="input" id="ven${v.id}" name="name" required maxlength="100" value="${esc(v.name)}"></div>
-      <div class="field"><label for="vet${v.id}">Trade</label><input class="input" id="vet${v.id}" name="trade" required maxlength="50" value="${esc(v.trade)}"></div><div class="field"><label for="vep${v.id}">Phone</label><input class="input" id="vep${v.id}" name="phone" maxlength="20" value="${esc(v.phone || '')}"></div></div>
+      <div class="field"><label for="vet${v.id}">Trade</label><select class="input" id="vet${v.id}" name="trade" required>${tradeOpts(v.trade)}</select></div><div class="field"><label for="vep${v.id}">Phone</label><input class="input" id="vep${v.id}" name="phone" maxlength="20" value="${esc(v.phone || '')}"></div></div>
       <div class="row"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-act="vcancel">Cancel</button></div></form>`
     : `<div class="member" style="grid-template-columns:44px minmax(0,1fr) auto auto"><span class="avatar light" style="width:44px;height:44px">${esc(initials(v.name))}</span><span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(v.name)}</span><span class="muted sm">${esc(v.trade)}</span></span><span class="sm">${esc(v.phone || '')}</span>
       <span class="row" style="gap:var(--space-1);flex-wrap:nowrap">${S.delVendor === v.id ? `<button class="btn btn-danger" data-act="vdel" data-id="${v.id}">Delete ${esc(v.name)}?</button><button class="btn btn-secondary" data-act="vcancel">Keep</button>`

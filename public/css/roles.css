@@ -70,3 +70,9 @@
 .core-sp { flex: 1; }
 .side-cap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted, #6b6b6b); padding: 0 14px; }
 @media (max-width: 760px) { .core-bar { grid-column: 1 / -1; } }
+
+/* Tester findings 2026-11-28. Pages under the top bar fill the grid row (the 100dvh height from ui.css cut the last ~70px off). */
+.web.core-shell > .page { height: auto; }
+/* The top bar wraps onto a second line, instead of hiding Alerts and Sound behind a scrollbar, when a role has many items. */
+.core-bar { flex-wrap: wrap; row-gap: 4px; overflow-x: visible; }
+@media (max-width: 1440px) { .core-link { padding: 8px 11px; gap: 6px; font-size: 14px; } }

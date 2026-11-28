@@ -72,17 +72,20 @@ class _DuesScreenState extends State<DuesScreen> {
                     StatTile(icon: Icons.schedule, value: '${t['overdue']}', label: 'Overdue bills'),
                   ]),
                   const SizedBox(height: 12),
-                  Wrap(spacing: 8, children: [
-                    for (final s in [null, 'overdue', 'unpaid', 'partial', 'paid'])
-                      ChoiceChip(
-                        label: Text(s == null ? 'All' : dueStatusLabel(s)),
-                        selected: _status == s,
-                        onSelected: (_) {
-                          _status = s;
-                          _refresh();
-                        },
-                      ),
-                  ]),
+                  DropdownButtonFormField<String>(
+                    initialValue: _status ?? '',
+                    decoration: const InputDecoration(labelText: 'Status', prefixIcon: Icon(Icons.filter_list)),
+                    items: [
+                      for (final s in ['', 'overdue', 'unpaid', 'partial', 'paid'])
+                        DropdownMenuItem<String>(value: s, child: Text(s.isEmpty ? 'All' : dueStatusLabel(s))),
+                    ],
+                    onChanged: (v) {
+                      final next = (v == null || v.isEmpty) ? null : v;
+                      if (next == _status) return;
+                      _status = next;
+                      _refresh();
+                    },
+                  ),
                 ],
                 const SizedBox(height: 12),
                 if (dues.isEmpty) EmptyState(Icons.receipt_long_outlined, app.isAdmin ? 'No bills match.' : 'No bills for your flat yet.'),

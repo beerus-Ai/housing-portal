@@ -86,17 +86,20 @@ class _AmenitiesScreenState extends State<AmenitiesScreen> {
                         EmptyState(Icons.event_busy_outlined,
                             app.isAdmin ? 'No amenities yet. Add them on the web dashboard.' : 'No amenities are open for booking yet.')
                       else ...[
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          for (final a in _amenities)
-                            ChoiceChip(
-                              label: Text('${a['name']}'),
-                              selected: a['id'] == _amenity,
-                              onSelected: (_) {
-                                _amenity = a['id'] as int;
-                                _load();
-                              },
-                            ),
-                        ]),
+                        DropdownButtonFormField<int>(
+                          key: ValueKey('amenity-$_amenity'),
+                          initialValue: _amenities.any((a) => a['id'] == _amenity) ? _amenity : null,
+                          isExpanded: true,
+                          decoration: const InputDecoration(labelText: 'Amenity', prefixIcon: Icon(Icons.event_available_outlined)),
+                          items: [
+                            for (final a in _amenities) DropdownMenuItem<int>(value: a['id'] as int, child: Text('${a['name']}', overflow: TextOverflow.ellipsis)),
+                          ],
+                          onChanged: (v) {
+                            if (v == null || v == _amenity) return;
+                            _amenity = v;
+                            _load();
+                          },
+                        ),
                         const SizedBox(height: 12),
                         SizedBox(
                           height: 40,

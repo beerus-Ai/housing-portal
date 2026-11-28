@@ -246,3 +246,7 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 @media (max-width: 1000px) { .wl-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) { .wl-top { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .sv-counter .nfc-type, .wl-tap .nfc-type { flex-wrap: wrap; } .sv-counter .nfc-type .input, .wl-tap .nfc-type .input { flex-basis: 100%; } .sv-who { flex-wrap: wrap; } }
+/* Gate desk rows hold icon, text, and a tag/time/menu: give the extras their own column so they do not wrap under the icon. */
+.rl .list-row:has(> :nth-child(3)) { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; }
+.rl .list-row:has(> :nth-child(4)) { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
+.rl .list-row .muted.sm { white-space: nowrap; }
