@@ -221,3 +221,7 @@ body:has(.nfc-scan) { overflow: hidden; }
 .nfc-who { text-align: left; } .nfc-who select { width: 100%; font-size: 17px; min-height: 48px; }
 .nfc-type { gap: 8px; flex-wrap: nowrap; } .nfc-type .input { flex: 1; min-width: 0; }
 .nfc-actions { gap: 10px; flex-wrap: wrap; justify-content: center; }
+/* Gate desk rows hold icon, text, and a tag/time/menu: give the extras their own column so they do not wrap under the icon. */
+.rl .list-row:has(> :nth-child(3)) { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; }
+.rl .list-row:has(> :nth-child(4)) { grid-template-columns: 40px minmax(0, 1fr) auto auto; }
+.rl .list-row .muted.sm { white-space: nowrap; }

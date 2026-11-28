@@ -162,7 +162,7 @@
         <div class="md-form">${field('mdin', 'Item', '<input class="input" id="mdin" name="name" maxlength="80" required placeholder="LED tube 20W">')}
           ${field('mdic', 'Category', `<select class="input" id="mdic" name="category">${INV_CATS.map(k => `<option value="${k}">${esc(cap(k))}</option>`).join('')}</select>`)}
           ${field('mdiq', 'Quantity now', '<input class="input" id="mdiq" name="quantity" type="number" min="0" step="1" value="0" inputmode="numeric">')}
-          ${field('mdiu', 'Unit', '<input class="input" id="mdiu" name="unit" maxlength="20" value="pcs">')}
+          ${field('mdiu', 'Unit', `<select class="input" id="mdiu" name="unit">${['pcs', 'roll', 'box', 'pack', 'kg', 'g', 'litre', 'ml', 'metre', 'pair', 'set', 'bag'].map(u => `<option>${u}</option>`).join('')}</select>`)}
           ${field('mdim', 'Reorder level', '<input class="input" id="mdim" name="min_qty" type="number" min="0" step="1" value="0" inputmode="numeric">', 'Alert the committee at or below this')}
           ${field('mdil', 'Location (optional)', '<input class="input" id="mdil" name="location" maxlength="80" placeholder="Store room">')}</div>
         ${X.moveFor == null ? errLine() : ''}<div class="row"><button class="btn btn-primary">${ic('package')}Add item</button></div></form>` : '';

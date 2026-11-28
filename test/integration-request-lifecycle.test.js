@@ -152,6 +152,14 @@ test('full lifecycle: raise -> triage -> assign staff -> take up -> estimate -> 
     assert.ok(await t.has(member, /was approved by/));
     assert.equal((await t.admin('GET', `/api/requests/${id}`)).body.cost_status, 'approved');
 
+    // Separation of duties: the head who sets a cost does not approve it; the admin decides instead.
+    assert.equal((await head('POST', `/api/requests/${id}/estimate`, { amount: 20000, note: 'Second section' })).status, 200);
+    assert.ok(await t.has(t.admin, /Cost approval needed: Rs 20000/));
+    assert.equal((await t.admin('GET', '/api/admin/approvals')).body.can_decide, true);
+    const own = await head('POST', `/api/requests/${id}/cost-decision`, { decision: 'approve' });
+    assert.equal(own.status, 403); assert.match(own.body.error, /You set this cost/);
+    assert.equal((await t.admin('POST', `/api/requests/${id}/cost-decision`, { decision: 'approve' })).status, 200);
+
     // Work done -> committee asked to close.
     assert.equal((await plumber('POST', `/api/staff/jobs/${id}/update`, { progress: 'done', note: 'Fixed' })).status, 201);
     assert.ok((await t.admin('GET', `/api/requests/${id}`)).body.work_done_at);
