@@ -188,8 +188,9 @@ window.HP = (() => {
       try {
         const p = await API.auth.pulse();
         sound.check(p.a);
-        if (last !== null && p.v !== last && !editing()) { await redraw(); }
-        if (last === null || !editing()) last = p.v;
+        const v = p.v + '|' + (p.chat_unread || 0); // a new chat message counts as a change too
+        if (last !== null && v !== last && !editing()) { await redraw(); }
+        if (last === null || !editing()) last = v;
         mark();
       } catch (e) { mark(e.status === 401 ? 'stale' : 'stale'); } finally { busy = false; }
     }

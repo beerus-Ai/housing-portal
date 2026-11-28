@@ -341,6 +341,85 @@
   ACT.cpkeep = () => { X.cpDel = null; render(); };
   ACT.cpcancel = el => { X.cpDel = null; cpRun(() => HP.api('POST', `/api/carpool/${el.dataset.id}/cancel`), 'Ride cancelled. Riders have been told.'); };
 
+  // =====================================================================
+  // Chat (docs/chat-api.md): everyone's thread with the committee desk; residents also write to neighbours.
+  // The composer is not inside a form, so the live poll still redraws; the typed text is kept in X.chDraft.
+  // =====================================================================
+  const CH = API.chat;
+  // chSel: the open conversation (an id, 'desk' before the first message, or 'new:<user id>'). chDraft: typed text per
+  // conversation. chFocus: put the caret back in the composer after a redraw. chBlock: the block confirmation is showing.
+  Object.assign(X, { chSel: null, chDraft: {}, chFocus: false, chBlock: false });
+  // The poller asks noRedraw before it redraws: remember whether the composer had focus, so it can be given back.
+  W.noRedraw = (prev => () => { if (S.page === 'chat' && document.activeElement && document.activeElement.id === 'chbox') X.chFocus = true; return !!(prev && prev()); })(W.noRedraw);
+  const chKey = v => (/^\d+$/.test(String(v)) ? Number(v) : v);
+  PAGES.chat = async () => {
+    const [data, people] = await Promise.all([CH.list(), isRes() ? CH.residents().catch(() => []) : []]);
+    const com = data.committee, convs = data.conversations;
+    let sel = X.chSel;
+    const newTo = typeof sel === 'string' && sel.startsWith('new:') ? people.find(p => String(p.id) === sel.slice(4)) : null;
+    // 'desk' and 'new:<id>' become the real conversation once it exists; the typed text moves with them.
+    const real = sel === 'desk' ? data.desk_id : newTo ? newTo.conversation_id : null;
+    if (real) { X.chDraft[String(real)] = X.chDraft[String(real)] || X.chDraft[String(sel)] || ''; delete X.chDraft[String(sel)]; sel = real; }
+    else if (typeof sel === 'string' && sel.startsWith('new:') && !newTo) sel = null;
+    if (typeof sel === 'number' && !convs.some(c => c.id === sel)) sel = null;
+    if (sel == null) sel = convs.length ? convs[0].id : com ? null : 'desk';
+    X.chSel = sel;
+    const thread = typeof sel === 'number' ? await CH.open(sel).catch(() => null) : null;
+    // The list: real conversations, plus the committee desk and a new neighbour conversation before their first message.
+    const items = convs.map(c => ({ ...c, key: c.id, unread: c.id === sel ? 0 : c.unread }));
+    if (!com && !data.desk_id) items.push({ key: 'desk', kind: 'desk', title: 'Committee', sub: 'Society committee desk', unread: 0, last: null });
+    if (newTo && !newTo.conversation_id) items.unshift({ key: sel, kind: 'direct', title: newTo.name, sub: `Flat ${newTo.flat}`, unread: 0, last: null });
+    const cur = thread ? thread.conversation : items.find(c => c.key === sel) || null;
+    const av = c => (c.kind === 'desk' && !com ? `<span class="avatar ch-av ch-av-desk">${ic('users-three')}</span>` : `<span class="avatar ch-av">${esc(HP.initials(c.title))}</span>`);
+    const row = c => { const on = c.key === sel; return `<button type="button" class="ch-item ${on ? 'on' : ''}" data-act="chopen" data-id="${esc(c.key)}" ${on ? 'aria-current="true"' : ''}>${av(c)}
+      <span class="ch-it"><b>${esc(c.title)}</b><span class="muted sm">${esc(c.last ? (c.last.mine ? 'You: ' : '') + c.last.body : c.sub)}</span></span>
+      <span class="ch-meta">${c.last ? `<span class="xs muted">${esc(HP.ageLabel(c.last.at))}</span>` : ''}${c.unread ? `<span class="ch-badge" aria-label="${c.unread} unread">${c.unread}</span>` : ''}</span></button>`; };
+    const picker = isRes() ? `<div class="ch-new"><label class="sr" for="chnew">New message to a neighbour</label><select class="input" id="chnew"><option value="">New message to a neighbour…</option>
+      ${people.map(p => `<option value="${p.id}">${esc(p.name)} · Flat ${esc(p.flat)}</option>`).join('')}</select></div>` : '';
+    const list = `<aside class="ch-list" aria-label="Conversations">${picker}<div class="ch-items">${items.map(row).join('') || `<p class="muted sm ch-none">${com ? 'No messages yet. Residents, staff and guards can write to the committee here.' : 'No conversations yet.'}</p>`}</div></aside>`;
+    const bubble = m => `<div class="ch-msg ${m.mine ? 'mine' : ''}"><div class="ch-bub">${!m.mine && cur && cur.kind === 'desk' ? `<span class="ch-from">${esc(m.from)}${m.committee && !com ? ' · Committee' : ''}</span>` : ''}<p>${esc(m.body)}</p><time class="ch-time">${esc(stamp(m.at))}</time></div></div>`;
+    const blockCtl = !cur || cur.kind !== 'direct' || typeof sel !== 'number' || cur.blocked === 'me' ? ''
+      : X.chBlock ? `<span class="row ch-blk"><button type="button" class="btn btn-danger" data-act="chblockyes">${ic('prohibit')}Block ${esc(cur.title)}?</button><button type="button" class="btn btn-secondary" data-act="chblockno">Cancel</button></span>`
+      : `<button type="button" class="btn btn-ghost" data-act="chblock" title="Stop messages both ways">${ic('prohibit')}Block</button>`;
+    const closed = cur && cur.blocked === 'me' ? `<div class="ch-closed" role="status">${ic('prohibit')}<span>You blocked ${esc(cur.title)}. Neither of you can send messages.</span><button type="button" class="btn btn-secondary" data-act="chunblock">Unblock</button></div>`
+      : cur && cur.blocked === 'them' ? `<div class="ch-closed" role="status">${ic('prohibit')}<span>You can no longer message ${esc(cur.title)}.</span></div>` : '';
+    const empty = !cur ? '' : cur.kind === 'desk' && !com ? 'Write to the committee. Any committee member can answer, and you will see who replied.' : 'No messages yet. Say hello.';
+    const compose = `<div class="ch-compose"><label class="sr" for="chbox">Message</label><textarea id="chbox" class="input" rows="2" maxlength="2000" placeholder="Write a message. Enter to send, Shift+Enter for a new line."></textarea>
+      <button type="button" class="btn btn-primary" data-act="chsend">${ic('paper-plane-right')}Send</button></div>`;
+    const pane = !cur ? `<section class="ch-thread ch-blank"><p class="muted">${com ? 'Choose a conversation.' : 'Choose a conversation or start a new one.'}</p></section>`
+      : `<section class="ch-thread" aria-label="Conversation with ${esc(cur.title)}"><header class="ch-th-h">${av(cur)}<span class="ch-it"><b>${esc(cur.title)}</b><span class="muted sm">${esc(cur.sub)}</span></span>${blockCtl}</header>
+        <div class="ch-msgs" id="chmsgs" role="log" aria-live="polite">${thread && thread.messages.length ? thread.messages.map(bubble).join('') : `<p class="muted ch-none">${esc(empty)}</p>`}</div>
+        ${closed || compose}</section>`;
+    page(`<div class="rl ch-page">${head('Chat', com ? 'One shared inbox: messages to the committee from residents, staff and guards. Your replies show your name.' : isRes() ? 'Write to the committee, or to a neighbour. Phone numbers and emails are never shown.' : 'Write to the committee. Any committee member can answer.')}
+      <div class="ch-wrap">${list}${pane}</div></div>`);
+    const box = $('#chbox');
+    if (box) { box.value = X.chDraft[String(sel)] || ''; if (X.chFocus) { box.focus({ preventScroll: true }); box.setSelectionRange(box.value.length, box.value.length); } }
+    X.chFocus = false;
+    const ms = $('#chmsgs'); if (ms) ms.scrollTop = ms.scrollHeight;
+  };
+  let chBusy = false;
+  const chSend = async () => {
+    const box = $('#chbox'); if (!box || chBusy) return;
+    const text = box.value, sel = X.chSel;
+    if (!text.trim()) { toast('Write a message first', 'error'); return; }
+    chBusy = true;
+    try {
+      const r = typeof sel === 'number' ? await CH.send(sel, text) : sel === 'desk' ? await CH.desk(text) : await CH.direct(Number(String(sel).slice(4)), text);
+      delete X.chDraft[String(sel)]; X.chSel = r.conversation_id;
+    } catch (x) { toast(x.message, 'error'); } finally { chBusy = false; }
+    X.chFocus = true; render();
+  };
+  const chBlock = async on => { try { await (on ? CH.block(X.chSel) : CH.unblock(X.chSel)); toast(on ? 'Blocked. Neither of you can send messages now.' : 'Unblocked'); } catch (x) { toast(x.message, 'error'); } X.chBlock = false; render(); };
+  ACT.chopen = el => { X.chSel = chKey(el.dataset.id); X.chBlock = false; X.chFocus = true; render(); };
+  ACT.chsend = () => chSend();
+  ACT.chblock = () => { X.chBlock = true; render(); };
+  ACT.chblockno = () => { X.chBlock = false; render(); };
+  ACT.chblockyes = () => chBlock(true);
+  ACT.chunblock = () => chBlock(false);
+  document.addEventListener('input', e => { if (e.target.id === 'chbox') X.chDraft[String(X.chSel)] = e.target.value; });
+  document.addEventListener('keydown', e => { if (e.target.id === 'chbox' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chSend(); } });
+  document.addEventListener('change', e => { if (e.target.id === 'chnew' && e.target.value) { X.chSel = 'new:' + e.target.value; X.chBlock = false; X.chFocus = true; render(); } });
+
   ACT.svrsvp = async el => { try { await V.rsvp(el.dataset.id, el.dataset.g === '1'); toast(el.dataset.g === '1' ? 'See you there' : 'Removed'); } catch (x) { toast(x.message, 'error'); } render(); };
   ACT.svevcancel = async el => { try { await V.cancelEvent(el.dataset.id); toast('Event cancelled; guests told'); } catch (x) { toast(x.message, 'error'); } render(); };
 

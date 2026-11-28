@@ -11,7 +11,7 @@ window.API = (() => {
       login: (email, password) => call('POST', '/api/login', { email, password }),
       logout: () => call('POST', '/api/logout'),
       register: body => call('POST', '/api/register', body),
-      pulse: () => call('GET', '/api/pulse'), // { v: version string, a: { rq, ru, em, em_on } } sound cues: newest request/order id, newest urgent or security request id, newest active emergency id, active emergency count
+      pulse: () => call('GET', '/api/pulse'), // { v: version string, a: { rq, ru, em, em_on }, chat_unread: unread chat messages } sound cues: newest request/order id, newest urgent or security request id, newest active emergency id, active emergency count
       google: credential => call('POST', '/api/auth/google', { credential }), // Google Identity Services ID token; signs in an EXISTING approved account matched by verified email
       // login and google answer { needs_2fa: true } (not signed in yet) for a user with two-factor on; see docs/auth-api.md
       login2fa: code => call('POST', '/api/login/2fa', { code }), // 6-digit authenticator code or a recovery code -> user
@@ -146,6 +146,17 @@ window.API = (() => {
       today: () => call('GET', '/api/daycare/today'), // committee -> { date, weekday, children: [enrolment] }
       checkin: eid => call('POST', `/api/daycare/enrolments/${id(eid)}/checkin`), // committee: drop-off now
       checkout: eid => call('POST', `/api/daycare/enrolments/${id(eid)}/checkout`), // committee: pick-up now; the parent is told
+    },
+    // Chat (docs/chat-api.md): everyone's thread with the committee desk, and resident-to-resident messages. Names and flats only, never phones or emails.
+    chat: {
+      list: () => call('GET', '/api/chat'), // any role: { conversations: [{ id, kind: 'desk'|'direct', title, sub, other: { id, name, flat? }|null, unread, blocked: 'me'|'them'|null, last: { body, mine, at }|null, last_at }], unread, desk_id|null, committee }
+      residents: () => call('GET', '/api/chat/residents'), // resident: [{ id, name, flat, conversation_id|null }] approved residents, not yourself
+      open: cid => call('GET', `/api/chat/${id(cid)}`), // participant (committee for desk threads): { conversation, messages: [{ id, mine, from, committee, body, at }] }; clears your unread
+      desk: body => call('POST', '/api/chat/desk', { body }), // anyone but the committee: -> 201 { id, conversation_id }; 400 empty or over 2000 characters
+      direct: (userId, body) => call('POST', '/api/chat/direct', { user_id: userId, body }), // resident: -> 201 { id, conversation_id }; 404 not an approved resident; 409 blocked
+      send: (cid, body) => call('POST', `/api/chat/${id(cid)}/messages`, { body }), // participant: -> 201 { id, conversation_id }; 409 blocked either way
+      block: cid => call('POST', `/api/chat/${id(cid)}/block`), // resident in a direct conversation: -> { ok, blocked: true }; 409 already blocked
+      unblock: cid => call('POST', `/api/chat/${id(cid)}/unblock`), // -> { ok, blocked: false }
     },
     // Community card wallet (docs/card-wallet-api.md): prepaid ledger per flat, frozen cards, one lookup for every counter. Amounts are rupees.
     wallet: {
