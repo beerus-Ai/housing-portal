@@ -88,7 +88,7 @@ test('login without 2FA is unchanged: same body, status codes and session', asyn
     const c = t.client();
     const ok = await c('POST', '/api/login', { email: r.email, password: PW });
     assert.equal(ok.status, 200);
-    assert.deepEqual(Object.keys(ok.body).sort(), ['department', 'email', 'flat', 'id', 'name', 'phone', 'position', 'resident_type', 'role', 'status']);
+    assert.deepEqual(Object.keys(ok.body).sort(), ['department', 'email', 'email_verified', 'flat', 'id', 'name', 'phone', 'position', 'resident_type', 'role', 'status']); // email_verified comes from verify.js (additive)
     assert.equal(ok.body.needs_2fa, undefined);
     assert.equal((await c('GET', '/api/me')).status, 200);
     const me = (await c('GET', '/api/me')).body;
