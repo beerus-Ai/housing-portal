@@ -194,10 +194,33 @@
       <div class="eg-grid">${stat('note-pencil', num(r.raised), 'Requests raised')}${stat('check-circle', num(r.closed), 'Closed')}${stat('list-checks', num(r.open_now), 'Open now')}${stat('arrow-counter-clockwise', num(r.reopened), 'Reopened')}
         ${stat('warning', num(r.escalated), 'Escalated', 'past the SLA')}${stat('siren', num(r.emergencies), 'Emergencies')}${stat('user-plus', num(r.new_residents), 'New residents')}${stat('megaphone', num(r.notices), 'Notices posted')}
         ${stat('star', r.avg_rating != null ? r.avg_rating + ' / 5' : '–', 'Average rating')}${stat('user-gear', hrs(r.avg_hours_to_assign), 'Average time to assign')}${stat('timer', hrs(r.avg_hours_to_close), 'Average time to close')}</div>
+      <section class="col ch-section" style="gap:var(--space-2)"><h2>Trends</h2><div class="ch-grid"><article class="form-card ch-card"><h3>Requests raised and resolved</h3><p class="muted sm">per week, last 12 weeks</p><div id="chReq" class="ch-box"><p class="muted sm">Loading…</p></div></article><article class="form-card ch-card"><h3>Resolved on time</h3><p class="muted sm">share of requests resolved within the SLA, per week</p><div id="chSla" class="ch-box"><p class="muted sm">Loading…</p></div></article><article class="form-card ch-card"><h3>Open requests by category</h3><p class="muted sm">right now</p><div id="chCat" class="ch-box"><p class="muted sm">Loading…</p></div></article><article class="form-card ch-card"><h3>Maintenance dues</h3><p class="muted sm">collected and still owed, by month due</p><div id="chDues" class="ch-box"><p class="muted sm">Loading…</p></div></article><article class="form-card ch-card"><h3>Gate check-ins</h3><p class="muted sm">card taps in, per day, last 14 days</p><div id="chGate" class="ch-box"><p class="muted sm">Loading…</p></div></article></div></section>
       <section class="col" style="gap:var(--space-2)"><h2>By category</h2>${table(['Category', 'Raised', 'Closed'], (r.by_category || []).map(c => `<tr><td>${esc(catLabel(c.category))}</td><td>${esc(c.raised)}</td><td>${esc(c.closed)}</td></tr>`), 'No requests this month.')}</section>
       <section class="col" style="gap:var(--space-2)"><h2>By vendor and staff</h2>${table(['Name', 'Kind', 'Closed', 'Average rating'], (r.by_assignee || []).map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.kind === 'staff' ? 'Society staff' : a.kind === 'vendor' ? 'Vendor' : a.kind)}</td><td>${esc(a.closed)}</td><td>${a.avg_rating != null ? esc(a.avg_rating) + ' / 5' : '–'}</td></tr>`), 'No work closed this month.')}</section>
       <section class="col" style="gap:var(--space-2)"><h2>Committee activity</h2>${table(['Name', 'Position', 'Actions', 'Assigned', 'Status changes', 'Cost decisions'], (r.committee || []).map(c => `<tr><td>${esc(c.name)}</td><td>${esc(HP.POSITION[c.position] || 'Admin')}</td><td>${esc(c.actions)}</td><td>${esc(c.assigned)}</td><td>${esc(c.status_changes)}</td><td>${esc(c.approvals)}</td></tr>`), 'No committee activity this month.')}</section>
       <p class="muted sm rl-printnote">Printed ${esc(new Date().toLocaleString('en-GB'))} from the ${esc(HP.SOCIETY.name)} portal.</p></div>`);
+
+    drawTrends();
+  };
+  // Trends on the Reports page (GET /api/admin/charts, drawn by public/charts.js). Colours: the portal accent for the
+  // main series, orange for the second (palette checked for colour-blind separation; the table view covers contrast).
+  const C1 = '#0088b0', C2 = '#f47230';
+  const wkLabel = w => new Date(w + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const drawTrends = async () => {
+    if (!HP.chart || !document.getElementById('chReq')) return;
+    let d; try { d = await HP.api('GET', '/api/admin/charts'); } catch (x) { document.querySelectorAll('.ch-box').forEach(b => { b.innerHTML = `<p class="muted sm">${esc(x.message)}</p>`; }); return; }
+    const wl = d.requests_weekly.map(r => wkLabel(r.week)), wf = d.requests_weekly.map(r => 'Week of ' + wkLabel(r.week));
+    HP.chart(document.getElementById('chReq'), { type: 'line', title: 'Requests raised and resolved per week', labels: wl, fullLabels: wf, tableHead: 'Week',
+      series: [{ label: 'Raised', color: C1, values: d.requests_weekly.map(r => r.raised) }, { label: 'Resolved', color: C2, values: d.requests_weekly.map(r => r.resolved) }] });
+    HP.chart(document.getElementById('chSla'), { type: 'line', title: 'Share resolved within the SLA', labels: wl, fullLabels: wf, tableHead: 'Week', yMax: 100, empty: 'No requests were resolved in the last 12 weeks.', yFmt: v => v + '%',
+      series: [{ label: 'On time', color: C1, values: d.sla_weekly.map(r => r.pct) }] });
+    HP.chart(document.getElementById('chCat'), d.open_by_category.length ? { type: 'hbar', title: 'Open requests by category', labels: d.open_by_category.map(c => catLabel(c.category)), tableHead: 'Category',
+      series: [{ label: 'Open requests', color: C1, values: d.open_by_category.map(c => c.n) }] } : null) ;
+    const ml = d.dues_monthly.map(m => new Date(m.month + '-01T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }));
+    HP.chart(document.getElementById('chDues'), { type: 'stacked', title: 'Dues collected and still owed by month', labels: ml, fullLabels: d.dues_monthly.map(m => new Date(m.month + '-01T00:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })), tableHead: 'Month', yFmt: v => rupees(v), empty: 'No maintenance bills were due in the last 6 months.',
+      series: [{ label: 'Collected', color: C1, values: d.dues_monthly.map(m => m.collected) }, { label: 'Still owed', color: C2, values: d.dues_monthly.map(m => m.outstanding) }] });
+    HP.chart(document.getElementById('chGate'), { type: 'bar', title: 'Gate check-ins per day', labels: d.gate_daily.map(g => new Date(g.day + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })), fullLabels: d.gate_daily.map(g => new Date(g.day + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })), tableHead: 'Day', empty: 'No gate card check-ins in the last 14 days.',
+      series: [{ label: 'Check-ins', color: C1, values: d.gate_daily.map(g => g.check_ins) }] });
   };
   ACT.rlprint = () => window.print();
 

@@ -277,3 +277,24 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .bk-file { position: relative; cursor: pointer; } .bk-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .bk-sum { margin: 0; } .bk-sum .ok { color: #12663f; } .bk-sum .bad { color: #b3261e; }
 .bk-err { color: #8c1d2e; display: inline-flex; gap: 6px; align-items: center; }
+/* Charts (public/charts.js): recessive axes, text in text tokens, a hover tooltip and a table view */
+.ch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: var(--space-4, 16px); }
+.ch-card { gap: 4px; --ch-surface: var(--color-surface, #eae9e9); }
+.ch-card h3 { margin: 0; font-size: 17px; } .ch-card > .muted { margin: 0 0 6px; }
+.ch-plot { position: relative; } .ch-plot svg { width: 100%; height: auto; display: block; overflow: visible; }
+.ch-box { min-width: 0; }
+.ch-lab { font-size: 11px; fill: var(--color-text-muted, #6b6764); font-variant-numeric: tabular-nums; }
+.ch-val { font-size: 12px; font-weight: 600; fill: var(--color-text, #201e1d); font-variant-numeric: tabular-nums; }
+.ch-direct { font-size: 12px; font-weight: 600; fill: var(--color-text, #201e1d); }
+.ch-plot .ch-gl { stroke: color-mix(in srgb, var(--color-text) 9%, transparent); stroke-width: 1; }
+.ch-plot .ch-base { stroke: color-mix(in srgb, var(--color-text) 30%, transparent); stroke-width: 1; }
+.ch-plot .ch-cross { stroke: color-mix(in srgb, var(--color-text) 35%, transparent); stroke-width: 1; stroke-dasharray: 3 3; }
+.ch-plot .ch-hit { fill: transparent; cursor: crosshair; } .ch-plot .ch-hit.on { fill: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.ch-tip { position: absolute; transform: translateX(-50%); z-index: 2; pointer-events: none; display: flex; flex-direction: column; gap: 3px; min-width: 140px;
+  padding: 8px 10px; border-radius: 10px; background: var(--color-text, #201e1d); color: #fff; font-size: 12.5px; box-shadow: 0 6px 18px rgb(0 0 0 / 18%); }
+.ch-tip span, .ch-legend span { display: flex; align-items: center; gap: 6px; } .ch-tip span b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.ch-tip i, .ch-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+.ch-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
+.ch-table summary { cursor: pointer; font-size: 13px; color: var(--color-accent-700, #006786); margin-top: 6px; }
+.ch-table table { margin-top: 8px; font-size: 13px; }
+@media print { .ch-tip, .ch-table summary { display: none; } .ch-table[open] table, .ch-table table { display: table; } }
