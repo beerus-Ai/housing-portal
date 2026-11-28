@@ -84,6 +84,7 @@ window.API = (() => {
       removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
+    charts: () => call('GET', '/api/admin/charts'), // committee: { requests_weekly, sla_weekly, open_by_category, dues_monthly, gate_daily, sla_hours } (docs/charts-api.md)
     // Bulk upload (docs/bulk-upload-api.md): the committee imports a CSV; a dry run checks every row first.
     bulk: {
       templates: () => call('GET', '/api/admin/bulk/templates'), // committee: { residents|accounts|vendors|inventory: { label, columns, required, example, help, needs_head } }
