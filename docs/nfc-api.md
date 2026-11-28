@@ -4,7 +4,7 @@ Gate desk for guards (the committee can open it too), `nfc.js`, 2026-11-25. A ca
 
 | Route | Who | Notes |
 |---|---|---|
-| `GET /api/gate/people?q=` | guard, committee | Approved residents and staff matching a name or flat (minimum fields) |
+| `GET /api/gate/people?q=` | guard, committee | Approved residents and staff matching a name or flat, 20 at most (minimum fields). Without `q`: all of them, up to 500 (the "Who carries this card?" dropdown) |
 | `GET /api/gate/cards` | guard, committee | Cards with holder |
 | `POST /api/gate/cards` `{serial,user_id,label?}` | guard, committee | 4-40 hex characters; 409 if the card is active for someone else; the holder is notified |
 | `DELETE /api/gate/cards/:id` | guard, committee | Deactivates the card |
@@ -13,7 +13,11 @@ Gate desk for guards (the committee can open it too), `nfc.js`, 2026-11-25. A ca
 
 Every registration, deactivation and tap is audited; taps also appear in the gate log (kind `card`).
 
-Registering: the guard can tap the card first or choose the person first, in either order (the web and the Flutter gate desk keep the tapped card until a person is chosen). An unknown card at the tap screen offers "Register this card". The Flutter app (`flutter_app/lib/screens/gate_desk.dart`) reads the same serial number with `nfc_manager`, so one card works with both.
+Registering: **Register a card** opens a full-screen scanner (web and Flutter). The guard taps the card; once the number is read, a "Who carries this card?" dropdown lists everyone who can carry one (`GET /api/gate/people` without `q`), and **Register card** saves it. On the web, the scanner says why the browser cannot listen when it cannot (Web NFC needs Chrome on Android and a secure page: https, or localhost). An unknown card at the tap screen offers "Register this card". The Flutter app (`flutter_app/lib/screens/gate_desk.dart`) reads the same serial number with `nfc_manager`, so one card works with both.
+
+## Windows PCs
+
+Browsers on a PC have no Web NFC, and most PC readers (a laptop's built-in NFC, "Microsoft IFD 0", or an ACR122U) are smart-card (PC/SC) readers that do not type anything. The Sahyadri Card Reader (`windows-reader/`, downloadable from the gate desk as `/downloads/SahyadriCardReader.zip`) reads the card UID with the PC/SC Get Data command (`FF CA 00 00 00`) and types it plus Enter into the gate desk card box, only while the portal window is in front unless told otherwise.
 
 ## Staff departments
 

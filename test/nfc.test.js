@@ -35,6 +35,10 @@ test('gate cards: guard registers a card, taps toggle in and out, staff shifts f
     // find people, register cards
     const people = (await guard('GET', '/api/gate/people?q=one')).body;
     const cl = people.find(p => p.role === 'staff');
+    // no q: everyone who can carry a card (the dropdown), residents included, guards and the committee left out
+    const all = (await guard('GET', '/api/gate/people')).body;
+    assert.ok(all.some(p => p.name === 'Asha' && p.flat === 'A-1') && all.some(p => p.id === cl.id));
+    assert.ok(all.every(p => ['resident', 'staff', 'shop', 'laundry'].includes(p.role)));
     assert.ok(cl && cl.department === 'cleaning');
     assert.equal((await guard('POST', '/api/gate/cards', { serial: 'zz', user_id: cl.id })).status, 400, 'too short');
     assert.equal((await guard('POST', '/api/gate/cards', { serial: '04:a1:b2:c3', user_id: cl.id })).status, 201);

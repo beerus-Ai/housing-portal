@@ -25,15 +25,18 @@ void main() {
     expect(personSub({'role': 'shop'}), 'Tuck shop');
   });
 
-  testWidgets('register: a card tapped before choosing the person is kept, not refused', (tester) async {
+  testWidgets('register: full-screen scanner, then the card number and a "who carries it" dropdown', (tester) async {
     await tester.pumpWidget(MaterialApp(theme: buildTheme(), home: const GateDeskScreen(nfc: false)));
     await tester.pump();
     await tester.tap(find.text('Register a card'));
     await tester.pump();
-    expect(find.text('Tap the card first or choose the person first, in either order.'), findsOneWidget);
+    expect(find.text('Tap the new card'), findsOneWidget);
+    expect(find.text('Latest taps'), findsNothing); // the scanner covers the whole screen
     final s = tester.state<GateDeskState>(find.byType(GateDeskScreen));
     await s.handleSerial('04:a1:b2:c3'); // what the NFC reader passes in
     await tester.pump();
-    expect(find.text('Card 04A1B2C3 read. Now choose who carries it.'), findsOneWidget);
+    expect(find.text('Card detected'), findsOneWidget);
+    expect(find.text('04A1B2C3'), findsOneWidget);
+    expect(find.text('Who carries this card?'), findsOneWidget);
   });
 }
