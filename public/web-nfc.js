@@ -18,7 +18,10 @@
   // Why the phone cannot listen, in words the guard can act on (Web NFC needs Chrome on Android and a secure page).
   const nfcWhy = () => !window.isSecureContext
     ? `NFC needs a secure page, and this one is http://${location.host}. Open the live site (https), or on the phone run adb reverse tcp:3000 tcp:3000 and open http://localhost:3000/?web.`
-    : !hasNfc() ? 'This browser cannot read NFC cards: Web NFC works in Chrome on Android. Use a USB reader that types the card number, or type it below.' : '';
+    : !hasNfc() ? (isWin() ? 'A browser on a PC cannot read NFC cards (Web NFC is only in Chrome on Android). Install the Sahyadri Card Reader on this PC: it reads the laptop NFC or a USB reader and types the card number here.' : 'This browser cannot read NFC cards: Web NFC works in Chrome on Android. Use a USB reader that types the card number, or type it below.') : '';
+  const isWin = () => /Windows/.test(navigator.userAgent);
+  // Windows PCs: the tray app in windows-reader/ (served from public/downloads) types the card number into #nfcin.
+  const winApp = () => !hasNfc() && isWin() ? `<a class="btn btn-secondary" href="/downloads/SahyadriCardReader.zip" download>${ic('download-simple')}Get the Windows card reader</a>` : '';
   // Keep the page still while a scanner is open or the guard is typing a card number.
   W.noRedraw = (prev => () => (prev && prev()) || (S.page === 'cards' && (!!N.scan || document.activeElement === $('#nfcin'))))(W.noRedraw);
 
@@ -66,11 +69,11 @@
         <div class="row nfc-actions"><button type="button" class="btn btn-primary btn-lg" data-act="nfcsave" ${N.who ? '' : 'disabled'}>${ic('check-circle')}Register card</button>
           <button type="button" class="btn btn-secondary" data-act="nfcrescan">${ic('arrow-counter-clockwise')}Scan a different card</button></div>`;
     } else if (N.scan === 'register') {
-      body = `${listen}<h2>Tap the new card</h2><p class="muted">${esc(status)}</p>${input}<p class="err" role="alert">${esc(N.err)}</p>`;
+      body = `${listen}<h2>Tap the new card</h2><p class="muted">${esc(status)}</p>${winApp()}${input}<p class="err" role="alert">${esc(N.err)}</p>`;
     } else {
       const res = !L ? '' : L.error ? `<div class="nfc-res bad">${ic('x-circle')}<b>${esc(L.error)}</b><span class="muted">Card ${esc(L.serial || '')}</span>${L.unknown ? `<button type="button" class="btn btn-primary" data-act="nfcregcard">${ic('plus-circle')}Register this card</button>` : ''}</div>`
         : `<div class="nfc-res ${L.direction}">${ic(L.direction === 'in' ? 'sign-in' : 'sign-out')}<b>${L.direction === 'in' ? 'Checked in' : 'Checked out'}: ${esc(L.person.name)}</b><span>${esc(fmt(L.at))}${L.shift ? ` · shift ${esc(L.shift)}` : ''}</span></div>`;
-      body = `${listen}<h2>Tap a card</h2><p class="muted">${esc(status)}</p>${res}${input}`;
+      body = `${listen}<h2>Tap a card</h2><p class="muted">${esc(status)}</p>${winApp()}${res}${input}`;
     }
     return `<div class="nfc-scan" role="dialog" aria-modal="true" aria-label="${N.scan === 'register' ? 'Register a card' : 'Scan cards'}">
       <button type="button" class="btn btn-secondary nfc-close" data-act="nfcclose" aria-label="Close the scanner">${ic('x')}Close</button>
@@ -80,7 +83,7 @@
   PAGES.cards = async () => {
     const [pr, cards] = await Promise.all([api('GET', '/api/gate/presence'), api('GET', '/api/gate/cards')]);
     const L = N.last;
-    const result = !L ? `<div class="nfc-idle"><span class="nfc-ring">${ic('contactless-payment')}</span><b>Tap a card</b><span class="muted">${hasNfc() && window.isSecureContext ? 'Open the scanner, then hold a card to the phone.' : 'A USB reader types the card number below.'}</span></div>`
+    const result = !L ? `<div class="nfc-idle"><span class="nfc-ring">${ic('contactless-payment')}</span><b>Tap a card</b><span class="muted">${hasNfc() && window.isSecureContext ? 'Open the scanner, then hold a card to the phone.' : 'A USB reader or the Windows card reader types the card number below.'}</span>${winApp()}</div>`
       : L.error ? `<div class="nfc-res bad">${ic('x-circle')}<b>${esc(L.error)}</b><span class="muted">Card ${esc(L.serial || '')}</span>${L.unknown ? `<button type="button" class="btn btn-primary" data-act="nfcregcard">${ic('plus-circle')}Register this card</button>` : ''}</div>`
       : `<div class="nfc-res ${L.direction}">${ic(L.direction === 'in' ? 'sign-in' : 'sign-out')}<b>${L.direction === 'in' ? 'Checked in' : 'Checked out'}: ${esc(L.person.name)}</b><span>${esc(fmt(L.at))}${L.shift ? ` · shift ${esc(L.shift)}` : ''}</span></div>`;
     page(`<div class="rl">${HP.hero({ theme: 'gate', name: S.me.name, kicker: `Gate desk · ${HP.todayLabel()}`, line: `<b>${pr.inside.length}</b> people inside · ${pr.cards} cards registered`, actions: [] })}

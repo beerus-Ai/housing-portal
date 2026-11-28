@@ -15,6 +15,10 @@ Every registration, deactivation and tap is audited; taps also appear in the gat
 
 Registering: **Register a card** opens a full-screen scanner (web and Flutter). The guard taps the card; once the number is read, a "Who carries this card?" dropdown lists everyone who can carry one (`GET /api/gate/people` without `q`), and **Register card** saves it. On the web, the scanner says why the browser cannot listen when it cannot (Web NFC needs Chrome on Android and a secure page: https, or localhost). An unknown card at the tap screen offers "Register this card". The Flutter app (`flutter_app/lib/screens/gate_desk.dart`) reads the same serial number with `nfc_manager`, so one card works with both.
 
+## Windows PCs
+
+Browsers on a PC have no Web NFC, and most PC readers (a laptop's built-in NFC, "Microsoft IFD 0", or an ACR122U) are smart-card (PC/SC) readers that do not type anything. The Sahyadri Card Reader (`windows-reader/`, downloadable from the gate desk as `/downloads/SahyadriCardReader.zip`) reads the card UID with the PC/SC Get Data command (`FF CA 00 00 00`) and types it plus Enter into the gate desk card box, only while the portal window is in front unless told otherwise.
+
 ## Staff departments
 
 Staff accounts carry a department, chosen when the account is created (`kind`: `maintenance`, `cleaner`, `shop`, `laundry`). The server enforces what each sees: maintenance gets inventory, cleaning gets waste collection, the tuck shop and laundry staff get only their own service. None of them see the others.
