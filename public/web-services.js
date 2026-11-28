@@ -48,7 +48,7 @@
   const NEXT_LAUNDRY = { requested: 'picked_up', picked_up: 'washing', washing: 'ready', ready: 'delivered' };
   const CATS = ['groceries', 'dairy', 'snacks', 'household', 'personal care', 'other'];
   // Photo library for shop items (public/img/shop, credited in CREDITS.md there).
-  const PHOTOS = ['milk', 'bread', 'eggs', 'rice', 'tea', 'biscuits', 'detergent', 'soap'];
+  const PHOTOS = ['milk', 'bread', 'eggs', 'rice', 'tea', 'biscuits', 'detergent', 'soap', 'paneer', 'curd', 'butter', 'atta', 'sugar', 'chips', 'bananas', 'toothpaste', 'shampoo'];
   const photoSel = (id, cur) => `<select class="input" id="${id}" name="image"><option value="">No photo (icon)</option>${PHOTOS.map(p => `<option value="/img/shop/${p}.jpg" ${cur === `/img/shop/${p}.jpg` ? 'selected' : ''}>${esc(cap(p))}</option>`).join('')}</select>`;
   const CAT_IC = { groceries: 'basket', dairy: 'drop', snacks: 'cookie', household: 'broom', 'personal care': 'hand-soap', other: 'package' };
   // How the order is received and paid (purchases are linked to the flat's finances).

@@ -226,7 +226,21 @@ const SHOP_INFO = [
   ['biscuits', 'Glucose biscuits, a family pack. Good with tea.'],
   ['detergent', 'Washing powder for machine and hand wash, 1 kg. Gentle on colours.'],
   ['soap', 'Bath soap, 100 g bar. Mild and moisturising.'],
+  ['paneer', 'Fresh malai paneer, soft and creamy. For paneer tikka, palak paneer or bhurji; keep refrigerated, use in 3 days.'],
+  ['curd', 'Thick set dahi made from toned milk. Good with rice, for raita or lassi; keep refrigerated.'],
+  ['butter', 'Salted table butter, 100 g. Keep refrigerated.'],
+  ['atta', 'Whole wheat chakki atta for soft rotis and parathas. 5 kg bag.'],
+  ['sugar', 'Refined white sugar, fine crystals. 1 kg pack.'],
+  ['potato chips', 'Classic salted potato chips, crisp and light. Family pack.'],
+  ['bananas', 'Ripe yellow bananas (elaichi or robusta, by season), sold by the dozen.'],
+  ['toothpaste', 'Fluoride toothpaste for strong teeth and fresh breath. 150 g tube.'],
+  ['shampoo', 'Mild everyday shampoo for all hair types. 180 ml bottle.'],
 ];
+// Added to the demo range on 2026-11-28 (photos credited in public/img/shop/CREDITS.md). Inserted by name when
+// missing, so an existing shop gets them too, and an item the shop owner hid stays hidden.
+const SHOP_MORE = [['Paneer', 'dairy', 90, 12, '200 g', 'paneer'], ['Curd', 'dairy', 35, 20, '400 g', 'curd'], ['Butter', 'dairy', 58, 15, '100 g', 'butter'],
+  ['Atta', 'groceries', 260, 10, '5 kg', 'atta'], ['Sugar', 'groceries', 48, 20, '1 kg', 'sugar'], ['Potato chips', 'snacks', 20, 40, 'pack', 'chips'],
+  ['Bananas', 'groceries', 60, 10, 'dozen', 'bananas'], ['Toothpaste', 'personal care', 95, 15, '150 g', 'toothpaste'], ['Shampoo', 'personal care', 120, 10, '180 ml', 'shampoo']];
 function seedDemoAccounts(db) {
   const pw = process.env.SEED_PASSWORD;
   if (!pw || pw.length < 6) return;
@@ -282,6 +296,8 @@ function seedDemoAccounts(db) {
       ['Tea', 'groceries', 140, 12, '250 g'], ['Biscuits', 'snacks', 30, 30, 'pack'], ['Detergent', 'household', 180, 8, '1 kg'], ['Soap', 'personal care', 45, 25, 'bar']]) si.run(...r, `/img/shop/${r[0].toLowerCase()}.jpg`);
   }
   // Short product information for the shop cards; only fills items that have none, so the shop owner's own text stays.
+  const addItem = db.prepare('INSERT INTO shop_items(name,category,price,stock,unit,image) SELECT ?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM shop_items WHERE lower(name)=lower(?))');
+  for (const [n, cat, price, stock, unit, img] of SHOP_MORE) addItem.run(n, cat, price, stock, unit, `/img/shop/${img}.jpg`, n);
   const info = db.prepare('UPDATE shop_items SET description=? WHERE lower(name)=? AND description IS NULL');
   for (const [n, d] of SHOP_INFO) info.run(d, n);
   if (db.prepare('SELECT COUNT(*) AS n FROM laundry_rates').get().n === 0) {
