@@ -81,3 +81,19 @@
 .auth-phone .input { min-height: 56px; }
 .auth-phone .auth-go { min-height: 60px; font-size: 19px; }
 .auth-phone > form.screen { padding-bottom: 28px; }
+
+/* Community card (docs/card-wallet-api.md): card reader box, counter lines, wallet and activity rows */
+.mob .cw-read { align-items: stretch; }
+.mob .cw-ic { align-self: center; width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; background: color-mix(in srgb, var(--color-accent-700) 12%, transparent); color: var(--color-accent-700); }
+.mob .cw-line { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+.mob .cw-line:last-child { border-bottom: 0; }
+.mob .cw-line.on b:first-child { color: var(--color-accent-700); }
+.mob .cw-qty { min-width: 28px; text-align: center; font-size: 18px; }
+.mob .cw-total { font-size: 22px; }
+.mob .cw-pays { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mob .am-seg:disabled { opacity: .45; }
+.mob .cw-bal { font-size: 40px; margin: 6px 0 4px; }
+.mob .cw-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.mob .cw-row .am-li { width: 40px; height: 40px; font-size: 22px; border-radius: 12px; }
+.mob .cw-amt { margin-left: auto; white-space: nowrap; }
+.mob .cw-amt.in { color: var(--color-accent-700); }

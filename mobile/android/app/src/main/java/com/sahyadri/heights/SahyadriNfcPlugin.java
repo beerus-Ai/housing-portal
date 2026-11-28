@@ -20,6 +20,7 @@ import java.util.Arrays;
 
 /**
  * Minimal NDEF reader/writer using reader mode (no foreground dispatch, no intent filters needed).
+ * read() also returns the tag UID as "serial" (community cards often carry no NDEF data).
  * Tag contents are never logged.
  */
 @CapacitorPlugin(name = "SahyadriNfc")
@@ -95,17 +96,35 @@ public class SahyadriNfcPlugin extends Plugin {
         }
     }
 
+    // Result: text (first NDEF record, "" when none), empty, serial (tag UID as upper-case hex, no separators,
+    // "" when the tag gives none) and ndef_error (the UID was read but the NDEF contents could not be).
     private JSObject readTag(Tag tag) throws Exception {
-        Ndef ndef = Ndef.get(tag);
-        NdefMessage msg = ndef == null ? null : ndef.getCachedNdefMessage();
-        if (ndef != null && msg == null) {
-            ndef.connect();
-            try { msg = ndef.getNdefMessage(); } finally { ndef.close(); }
-        }
         JSObject r = new JSObject();
+        String serial = hex(tag.getId());
+        r.put("serial", serial);
+        NdefMessage msg;
+        try {
+            Ndef ndef = Ndef.get(tag);
+            msg = ndef == null ? null : ndef.getCachedNdefMessage();
+            if (ndef != null && msg == null) {
+                ndef.connect();
+                try { msg = ndef.getNdefMessage(); } finally { ndef.close(); }
+            }
+        } catch (Exception e) {
+            if (serial.isEmpty()) throw e;
+            r.put("text", ""); r.put("empty", true); r.put("ndef_error", true);
+            return r;
+        }
         if (msg == null || msg.getRecords().length == 0) { r.put("text", ""); r.put("empty", true); return r; }
         r.put("text", recordText(msg.getRecords()[0]));
         return r;
+    }
+
+    private static String hex(byte[] id) {
+        if (id == null) return "";
+        StringBuilder b = new StringBuilder(id.length * 2);
+        for (byte x : id) b.append(String.format("%02X", x & 0xFF));
+        return b.toString();
     }
 
     private static String recordText(NdefRecord rec) {

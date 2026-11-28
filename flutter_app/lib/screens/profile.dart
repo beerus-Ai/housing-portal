@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
 import '../theme.dart';
+import 'my_card.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -40,6 +41,13 @@ class ProfileScreen extends StatelessWidget {
             if (u['phone'] != null)
               ListTile(leading: const Icon(Icons.phone_outlined), title: const Text('Phone'), trailing: Text('${u['phone']}')),
             ListTile(leading: const Icon(Icons.badge_outlined), title: const Text('Role'), trailing: Text('${u['role']}')),
+            ListTile(
+                key: const Key('myCard'),
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('My community card'),
+                subtitle: Text(u['role'] == 'resident' ? 'Wallet, freeze a lost card, activity' : 'Freeze a lost card, activity'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyCardScreen()))),
             ListTile(
                 leading: const Icon(Icons.dns_outlined),
                 title: const Text('Server'),
