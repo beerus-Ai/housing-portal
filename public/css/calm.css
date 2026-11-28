@@ -221,3 +221,28 @@ body:has(.nfc-scan) { overflow: hidden; }
 .nfc-who { text-align: left; } .nfc-who select { width: 100%; font-size: 17px; min-height: 48px; }
 .nfc-type { gap: 8px; flex-wrap: nowrap; } .nfc-type .input { flex: 1; min-width: 0; }
 .nfc-actions { gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* ---------- community card wallet (docs/card-wallet-api.md): profile, committee Wallets, counters */
+.wl-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.wl-bal, .wl-freeze { gap: 6px; }
+.wl-big { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.wl-bal.frozen .wl-big { opacity: .55; }
+.wl-freeze.frozen { background: #eaf2fb; border: 1.5px solid #9cc3ea; }
+.wl-confirm { gap: 8px; animation: calm-rise .2s ease both; }
+.wl-tx { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }
+.wl-amt { font-variant-numeric: tabular-nums; white-space: nowrap; } .wl-amt.in { color: #12663f; } .wl-amt.out { color: var(--color-text, #222); }
+.wl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--color-surface, #fff); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wl-hint { margin: 0; display: flex; align-items: center; gap: 6px; }
+.wl-cerr { padding: 14px; font-size: 15px; } .wl-cerr i { font-size: 30px; }
+.wl-topup { gap: 12px; }
+.wl-tap { gap: 6px; padding: 12px; border-radius: 12px; border: 2px dashed color-mix(in srgb, var(--color-accent) 40%, transparent); }
+.wl-tapres { margin: 0; min-height: 1.4em; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wl-num { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
+.wl-hist { gap: 10px; }
+.wl-grid { grid-template-columns: minmax(0, 480px) minmax(0, 1fr); }
+.sv-checkin { margin-top: -4px; }
+.sv-counter .nfc-type, .wl-tap .nfc-type { gap: 8px; flex-wrap: nowrap; } .sv-counter .nfc-type .input, .wl-tap .nfc-type .input { flex: 1; min-width: 0; }
+@media (max-width: 1000px) { .wl-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .wl-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .sv-counter .nfc-type, .wl-tap .nfc-type { flex-wrap: wrap; } .sv-counter .nfc-type .input, .wl-tap .nfc-type .input { flex-basis: 100%; } .sv-who { flex-wrap: wrap; } }
