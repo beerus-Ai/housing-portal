@@ -51,7 +51,7 @@
   };
   // Menu sections. Home and the required items ('core') are plain links at the top; Administration is the
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
-  const GROUPS = [['home', 'Home', 'house'], ['core', '', ''], ['admin', 'Administration', 'gear-six'], ['services', 'Services', 'storefront'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
+  const GROUPS = [['home', 'Home', 'house'], ['core', 'Daily tasks', 'list-checks'], ['admin', 'Administration', 'gear-six'], ['services', 'Services', 'storefront'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
     users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
@@ -193,8 +193,18 @@
   const heroPanels = ps => `<div class="panels" style="--cols:${ps.length}">${ps.map(p => `<button class="panel" data-act="nav" data-page="${p.go}" ${p.sel ? `data-sel="${p.sel}"` : ''}><div class="l soft">${ic(p.icon)}${esc(p.l)}</div><div class="v">${esc(p.v)}</div><div class="s">${esc(p.s)}</div></button>`).join('')}</div>`;
   const noticeRow = n => `<article class="row" style="flex-wrap:nowrap;align-items:flex-start;cursor:pointer" data-act="nav" data-page="notices" tabindex="0" role="link"><span class="tile" style="width:36px;height:36px;font-size:20px">${ic(noticeIcon(n))}</span>
     <span class="col" style="gap:2px"><span class="muted xs">${esc(day(n.created_at))} · ${esc(n.author)}</span><span class="list-title">${esc(n.title)}</span></span></article>`;
-  const reqRow = r => `<button class="list-row ${S.selId === r.id ? 'on' : ''}" data-act="open" data-id="${r.id}"><span class="tile">${ic(catIcon(r.category))}</span>
-    <span class="col" style="gap:4px"><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · ${esc(day(r.created_at))}${isAdmin() || S.me.resident_type !== 'tenant' ? ' · ' + esc(r.flat) : ''}</span><span class="list-title">${esc(r.title)}</span><span style="align-self:flex-start">${statusTag(r)}</span></span></button>`;
+  // One compact row per request: title on one line, a muted line under it, a small status tag on the right. The flat is
+  // shown only to the committee (a resident's list is all their own flat).
+  const reqRow = r => `<button class="list-row req-row ${S.selId === r.id ? 'on' : ''}" data-act="open" data-id="${r.id}" title="${esc(r.title)}"><span class="tile">${ic(catIcon(r.category))}</span>
+    <span class="col req-txt"><span class="req-title">${esc(r.title)}</span><span class="muted xs">${rid(r)} · ${esc(catLabel(r.category))} · ${esc(day(r.created_at))}${isAdmin() ? ' · ' + esc(r.flat) : ''}</span></span><span class="req-st">${isOpen(r) ? statusTag(r) : `<span class="tag ${r.rating ? 'tag-neutral' : 'tag-accent-2'}">${r.rating ? 'Closed' : 'To rate'}</span>`}</span></button>`; // short tags in the list; the full status is in the detail
+  // Active requests first; resolved ones folded under one line so the list stays short.
+  const reqGroups = (reqs, sel) => {
+    const act = reqs.filter(isOpen), past = reqs.filter(r => !isOpen(r));
+    if (sel && !isOpen(sel)) S.showPast = true;
+    const head = (label, n) => `<div class="req-group"><span>${label}</span><span class="muted">${n}</span></div>`;
+    return (act.length ? head('Active', act.length) + act.map(reqRow).join('') : '<p class="muted sm" style="margin:4px 0">Nothing open right now.</p>')
+      + (past.length ? `<button type="button" class="req-group req-toggle" data-act="reqpast" aria-expanded="${!!S.showPast}"><span>Resolved</span><span class="muted">${past.length}</span>${ic(S.showPast ? 'caret-up' : 'caret-down')}</button>${S.showPast ? past.map(reqRow).join('') : ''}` : '');
+  };
   // Vendors and society staff in one picker. Values are 'v:<id>' or 's:<id>' (ACT.assign sends vendor_id or staff_id).
   const assignOptions = (vs, staff, d) => `<option value="">Unassigned</option><optgroup label="Vendors">${vs.map(v => `<option value="v:${v.id}" ${!d.assignee_id && d.vendor_id === v.id ? 'selected' : ''}>${esc(v.name)}${v.trade ? ' · ' + esc(v.trade) : ''}</option>`).join('')}</optgroup>`
     + (staff.length ? `<optgroup label="Society staff">${staff.map(s => `<option value="s:${s.id}" ${d.assignee_id === s.id ? 'selected' : ''}>${esc(s.name)}${s.on_shift ? ' · on shift' : ''} · ${esc(s.open_jobs || 0)} open jobs</option>`).join('')}</optgroup>` : '');
@@ -266,7 +276,7 @@
         S.selId = d.id;
       }
       const filter = isAdmin() ? `<div class="row"><select class="input" id="fs" style="width:auto" aria-label="Filter by status"><option value="">Any status</option>${['open', 'assigned', 'in_progress', 'closed'].map(s => `<option value="${s}" ${S.filter === s ? 'selected' : ''}>${s.replace('_', ' ')}</option>`).join('')}</select><span class="row" style="gap:4px">${HP.CATS.map(([k, l]) => `<button type="button" class="tag ${S.catFilter === k ? 'tag-accent' : 'tag-outline'} link-btn" style="text-decoration:none;color:inherit" data-act="catfilter" data-c="${k}">${esc(l)}</button>`).join('')}${['telegram', 'whatsapp'].map(c => `<button type="button" class="tag ${S.srcFilter === c ? 'tag-accent' : 'tag-outline'} link-btn" style="text-decoration:none;color:inherit" data-act="srcfilter" data-src="${c}" data-count="0">Via ${c === 'telegram' ? 'Telegram' : 'WhatsApp'}</button>`).join('')}</span>${S.catFilter ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearcat">${esc(catLabel(S.catFilter))} ✕</button>` : ''}${srcName ? `<button class="tag tag-accent link-btn" style="text-decoration:none;color:inherit" data-act="clearsrc">Via ${esc(srcName)} ✕</button>` : ''}<a href="${API.admin.exportUrl}">Export CSV</a></div>` : '';
-      page(`<div class="split"><div class="col" style="gap:var(--space-1)"><h2 style="margin-bottom:var(--space-3)">${heading}</h2>${filter}${reqs.map(reqRow).join('') || '<p class="muted">No requests.</p>'}</div><div class="col" style="gap:var(--space-4)">${detail}</div></div>`);
+      page(`<div class="split"><div class="col" style="gap:var(--space-1)"><h2 style="margin-bottom:var(--space-3)">${heading}</h2>${filter}${reqs.length ? reqGroups(reqs, sel) : '<p class="muted">No requests.</p>'}</div><div class="col" style="gap:var(--space-4)">${detail}</div></div>`);
     },
 
     async raise() {
@@ -514,6 +524,7 @@
   document.addEventListener('load', e => { const t = e.target; if (t && t.classList && t.classList.contains('cat-img') && t.parentElement) t.parentElement.classList.add('has-img'); }, true);
   const catPic = () => ''; // category tiles are icon cards now (no images)
   const ACT = {
+    reqpast: () => { S.showPast = !S.showPast; render(); },
     catfilter: el => { S.catFilter = el.dataset.c; S.srcFilter = ''; S.filter = ''; go('requests'); }, // a category card means all not-yet-closed work in that category
     clearcat: () => { S.catFilter = ''; S.filter = ''; render(); },
     srcfilter: el => { try { localStorage.setItem('hp.seen.' + el.dataset.src, el.dataset.count || '0'); } catch {} S.srcFilter = el.dataset.src; S.catFilter = ''; S.filter = ''; S.selId = null; go('requests'); }, // a "Via WhatsApp/Telegram" card lists requests from that channel
