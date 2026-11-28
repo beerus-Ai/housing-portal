@@ -424,4 +424,180 @@
     e.preventDefault(); X.err = ''; setErr('');
     try { if (await fn(e.target) !== false) render(); } catch (x) { X.err = x.message; setErr(x.message); }
   });
+
+  // =====================================================================
+  // Neighbourhood business directory (docs/business-api.md): residents list a business (theirs or a nearby trusted one);
+  // the committee approves, rejects with a reason or takes it down; residents browse by category and search and leave
+  // one editable 1-5 star rating. Phones are shown on live listings.
+  // Daycare (docs/daycare-api.md): the committee registers providers, decides on places and marks drop-off and pick-up;
+  // parents ask for a place with the child's first name and age only, and see today's status.
+  // Own state, actions and submit listener, so this block stays separate from the ones above.
+  (() => {
+    const A = window.API || {};
+    const BZ = A.business, DC = A.daycare;
+    if (!BZ || !DC) return;
+    const BZ_CATS = ['food', 'tutoring', 'tailoring', 'beauty', 'repairs', 'home services', 'health', 'other'];
+    const BZ_IC = { food: 'bowl-food', tutoring: 'book-open', tailoring: 'needle', beauty: 'sparkle', repairs: 'wrench', 'home services': 'house-line', health: 'first-aid', other: 'briefcase' };
+    const DC_DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri']];
+    // bzCat/bzQ: filter. bzForm: 'new' or the listing id being edited. bzRate/bzRej/bzDown/bzDel: the listing whose inline form or confirm is open.
+    // dcFor: provider whose "ask for a place" form is open. dcProv: 'new' or the provider id being edited. dcDel/dcStop: confirms.
+    const Y = { bzCat: '', bzQ: '', bzForm: null, bzRate: null, bzRej: null, bzDown: null, bzDel: null, dcFor: null, dcProv: null, dcDel: null, dcStop: null };
+    const busy = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('.bz-form, .dc-form')); };
+    W.noRedraw = (prev => () => (prev && prev()) || (['business', 'daycare'].includes(S.page) && (busy() || Y.bzForm != null || Y.bzRate != null || Y.bzRej != null || Y.bzDown != null || Y.dcFor != null || Y.dcProv != null)))(W.noRedraw);
+    const err = id => `<p class="err" id="${id}" role="alert"></p>`;
+    const phoneLink = p => p ? `<a class="cp-phone" href="tel:${esc(String(p).replace(/[^\d+]/g, ''))}">${ic('phone')}${esc(p)}</a>` : '';
+    const sec = (title, n, body) => `<section class="col" style="gap:var(--space-2)"><h2>${esc(title)}${n ? ` <span class="muted">${n}</span>` : ''}</h2>${body}</section>`;
+    const starRow = (avg, count) => count ? `<span class="bz-stars" aria-label="${esc(avg)} out of 5 from ${esc(count)} rating${count === 1 ? '' : 's'}">${[1, 2, 3, 4, 5].map(i => ic('star', i <= Math.round(avg) ? 'on' : '')).join('')}<b>${esc(avg)}</b><span class="muted sm">(${esc(count)})</span></span>` : '<span class="muted sm">No ratings yet</span>';
+    const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (x) { toast(x.message, 'error'); } render(); };
+
+    // ---------- business directory
+    const BZ_TAG = { pending: ['tag-accent-2', 'Waiting for the committee'], approved: ['tag-accent', 'Live'], rejected: ['tag-neutral', 'Not approved'], removed: ['tag-neutral', 'Taken down'] };
+    const bzTag = s => { const [c, l] = BZ_TAG[s] || ['tag-neutral', cap(s)]; return `<span class="tag ${c}">${esc(l)}</span>`; };
+    const bzForm = b => `<form id="bzsave" class="form-card col bz-form" data-id="${b ? b.id : ''}"><h3 style="margin:0">${ic('storefront')} ${b ? 'Edit listing' : 'List a business'}</h3>
+      <div class="two">${field('bzname', 'Business name', `<input class="input" id="bzname" name="name" required maxlength="80" value="${esc(b ? b.name : '')}">`)}${field('bzcat', 'Category', `<select class="input" id="bzcat" name="category" required><option value="">Choose…</option>${BZ_CATS.map(c => `<option value="${esc(c)}" ${b && b.category === c ? 'selected' : ''}>${esc(cap(c))}</option>`).join('')}</select>`)}</div>
+      ${field('bzdesc', 'What they offer', `<textarea class="input" id="bzdesc" name="description" required maxlength="500" rows="3">${esc(b ? b.description : '')}</textarea>`)}
+      <div class="three">${field('bzphone', 'Phone', `<input class="input" id="bzphone" name="phone" type="tel" required maxlength="20" value="${esc(b ? b.phone || '' : '')}">`)}${field('bzhours', 'Opening hours', `<input class="input" id="bzhours" name="hours" required maxlength="80" placeholder="Mon-Sat 10:00-19:00" value="${esc(b ? b.hours : '')}">`)}${field('bzweb', 'Website (optional)', `<input class="input" id="bzweb" name="website" type="url" maxlength="200" placeholder="https://" value="${esc(b && b.website ? b.website : '')}">`)}</div>
+      <label class="row" style="gap:6px"><input type="checkbox" name="run_by_resident" ${b && b.run_by_resident ? 'checked' : ''}> The owner lives in the society (run by a resident)</label>
+      ${err('bzerr')}<div class="row"><button class="btn btn-primary">${ic('paper-plane-tilt')}${b ? 'Save and send for review' : 'Send for review'}</button><button type="button" class="btn btn-secondary" data-act="bzclose">Cancel</button><span class="muted sm">The committee checks every listing before it goes live.</span></div></form>`;
+    const inlineReason = (formId, label, btn) => `<form id="${formId}" class="row bz-form bz-inline"><label class="sr" for="${formId}r">${esc(label)}</label><input class="input" id="${formId}r" name="reason" required maxlength="300" placeholder="${esc(label)}"><button class="btn btn-danger">${esc(btn)}</button><button type="button" class="btn btn-secondary" data-act="bzclose">Cancel</button></form>`;
+    const rateForm = b => `<form id="bzrate" class="col bz-form bz-inline"><fieldset class="bz-pick"><legend>Your rating</legend>${[1, 2, 3, 4, 5].map(i => `<label><input type="radio" name="stars" value="${i}" required ${b.my_review && b.my_review.stars === i ? 'checked' : ''}>${ic('star')}<span class="sr">${i} star${i === 1 ? '' : 's'}</span></label>`).join('')}</fieldset>
+      <div class="row"><label class="sr" for="bzrv">Short review</label><input class="input" id="bzrv" name="review" maxlength="300" placeholder="A short review (optional)" value="${esc(b.my_review && b.my_review.review ? b.my_review.review : '')}"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-act="bzclose">Cancel</button></div></form>`;
+    const bzCard = b => {
+      const site = b.website && /^https?:\/\//i.test(b.website) ? `<a href="${esc(b.website)}" target="_blank" rel="noopener noreferrer">${ic('globe')}Website</a>` : '';
+      const reviews = (b.reviews || []).filter(r => r.review).slice(0, 3).map(r => `<p class="bz-rev sm"><b>${esc(r.stars)}★</b> ${esc(r.review)} <span class="muted">· ${esc(r.name)}, Flat ${esc(r.flat)}</span></p>`).join('');
+      let acts = '';
+      if (isAdmin() && b.status === 'pending') acts = Y.bzRej === b.id ? inlineReason('bzrej', 'Reason for rejecting', 'Reject') : `<button class="btn btn-primary" data-act="bzapprove" data-id="${b.id}">${ic('check')}Approve</button><button class="btn btn-secondary" data-act="bzrejopen" data-id="${b.id}">Reject</button>`;
+      else if (isAdmin() && b.status === 'approved') acts = Y.bzDown === b.id ? inlineReason('bzdown', 'Reason for taking it down', 'Take down') : `<button class="btn btn-secondary" data-act="bzdownopen" data-id="${b.id}">${ic('x')}Take down</button>`;
+      else if (b.mine) acts = Y.bzDel === b.id ? `<button class="btn btn-danger" data-act="bzwithdraw" data-id="${b.id}">${ic('trash')}Remove listing?</button><button class="btn btn-secondary" data-act="bzclose">Keep</button>`
+        : `${b.status !== 'removed' ? `<button class="btn btn-secondary" data-act="bzedit" data-id="${b.id}">${ic('pencil-simple')}Edit</button>` : ''}<button class="btn btn-ghost" data-act="bzdelask" data-id="${b.id}">Remove</button>`;
+      else if (isRes() && b.status === 'approved') acts = Y.bzRate === b.id ? rateForm(b) : `<button class="btn btn-secondary" data-act="bzrateopen" data-id="${b.id}">${ic('star')}${b.my_review ? `You rated ${esc(b.my_review.stars)}★ · Edit` : 'Rate'}</button>`;
+      return `<article class="form-card col bz-card ${['approved', 'pending'].includes(b.status) ? '' : 'off'}"><div class="row bz-top"><span class="tile">${ic(BZ_IC[b.category] || 'briefcase')}</span>
+        <span class="col" style="gap:2px;min-width:0;flex:1"><b class="bz-name">${esc(b.name)}</b><span class="row" style="gap:6px;flex-wrap:wrap"><span class="tag tag-outline">${esc(cap(b.category))}</span>${b.run_by_resident ? `<span class="tag tag-accent">${ic('house')} Run by a resident</span>` : ''}${b.status !== 'approved' || b.mine ? bzTag(b.status) : ''}</span></span>
+        ${b.status === 'approved' ? starRow(b.rating.average, b.rating.count) : ''}</div>
+        <p style="margin:0">${esc(b.description)}</p>
+        <span class="row muted sm bz-meta"><span>${ic('clock')} ${esc(b.hours)}</span>${phoneLink(b.phone)}${site}<span>Listed by ${esc(b.listed_by.name)} · Flat ${esc(b.listed_by.flat)}</span></span>
+        ${b.reason ? `<p class="sm bz-reason">${ic('info')} ${esc(b.reason)}</p>` : ''}${reviews}
+        ${acts ? `<div class="row bz-acts">${acts}</div>` : ''}</article>`;
+    };
+    PAGES.business = async () => {
+      const rows = await BZ.list({ category: Y.bzCat, q: Y.bzQ });
+      const pending = rows.filter(b => b.status === 'pending' && isAdmin()), mine = rows.filter(b => b.mine);
+      const live = rows.filter(b => b.status === 'approved' && !b.mine);
+      const editing = Y.bzForm === 'new' ? bzForm(null) : Y.bzForm != null ? bzForm(rows.find(b => b.id === Y.bzForm)) : '';
+      const find = `<form id="bzfind" class="row bz-find" role="search"><label class="sr" for="bzfcat">Category</label><select class="input" id="bzfcat" name="category" data-bzcat><option value="">All categories</option>${BZ_CATS.map(c => `<option value="${esc(c)}" ${Y.bzCat === c ? 'selected' : ''}>${esc(cap(c))}</option>`).join('')}</select>
+        <label class="sr" for="bzfq">Search</label><input class="input" id="bzfq" name="q" type="search" maxlength="60" placeholder="Search tiffin, tuition, tailor…" value="${esc(Y.bzQ)}"><button class="btn btn-secondary">${ic('magnifying-glass')}Search</button>${Y.bzCat || Y.bzQ ? '<button type="button" class="btn btn-ghost" data-act="bzclear">Clear</button>' : ''}</form>`;
+      const addBtn = isRes() && Y.bzForm == null ? `<button class="btn btn-primary" data-act="bzadd">${ic('plus')}List a business</button>` : '';
+      page(`<div class="rl">${head('Local businesses', isAdmin() ? 'Check new listings before they go live. You can take down a listing that breaks the rules.' : 'Small businesses run by neighbours or trusted nearby. Every listing is checked by the committee.', addBtn)}
+        ${editing}${find}
+        ${isAdmin() ? sec('Waiting for review', pending.length, pending.map(bzCard).join('') || '<p class="muted">Nothing waiting.</p>') : ''}
+        ${isRes() && mine.length ? sec('Your listings', mine.length, mine.map(bzCard).join('')) : ''}
+        ${sec(isAdmin() ? 'Live listings' : 'Directory', live.length, `<div class="bz-grid">${live.map(bzCard).join('')}</div>` + (live.length ? '' : `<p class="muted">${Y.bzCat || Y.bzQ ? 'No business matches. Try another category or word.' : 'No businesses listed yet.'}</p>`))}</div>`);
+    };
+    const closeAll = () => Object.assign(Y, { bzForm: null, bzRate: null, bzRej: null, bzDown: null, bzDel: null });
+    ACT.bzadd = () => { closeAll(); Y.bzForm = 'new'; render(); };
+    ACT.bzedit = el => { closeAll(); Y.bzForm = Number(el.dataset.id); render(); };
+    ACT.bzclose = () => { closeAll(); render(); };
+    ACT.bzclear = () => { Y.bzCat = ''; Y.bzQ = ''; render(); };
+    ACT.bzrateopen = el => { closeAll(); Y.bzRate = Number(el.dataset.id); render(); };
+    ACT.bzrejopen = el => { closeAll(); Y.bzRej = Number(el.dataset.id); render(); };
+    ACT.bzdownopen = el => { closeAll(); Y.bzDown = Number(el.dataset.id); render(); };
+    ACT.bzdelask = el => { closeAll(); Y.bzDel = Number(el.dataset.id); render(); };
+    ACT.bzapprove = el => run(() => BZ.decide(el.dataset.id, 'approve'), 'Approved. The listing is live and the owner has been told.');
+    ACT.bzwithdraw = el => { const id = el.dataset.id; closeAll(); run(() => BZ.withdraw(id), 'Listing removed'); };
+
+    // ---------- daycare
+    const DC_TAG = { pending: ['tag-accent-2', 'Waiting for the committee'], approved: ['tag-accent', 'Place confirmed'], declined: ['tag-neutral', 'Declined'], cancelled: ['tag-neutral', 'Cancelled'] };
+    const dcTag = s => { const [c, l] = DC_TAG[s] || ['tag-neutral', cap(s)]; return `<span class="tag ${c}">${esc(l)}</span>`; };
+    const dcDays = days => (days || []).map(d => (DC_DAYS.find(x => x[0] === d) || [d, d])[1]).join(', ');
+    const dcToday = t => !t ? '' : t.out_at ? `<span class="dc-now done">${ic('check-circle')} Picked up at ${esc(t.out_at)} (dropped off ${esc(t.in_at)})</span>`
+      : t.in_at ? `<span class="dc-now in">${ic('baby')} At daycare since ${esc(t.in_at)}</span>` : t.scheduled ? `<span class="dc-now">${ic('clock')} Not dropped off yet today</span>` : '<span class="muted sm">Not a daycare day</span>';
+    const provForm = p => `<form id="dcprov" class="form-card col dc-form" data-id="${p ? p.id : ''}"><h3 style="margin:0">${ic('baby-carriage')} ${p ? 'Edit daycare' : 'Register a daycare'}</h3>
+      <div class="two">${field('dcpn', 'Name', `<input class="input" id="dcpn" name="name" required maxlength="80" value="${esc(p ? p.name : '')}">`)}${field('dcploc', 'Location', `<input class="input" id="dcploc" name="location" required maxlength="120" placeholder="Clubhouse ground floor" value="${esc(p ? p.location : '')}">`)}</div>
+      <div class="three">${field('dcpmin', 'Youngest (years)', `<input class="input" id="dcpmin" name="age_min" type="number" min="0" max="14" required value="${esc(p ? p.age_min : 1)}">`)}${field('dcpmax', 'Oldest (years)', `<input class="input" id="dcpmax" name="age_max" type="number" min="0" max="14" required value="${esc(p ? p.age_max : 5)}">`)}${field('dcpcap', 'Places', `<input class="input" id="dcpcap" name="capacity" type="number" min="1" max="200" required value="${esc(p ? p.capacity : 10)}">`)}</div>
+      <div class="three">${field('dcph', 'Hours', `<input class="input" id="dcph" name="hours" required maxlength="80" placeholder="Mon-Fri 08:30-17:30" value="${esc(p ? p.hours : '')}">`)}${field('dcpfee', 'Fee per month (₹)', `<input class="input" id="dcpfee" name="fee_month" type="number" min="0" step="50" required value="${esc(p ? p.fee_month : '')}">`)}${field('dcpph', 'Phone', `<input class="input" id="dcpph" name="phone" type="tel" required maxlength="20" value="${esc(p ? p.phone : '')}">`)}</div>
+      ${field('dcpnotes', 'Notes', `<input class="input" id="dcpnotes" name="notes" maxlength="500" placeholder="e.g. Meals included, bring a water bottle" value="${esc(p && p.notes ? p.notes : '')}">`)}
+      ${err('dcperr')}<div class="row"><button class="btn btn-primary">${ic('floppy-disk')}${p ? 'Save' : 'Register'}</button><button type="button" class="btn btn-secondary" data-act="dcclose">Cancel</button><span class="muted sm">Fees are recorded only; parents pay the daycare directly.</span></div></form>`;
+    const enrolForm = p => {
+      const ages = []; for (let a = p.age_min; a <= p.age_max; a++) ages.push(a);
+      const today = istToday();
+      return `<form id="dcenrol" class="col dc-form bz-inline" data-id="${p.id}"><div class="three">${field('dcchild', "Child's first name", '<input class="input" id="dcchild" name="child_name" required maxlength="30" autocomplete="off">', 'First name only. No surname or date of birth.')}
+        ${field('dcage', 'Age (years)', `<select class="input" id="dcage" name="child_age">${ages.map(a => `<option>${a}</option>`).join('')}</select>`)}${field('dcstart', 'Start date', `<input class="input" id="dcstart" name="start_date" type="date" required min="${today}" value="${today}">`)}</div>
+        <fieldset class="dc-days"><legend>Days</legend>${DC_DAYS.map(([v, l]) => `<label><input type="checkbox" name="days" value="${v}" checked>${l}</label>`).join('')}</fieldset>
+        ${err('dceerr')}<div class="row"><button class="btn btn-primary">${ic('paper-plane-tilt')}Ask for a place</button><button type="button" class="btn btn-secondary" data-act="dcclose">Cancel</button></div></form>`;
+    };
+    const provCard = p => `<article class="form-card col dc-card ${p.active ? '' : 'off'}"><div class="row bz-top"><span class="tile">${ic('baby-carriage')}</span>
+      <span class="col" style="gap:2px;min-width:0;flex:1"><b class="bz-name">${esc(p.name)}</b><span class="muted sm">Ages ${esc(p.age_min)} to ${esc(p.age_max)} · ${esc(p.hours)} · ${esc(rupees(p.fee_month))} a month</span></span>
+      <span class="tag ${p.active && p.places_left ? 'tag-accent' : 'tag-neutral'}">${p.active ? (p.places_left ? `${esc(p.places_left)} of ${esc(p.capacity)} places free` : 'Full') : 'Closed'}</span></div>
+      <span class="row muted sm bz-meta"><span>${ic('map-pin')} ${esc(p.location)}</span>${phoneLink(p.phone)}</span>${p.notes ? `<p class="sm" style="margin:0">${esc(p.notes)}</p>` : ''}
+      ${isRes() ? (Y.dcFor === p.id ? enrolForm(p) : `<div class="row bz-acts"><button class="btn btn-primary" data-act="dcask" data-id="${p.id}">${ic('hand-waving')}Ask for a place</button></div>`)
+        : p.active ? `<div class="row bz-acts">${Y.dcDel === p.id ? `<button class="btn btn-danger" data-act="dcclosep" data-id="${p.id}">${ic('x')}Close it and cancel its places?</button><button class="btn btn-secondary" data-act="dcclose">Keep</button>` : `<button class="btn btn-secondary" data-act="dcedit" data-id="${p.id}">${ic('pencil-simple')}Edit</button><button class="btn btn-ghost" data-act="dcdelask" data-id="${p.id}">Close</button>`}</div>` : ''}</article>`;
+    const enrolRow = e => `<div class="list-row dc-row"><span class="tile">${ic('baby')}</span>
+      <span class="col" style="gap:2px;min-width:0"><b>${esc(e.child_name)}, ${esc(e.child_age)}</b><span class="muted sm">${esc(e.provider.name)} · from ${esc(day(e.start_date))} · ${esc(dcDays(e.days))}${isAdmin() ? ` · Flat ${esc(e.flat)}` : ''}</span>${e.reason ? `<span class="sm">${esc(e.reason)}</span>` : ''}${!isAdmin() && e.status === 'approved' ? dcToday(e.today) : ''}</span>
+      <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${isAdmin() && e.status === 'pending' ? `<button class="btn btn-primary" data-act="dcapprove" data-id="${e.id}">${ic('check')}Approve</button><button class="btn btn-secondary" data-act="dcdecline" data-id="${e.id}">Decline</button>`
+        : dcTag(e.status)}${!isAdmin() && ['pending', 'approved'].includes(e.status) ? (Y.dcStop === e.id ? `<button class="btn btn-danger" data-act="dccancel" data-id="${e.id}">Cancel ${e.status === 'approved' ? 'place' : 'request'}?</button><button class="btn btn-secondary" data-act="dcclose">Keep</button>` : `<button class="btn btn-ghost" data-act="dcstopask" data-id="${e.id}">Cancel</button>`) : ''}</span></div>`;
+    const regRow = e => `<div class="list-row dc-row"><span class="tile">${ic('baby')}</span><span class="col" style="gap:2px;min-width:0"><b>${esc(e.child_name)}, ${esc(e.child_age)}</b><span class="muted sm">${esc(e.provider.name)} · Flat ${esc(e.flat)}${e.today.scheduled ? '' : ' · extra day'}</span></span>
+      <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${e.today.in_at ? `<span class="tag tag-outline">In ${esc(e.today.in_at)}</span>` : `<button class="btn btn-primary" data-act="dcin" data-id="${e.id}">${ic('sign-in')}Dropped off</button>`}
+        ${e.today.out_at ? `<span class="tag tag-outline">Out ${esc(e.today.out_at)}</span>` : e.today.in_at ? `<button class="btn btn-primary" data-act="dcout" data-id="${e.id}">${ic('sign-out')}Picked up</button>` : ''}</span></div>`;
+    PAGES.daycare = async () => {
+      const [provs, enr, reg] = await Promise.all([DC.providers(), DC.enrolments(), isAdmin() ? DC.today() : null]);
+      if (isAdmin()) {
+        const pend = enr.filter(e => e.status === 'pending');
+        const form = Y.dcProv === 'new' ? provForm(null) : Y.dcProv != null ? provForm(provs.find(p => p.id === Y.dcProv)) : '';
+        return page(`<div class="rl">${head('Daycare', 'Daycare providers in or near the society. Approve places, and mark children in and out each day.', Y.dcProv == null ? `<button class="btn btn-primary" data-act="dcadd">${ic('plus')}Register a daycare</button>` : '')}${form}
+          ${sec(`Today · ${day(reg.date)}`, reg.children.length, `<div class="col" style="gap:4px">${reg.children.map(regRow).join('') || '<p class="muted">No children are booked for today.</p>'}</div>`)}
+          ${sec('Waiting for a decision', pend.length, `<div class="col" style="gap:4px">${pend.map(enrolRow).join('') || '<p class="muted">Nothing waiting.</p>'}</div>`)}
+          ${sec('Providers', provs.filter(p => p.active).length, provs.map(provCard).join('') || '<p class="muted">No daycare registered yet.</p>')}</div>`);
+      }
+      const kids = enr.filter(e => e.status !== 'cancelled');
+      page(`<div class="rl">${head('Daycare', 'Daycare near home. Ask for a place with your child\'s first name and age; the committee confirms it.')}
+        ${kids.length ? sec('Your children', kids.length, `<div class="col" style="gap:4px">${kids.map(enrolRow).join('')}</div>`) : ''}
+        ${sec('Daycare providers', provs.length, provs.map(provCard).join('') || '<p class="muted">No daycare is listed yet.</p>')}</div>`);
+    };
+    const dcCloseAll = () => Object.assign(Y, { dcFor: null, dcProv: null, dcDel: null, dcStop: null });
+    ACT.dcadd = () => { dcCloseAll(); Y.dcProv = 'new'; render(); };
+    ACT.dcedit = el => { dcCloseAll(); Y.dcProv = Number(el.dataset.id); render(); };
+    ACT.dcclose = () => { dcCloseAll(); render(); };
+    ACT.dcask = el => { dcCloseAll(); Y.dcFor = Number(el.dataset.id); render(); };
+    ACT.dcdelask = el => { dcCloseAll(); Y.dcDel = Number(el.dataset.id); render(); };
+    ACT.dcstopask = el => { dcCloseAll(); Y.dcStop = Number(el.dataset.id); render(); };
+    ACT.dcclosep = el => { const id = el.dataset.id; dcCloseAll(); run(async () => { const r = await DC.closeProvider(id); toast(r.cancelled ? `Daycare closed. ${r.cancelled} place${r.cancelled === 1 ? '' : 's'} cancelled; parents told.` : 'Daycare closed'); }); };
+    ACT.dccancel = el => { const id = el.dataset.id; dcCloseAll(); run(() => DC.cancel(id), 'Cancelled. The committee has been told.'); };
+    ACT.dcapprove = el => run(() => DC.decide(el.dataset.id, 'approve'), 'Place confirmed. The parent has been told.');
+    ACT.dcdecline = el => run(() => DC.decide(el.dataset.id, 'decline'), 'Declined. The parent has been told.');
+    ACT.dcin = el => run(() => DC.checkin(el.dataset.id), 'Marked dropped off');
+    ACT.dcout = el => run(() => DC.checkout(el.dataset.id), 'Marked picked up. The parent has been told.');
+
+    // ---------- forms of this block
+    const val = (f, n) => (f.elements[n] ? f.elements[n].value.trim() : '');
+    const own = {
+      bzfind: f => { Y.bzCat = val(f, 'category'); Y.bzQ = val(f, 'q'); },
+      bzsave: async f => {
+        const body = { name: val(f, 'name'), category: val(f, 'category'), description: val(f, 'description'), phone: val(f, 'phone'), hours: val(f, 'hours'), website: val(f, 'website'), run_by_resident: f.elements.run_by_resident.checked };
+        if (f.dataset.id) await BZ.update(f.dataset.id, body); else await BZ.submit(body);
+        closeAll(); toast('Sent to the committee. You will be told when it is live.');
+      },
+      bzrate: async f => { const s = f.querySelector('input[name="stars"]:checked'); await BZ.review(Y.bzRate, Number(s ? s.value : 0), val(f, 'review')); closeAll(); toast('Thanks for rating'); },
+      bzrej: async f => { await BZ.decide(Y.bzRej, 'reject', val(f, 'reason')); closeAll(); toast('Rejected. The owner has been told why.'); },
+      bzdown: async f => { await BZ.remove(Y.bzDown, val(f, 'reason')); closeAll(); toast('Taken down. The owner has been told why.'); },
+      dcprov: async f => {
+        const body = { name: val(f, 'name'), location: val(f, 'location'), age_min: Number(val(f, 'age_min')), age_max: Number(val(f, 'age_max')), capacity: Number(val(f, 'capacity')), hours: val(f, 'hours'), fee_month: Number(val(f, 'fee_month')), phone: val(f, 'phone'), notes: val(f, 'notes') };
+        if (f.dataset.id) await DC.updateProvider(f.dataset.id, body); else await DC.addProvider(body);
+        dcCloseAll(); toast(f.dataset.id ? 'Saved' : 'Daycare registered');
+      },
+      dcenrol: async f => {
+        const days = [...f.querySelectorAll('input[name="days"]:checked')].map(x => x.value);
+        await DC.enrol({ provider_id: Number(f.dataset.id), child_name: val(f, 'child_name'), child_age: Number(val(f, 'child_age')), start_date: val(f, 'start_date'), days });
+        dcCloseAll(); toast('Asked. The committee will confirm the place.');
+      },
+    };
+    const ERR_OF = { bzsave: 'bzerr', dcprov: 'dcperr', dcenrol: 'dceerr' };
+    document.addEventListener('submit', async e => {
+      const fn = own[e.target.id]; if (!fn) return;
+      e.preventDefault();
+      const out = ERR_OF[e.target.id] && document.getElementById(ERR_OF[e.target.id]);
+      if (out) out.textContent = '';
+      try { await fn(e.target); render(); } catch (x) { if (out) out.textContent = x.message; else toast(x.message, 'error'); }
+    });
+    document.addEventListener('change', e => { if (e.target.matches('[data-bzcat]')) { Y.bzCat = e.target.value; render(); } });
+  })();
 })();

@@ -176,6 +176,25 @@ function openDb(file) {
     id INTEGER PRIMARY KEY, ride_id INTEGER NOT NULL REFERENCES carpool_rides(id), rider_id INTEGER NOT NULL REFERENCES users(id),
     seats INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT (datetime('now')), decided_at TEXT,
     UNIQUE(ride_id, rider_id));
+  CREATE TABLE IF NOT EXISTS business_listings(
+    id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id), name TEXT NOT NULL, category TEXT NOT NULL, description TEXT NOT NULL,
+    phone TEXT NOT NULL, hours TEXT NOT NULL, website TEXT, run_by_resident INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending',
+    reason TEXT, decided_by INTEGER REFERENCES users(id), decided_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS business_reviews(
+    listing_id INTEGER NOT NULL REFERENCES business_listings(id), user_id INTEGER NOT NULL REFERENCES users(id), stars INTEGER NOT NULL, review TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(listing_id, user_id));
+  CREATE TABLE IF NOT EXISTS daycare_providers(
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, age_min INTEGER NOT NULL, age_max INTEGER NOT NULL, capacity INTEGER NOT NULL, hours TEXT NOT NULL,
+    fee_month REAL NOT NULL, location TEXT NOT NULL, phone TEXT NOT NULL, notes TEXT, active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS daycare_enrolments(
+    id INTEGER PRIMARY KEY, provider_id INTEGER NOT NULL REFERENCES daycare_providers(id), parent_id INTEGER NOT NULL REFERENCES users(id), flat TEXT NOT NULL,
+    child_name TEXT NOT NULL, child_age INTEGER NOT NULL, start_date TEXT NOT NULL, days TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+    reason TEXT, decided_by INTEGER REFERENCES users(id), decided_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS daycare_attendance(
+    id INTEGER PRIMARY KEY, enrolment_id INTEGER NOT NULL REFERENCES daycare_enrolments(id), date TEXT NOT NULL, in_at TEXT NOT NULL, out_at TEXT,
+    in_by INTEGER REFERENCES users(id), out_by INTEGER REFERENCES users(id), UNIQUE(enrolment_id, date));
   CREATE TABLE IF NOT EXISTS event_rsvps(
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY(event_id, user_id));`);

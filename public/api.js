@@ -107,6 +107,31 @@ window.API = (() => {
       decide: (qid, decision) => call('POST', `/api/carpool/requests/${id(qid)}/decide`, { decision }), // driver: 'accept'|'decline'; 409 not enough seats
       withdraw: qid => call('POST', `/api/carpool/requests/${id(qid)}/cancel`), // rider: pending or accepted seat
     },
+    // Neighbourhood business directory (docs/business-api.md): residents list, the committee moderates, residents rate 1-5.
+    business: {
+      list: (p = {}) => call('GET', '/api/business' + qs(p)), // resident or committee, { category?, q?, status? ('all', committee) } -> [{ id, name, category, description, phone|null, hours, website, run_by_resident, status: pending|approved|rejected|removed|withdrawn, reason, mine, listed_by: { name, flat }, rating: { count, average|null }, my_review: { stars, review }|null, reviews: [{ name, flat, stars, review, updated_at }] }]
+      categories: () => call('GET', '/api/business/categories'), // ['food','tutoring','tailoring','beauty','repairs','home services','health','other']
+      submit: body => call('POST', '/api/business', body), // resident: { name, category, description, phone, hours, website?, run_by_resident? } -> 201 { id, status: 'pending' }
+      update: (bid, body) => call('PUT', `/api/business/${id(bid)}`, body), // owner: same body; goes back to 'pending'
+      withdraw: bid => call('DELETE', `/api/business/${id(bid)}`), // owner
+      decide: (bid, decision, reason) => call('POST', `/api/business/${id(bid)}/decide`, { decision, reason }), // committee: 'approve'|'reject' (reason required)
+      remove: (bid, reason) => call('POST', `/api/business/${id(bid)}/remove`, { reason }), // committee: take a live listing down
+      review: (bid, stars, review) => call('PUT', `/api/business/${id(bid)}/review`, { stars, review }), // resident, not the owner: one per listing, editable -> { ok, rating }
+    },
+    // Daycare (docs/daycare-api.md): committee registers providers and decides; parents enrol with first name and age only.
+    daycare: {
+      providers: () => call('GET', '/api/daycare/providers'), // resident or committee -> [{ id, name, age_min, age_max, capacity, places_left, hours, fee_month, location, phone, notes, active }]
+      addProvider: body => call('POST', '/api/daycare/providers', body), // committee: { name, age_min, age_max, capacity, hours, fee_month, location, phone, notes? } -> 201 { id }
+      updateProvider: (pid, body) => call('PUT', `/api/daycare/providers/${id(pid)}`, body), // committee; 409 capacity below enrolled
+      closeProvider: pid => call('DELETE', `/api/daycare/providers/${id(pid)}`), // committee: open enrolments cancelled, parents told -> { ok, cancelled }
+      enrolments: (p = {}) => call('GET', '/api/daycare/enrolments' + qs(p)), // resident (own flat) or committee, { status? } -> [{ id, provider: { id, name, hours, fee_month, phone }, child_name, child_age, start_date, days, status, reason, flat, parent, today: { date, scheduled, in_at, out_at } }]
+      enrol: body => call('POST', '/api/daycare/enrolments', body), // resident: { provider_id, child_name (first name), child_age, start_date, days: ['mon'..'fri'] } -> 201 { id, status: 'pending' }
+      decide: (eid, decision, reason) => call('POST', `/api/daycare/enrolments/${id(eid)}/decide`, { decision, reason }), // committee: 'approve'|'decline'; 409 full
+      cancel: eid => call('POST', `/api/daycare/enrolments/${id(eid)}/cancel`), // a resident of the flat
+      today: () => call('GET', '/api/daycare/today'), // committee -> { date, weekday, children: [enrolment] }
+      checkin: eid => call('POST', `/api/daycare/enrolments/${id(eid)}/checkin`), // committee: drop-off now
+      checkout: eid => call('POST', `/api/daycare/enrolments/${id(eid)}/checkout`), // committee: pick-up now; the parent is told
+    },
     // Community card wallet (docs/card-wallet-api.md): prepaid ledger per flat, frozen cards, one lookup for every counter. Amounts are rupees.
     wallet: {
       mine: () => call('GET', '/api/wallet'), // resident with a flat: { flat, balance, tx: [{ id, amount (+in, -out), kind: 'topup'|'shop'|'laundry'|'refund'|'adjust', method: 'cash'|'upi'|null, note, created_at }] } (last 50, newest first)
