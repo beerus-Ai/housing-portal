@@ -301,7 +301,7 @@
       const rows = [...us.filter(u => u.status === 'pending'), ...us.filter(u => u.status !== 'pending').slice(0, 6)];
       screen(`<h1 class="am-h1">Approvals</h1><span class="muted sm">Check against the flat register before approving.</span>${rows.map(u => `<div class="m-card"><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="avatar light" style="width:44px;height:44px">${esc(initials(u.name))}</span>
         <span class="col" style="gap:0"><span class="list-title" style="font-size:16px">${esc(u.name)}</span><span class="muted xs">${esc(u.flat)} · ${esc(TYPE[u.resident_type] || '')} · ${esc(day(u.created_at))}</span></span></div>
-        ${u.status === 'pending' ? `<div class="two"><button class="btn btn-primary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></div>`
+        ${u.status === 'pending' ? `<button class="btn btn-primary" data-act="issuecard" data-id="${u.id}" data-name="${esc(u.name)}" data-approve="1">${ic('contactless-payment')}Approve + card</button><div class="two"><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="approve">Approve</button><button class="btn btn-secondary" data-act="decide" data-id="${u.id}" data-d="reject">Reject</button></div>`
           : `<span class="tag ${u.status === 'approved' ? 'tag-accent' : 'tag-accent-2'}" style="align-self:flex-start">${u.status === 'approved' ? 'Approved' : 'Rejected'}</span>`}</div>`).join('') || '<p class="muted">No residents yet.</p>'}`);
     },
 
@@ -436,6 +436,12 @@
     async parcels() {
       screen(`${isAdmin() ? head('Parcels by card', 'menu') : '<h1 class="am-h1">Parcels</h1>'}<span class="muted sm">Tap the resident's card to see what is waiting for their flat.</span><div id="pcbody" class="col" style="gap:16px"></div>`);
       drawParcels();
+    },
+    // Issue a community card (committee): approve if asked, then tap the card (NFC, the Android app, or typing).
+    async issuecard() {
+      const I = S.iss || {};
+      screen(`${head('Community card', 'approvals')}<div class="m-card col" style="gap:4px"><span class="muted xs">${I.approve ? 'Approve and hand a card to' : 'Hand a card to'}</span><b style="font-size:18px">${esc(I.name || '')}</b></div>${cardBox('issue')}${cardErrBox(I.err)}`);
+      focusCard();
     },
     async mycard() {
       const res = S.me.role === 'resident' && !!S.me.flat;
@@ -784,6 +790,17 @@
   // a card was read or typed: p is 'counter' (shop, laundry) or 'parcel' (guard, committee)
   async function onCard(p, raw) {
     const serial = normSerial(raw), bad = serial.length < 4 || serial.length > 40 ? 'Tap the card, or type its number (4 to 40 hex characters).' : '';
+    if (p === 'issue') {
+      const I = S.iss || {}; I.err = bad;
+      if (!bad) {
+        try {
+          if (I.approve) { await API.admin.decide(I.id, 'approve'); I.approve = false; }
+          await api('POST', `/api/admin/users/${I.id}/card`, { serial });
+          toast(`Card ${serial} issued to ${I.name}`); S.iss = null; S.tab = 'approvals'; return render();
+        } catch (x) { I.err = x.message; }
+      }
+      return render();
+    }
     if (p === 'counter') {
       const C = S.ct; C.err = bad; C.done = null; C.holder = null;
       if (!bad) {
@@ -983,6 +1000,7 @@
     rate: async el => { await API.requests.rate(S.selId, Number(el.dataset.n)); toast('Thank you. Request closed.'); render(); },
     assign: async el => { const v = $('#vs').value; if (!v) return toast('Choose a vendor', 'error'); await API.requests.assign(el.dataset.id, Number(v)); toast('Assigned'); render(); },
     move: async el => { await API.requests.setStatus(el.dataset.id, el.dataset.s); toast(el.dataset.s === 'closed' ? 'Marked resolved' : 'Work started'); render(); },
+    issuecard: el => { S.iss = { id: Number(el.dataset.id), name: el.dataset.name, approve: el.dataset.approve === '1', err: '' }; S.tab = 'issuecard'; render(); },
     decide: async el => { await API.admin.decide(el.dataset.id, el.dataset.d); toast(el.dataset.d === 'approve' ? 'Approved' : 'Rejected'); render(); },
     mjaccept: async el => { await RAPI.staff.accept(el.dataset.id); toast('Job taken up'); render(); },
     mjform: el => { S.mj.form = { id: Number(el.dataset.id), kind: el.dataset.k }; render(); },

@@ -91,7 +91,7 @@
       { label: 'Remove', icon: 'trash', act: 'stdel', data: { id: u.id }, danger: true },
     ]);
     const panel = open === 'card' ? `<div class="st-panel-in col" style="align-items:stretch">${ST.cardData ? HP.cardPanel(ST.cardData, { name: u.name }) : '<p class="muted">Loading…</p>'}
-        <form class="st-card-issue row" data-id="${u.id}" style="gap:8px;flex-wrap:nowrap"><label class="sr" for="sc${u.id}">Card number</label><input class="input" id="sc${u.id}" name="serial" placeholder="Tap or type a card number to issue or replace" autocomplete="off"><button class="btn btn-primary">${ic('identification-card')}Issue card</button><button type="button" class="btn btn-secondary" data-act="stclose">Close</button></form></div>`
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-act="stcardscan" data-id="${u.id}" data-name="${esc(u.name)}">${ic('contactless-payment')}${ST.cardData && ST.cardData.cards && ST.cardData.cards.length ? 'Replace card (tap the new one)' : 'Issue card (tap it)'}</button><button type="button" class="btn btn-secondary" data-act="stclose">Close</button></div></div>`
       : open === 'edit' ? `<div class="st-user-c st-panel-in">
         <div class="field st-sel"><label for="ut${u.id}">Type</label><select class="input" id="ut${u.id}" data-utype="${u.id}">${['owner', 'tenant', 'family'].map(t => `<option value="${t}" ${u.resident_type === t ? 'selected' : ''}>${TYPE[t]}</option>`).join('')}</select></div>
         <form class="st-uflat" data-id="${u.id}"><div class="field"><label for="uf${u.id}">Flat</label><div class="row" style="flex-wrap:nowrap;gap:6px"><input class="input" id="uf${u.id}" name="flat" required maxlength="20" value="${esc(u.flat || '')}"><button class="btn btn-secondary">Save</button></div></div></form>
@@ -161,12 +161,13 @@
   ACT.stgdkeep = () => { ST.gdel = null; render(); };
   ACT.stgdok = run(async el => { ST.gdel = null; await API.gate.removeGuard(el.dataset.id); toast('Guard removed'); render(); });
 
-  document.addEventListener('submit', async e => {
-    const f = e.target.closest && e.target.closest('.st-card-issue'); if (!f) return;
-    e.preventDefault(); const id = f.dataset.id;
-    try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial: f.serial.value }); toast('Community card issued'); ST.cardData = await HP.api('GET', `/api/admin/users/${id}/card`); drawUsers(); }
+  // Issue or replace a card: the shared full-screen card scanner (web-nfc.js) reads it (NFC, Windows reader, USB reader or typing).
+  ACT.stcardscan = async el => {
+    const id = Number(el.dataset.id), serial = await window.HPWeb.scanCard({ title: 'Tap the card to issue', name: el.dataset.name, userId: id });
+    if (!serial) return;
+    try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial }); toast(`Community card ${serial} issued to ${el.dataset.name}`); ST.cardData = await HP.api('GET', `/api/admin/users/${id}/card`); drawUsers(); }
     catch (x) { toast(x.message, 'error'); }
-  });
+  };
   document.addEventListener('input', e => {
     if (e.target.id === 'stq') { ST.q = e.target.value; drawUsers(); }
   });

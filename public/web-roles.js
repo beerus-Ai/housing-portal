@@ -217,7 +217,7 @@
     const stag = { approved: ['tag-accent', 'Active'], suspended: ['tag-neutral', 'Suspended'], removed: ['tag-neutral', 'Removed'] }[a.status] || ['tag-neutral', a.status];
     const menu = me ? '<span class="muted sm">This is you</span>' : a.status === 'removed' ? '' : HP.kebab(`More actions for ${a.name}`, [
       committee ? { label: 'Change position', icon: 'arrows-down-up', act: 'rlposopen', data: { id: a.id } } : null,
-      { label: 'Issue card', icon: 'identification-card', act: 'rlcard', data: { id: a.id } },
+      { label: 'Issue card', icon: 'identification-card', act: 'rlcard', data: { id: a.id, name: a.name } },
       { label: a.status === 'suspended' ? 'Reactivate' : 'Suspend', icon: a.status === 'suspended' ? 'play-circle' : 'pause-circle', act: 'rlsus', data: { id: a.id, to: a.status === 'suspended' ? 'approved' : 'suspended' } },
       { label: 'Remove', icon: 'trash', act: 'rldel', data: { id: a.id }, danger: true },
     ]);
@@ -236,7 +236,7 @@
       <form id="rlacc" class="form-card col" style="max-width:720px"><h3>Add an account</h3>
         <div class="two">${field('rlan', 'Full name', '<input class="input" id="rlan" name="name" required maxlength="100">')}${field('rlak', 'Role', `<select class="input" id="rlak" name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select>`)}</div>
         <div class="two">${field('rlae', 'Email', '<input class="input" id="rlae" name="email" type="email" required autocomplete="off">')}${field('rlap', 'Temporary password (8+ characters)', '<input class="input" id="rlap" name="password" type="password" required minlength="8" autocomplete="new-password">')}</div>
-        ${field('rlac', 'Community card number', '<input class="input" id="rlac" name="card" autocomplete="off" placeholder="Tap or type the card you hand them" style="max-width:360px">', 'Staff tap it at the gate to punch in and out.')}
+        ${field('rlac', 'Community card number', `<span class="row" style="gap:8px;flex-wrap:nowrap"><input class="input" id="rlac" name="card" readonly placeholder="No card yet" style="max-width:240px"><button type="button" class="btn btn-secondary" data-act="rlacscan">${ic('contactless-payment')}Tap card</button><button type="button" class="btn btn-ghost" data-act="rlacclear" aria-label="Remove the card">${ic('x')}</button></span>`, 'Optional. Staff tap it at the gate to punch in and out.')}
         <div class="row"><button class="btn btn-primary">${ic('user-plus')}Add account</button><span class="muted sm">Ask them to change the password after signing in.</span></div></form></div>`);
   };
   const accRun = fn => async el => { R.err = ''; try { await fn(el); } catch (x) { R.err = x.message; toast(x.message, 'error'); } render(); };
@@ -244,7 +244,21 @@
   ACT.rldel = el => { R.accDel = Number(el.dataset.id); R.accPos = null; render(); };
   ACT.rlposopen = el => { R.accPos = Number(el.dataset.id); R.accDel = null; render(); };
   ACT.rlposclose = () => { R.accPos = R.accCard = null; render(); };
-  ACT.rlcard = el => { R.accCard = Number(el.dataset.id); R.accPos = R.accDel = null; render().then(() => { const i = document.getElementById('rlci' + el.dataset.id); if (i) i.focus(); }); };
+  // Issue a card: the shared full-screen card scanner (web-nfc.js): NFC, the Windows card reader, a USB reader or typing.
+  ACT.rlcard = async el => {
+    R.accPos = R.accDel = R.accCard = null;
+    const id = Number(el.dataset.id), serial = await W.scanCard({ title: 'Tap the card to issue', name: el.dataset.name, userId: id });
+    if (!serial) return;
+    try { await HP.api('POST', `/api/admin/users/${id}/card`, { serial }); toast(`Community card ${serial} issued${el.dataset.name ? ' to ' + el.dataset.name : ''}`); } catch (x) { toast(x.message, 'error'); }
+    render();
+  };
+  // New account: tap the card into the read-only field (the scanner fills it).
+  ACT.rlacscan = async () => {
+    const nm = (document.getElementById('rlan') || {}).value || '';
+    const serial = await W.scanCard({ title: 'Tap the card you hand them', name: nm.trim() });
+    const i = document.getElementById('rlac'); if (serial && i) { i.value = serial; }
+  };
+  ACT.rlacclear = () => { const i = document.getElementById('rlac'); if (i) i.value = ''; };
   document.addEventListener('submit', async e => {
     const f = e.target.closest && e.target.closest('.rl-card-issue'); if (!f) return;
     e.preventDefault();
