@@ -48,7 +48,7 @@
     const today = istToday();
     if (!X.date || X.date < today) X.date = today;
     const [sl, mine] = await Promise.all([X.amenity ? M.slots(X.amenity, X.date).catch(() => null) : null, M.bookings()]);
-    const picker = open.length ? `<div class="md-chips" role="group" aria-label="Choose an amenity">${open.map(a => `<button type="button" class="btn ${a.id === X.amenity ? 'btn-primary' : 'btn-secondary'}" data-act="mdam" data-id="${a.id}" aria-pressed="${a.id === X.amenity}">${ic('calendar-check')}${esc(a.name)}</button>`).join('')}</div>` : '';
+    const picker = open.length ? `<div class="md-chips">${field('mdamsel', 'Amenity', `<select class="input" id="mdamsel" style="width:auto;min-width:220px">${open.map(a => `<option value="${a.id}" ${a.id === X.amenity ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>`)}</div>` : '';
     const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
     const dayBar = `<div class="md-chips" role="group" aria-label="Choose a day">${days.map(d => `<button type="button" class="btn btn-sm ${d === X.date ? 'btn-primary' : 'btn-ghost'}" data-act="mdday" data-d="${d}" aria-pressed="${d === X.date}">${esc(d === today ? 'Today' : new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }))}</button>`).join('')}
       <input class="input md-date" type="date" id="mddate" value="${esc(X.date)}" min="${today}" max="${addDays(today, 30)}" aria-label="Pick another date"></div>`;
@@ -82,7 +82,6 @@
       <section class="col" style="gap:var(--space-2)"><h2>${isAdmin() ? 'Upcoming bookings' : 'Your flat\'s bookings'}</h2>
         ${table(isAdmin() ? ['Amenity', 'Date', 'Time', 'Flat', 'Booked by', ''] : ['Amenity', 'Date', 'Time', ''], myRows, 'No upcoming bookings.')}</section>${manage}</div>`);
   };
-  ACT.mdam = el => { X.amenity = Number(el.dataset.id); render(); };
   ACT.mdday = el => { X.date = el.dataset.d; render(); };
   ACT.mdbook = async el => {
     try { await M.book({ amenity_id: X.amenity, date: X.date, start: el.dataset.s }); toast('Booked. It is on your flat\'s list.'); }
@@ -163,7 +162,7 @@
         <div class="md-form">${field('mdin', 'Item', '<input class="input" id="mdin" name="name" maxlength="80" required placeholder="LED tube 20W">')}
           ${field('mdic', 'Category', `<select class="input" id="mdic" name="category">${INV_CATS.map(k => `<option value="${k}">${esc(cap(k))}</option>`).join('')}</select>`)}
           ${field('mdiq', 'Quantity now', '<input class="input" id="mdiq" name="quantity" type="number" min="0" step="1" value="0" inputmode="numeric">')}
-          ${field('mdiu', 'Unit', '<input class="input" id="mdiu" name="unit" maxlength="20" value="pcs">')}
+          ${field('mdiu', 'Unit', `<select class="input" id="mdiu" name="unit">${['pcs', 'roll', 'box', 'pack', 'kg', 'g', 'litre', 'ml', 'metre', 'pair', 'set', 'bag'].map(u => `<option>${u}</option>`).join('')}</select>`)}
           ${field('mdim', 'Reorder level', '<input class="input" id="mdim" name="min_qty" type="number" min="0" step="1" value="0" inputmode="numeric">', 'Alert the committee at or below this')}
           ${field('mdil', 'Location (optional)', '<input class="input" id="mdil" name="location" maxlength="80" placeholder="Store room">')}</div>
         ${X.moveFor == null ? errLine() : ''}<div class="row"><button class="btn btn-primary">${ic('package')}Add item</button></div></form>` : '';
@@ -227,7 +226,8 @@
   document.addEventListener('change', async e => {
     const t = e.target;
     try {
-      if (t.id === 'mddate') { if (t.value) { X.date = t.value; await render(); } }
+      if (t.id === 'mdamsel') { X.amenity = Number(t.value); await render(); }
+      else if (t.id === 'mddate') { if (t.value) { X.date = t.value; await render(); } }
       else if (t.id === 'mdfs') { X.dueStatus = t.value; await render(); }
       else if (t.id === 'mdfp') { X.duePeriod = t.value; await render(); }
       else if (t.id === 'mdwd') { X.days = t.value; await render(); }

@@ -147,18 +147,25 @@ module.exports = function mountRoles(app, c) {
     const limit = approvalLimit(), needs = amount > limit;
     run('UPDATE requests SET est_cost=?, cost_status=?, cost_note=?, updated_at=datetime(\'now\') WHERE id=?', amount, needs ? 'pending' : 'approved', note || null, r.id);
     log(req.user.id, 'request', r.id, 'estimate', `Rs ${amount}${needs ? ' (over Rs ' + limit + ': needs head approval)' : ' (within limit)'}${note ? ': ' + note : ''}`);
-    if (needs) for (const id of approverIds()) notify(id, `Cost approval needed: Rs ${amount} for "${r.title}" (flat ${r.flat})`);
+    const sysIds = () => q("SELECT id FROM users WHERE role='admin' AND status='approved' AND COALESCE(position,'sysadmin')='sysadmin'").map(x => x.id);
+    if (needs) for (const id of (posOf(req.user) === 'head' ? sysIds() : approverIds()).filter(x => x !== req.user.id)) notify(id, `Cost approval needed: Rs ${amount} for "${r.title}" (flat ${r.flat})`);
     res.json({ ok: true, cost_status: needs ? 'pending' : 'approved', approval_limit: limit });
   });
   app.get('/api/admin/approvals', auth, admin, (req, res) => res.json({
-    can_decide: canApproveCost(req.user), approval_limit: approvalLimit(),
+    can_decide: canApproveCost(req.user) || (posOf(req.user) === 'sysadmin' && q("SELECT r.id FROM requests r WHERE r.cost_status='pending'").some(x => { const s = costSetter(x.id); return s && one("SELECT id FROM users WHERE id=? AND position='head'", s); })), approval_limit: approvalLimit(),
     pending: q(`${REQ_SELECT} WHERE r.cost_status='pending' ORDER BY r.id`).map(r => shape(r, req.user)),
   }));
+  // Separation of duties: whoever set the estimate does not approve it. When the head set it, the admin (sysadmin) decides.
+  const costSetter = id => { const a = one("SELECT actor_id FROM audit WHERE entity='request' AND entity_id=? AND action='estimate' ORDER BY id DESC LIMIT 1", id); return a ? a.actor_id : null; };
   app.post('/api/requests/:id/cost-decision', auth, admin, (req, res) => {
-    if (!canApproveCost(req.user)) return res.status(403).json({ error: hasHead() ? 'Only the head of committee approves costs' : 'Only the head of committee or the admin approves costs' });
     const r = one(`${REQ_SELECT} WHERE r.id=?`, req.params.id);
+    const setter = r ? costSetter(r.id) : null, setterIsHead = !!(setter && one("SELECT id FROM users WHERE id=? AND role='admin' AND position='head'", setter));
+    const mayDecide = canApproveCost(req.user) || (setterIsHead && posOf(req.user) === 'sysadmin');
+    if (!mayDecide) return res.status(403).json({ error: hasHead() ? 'Only the head of committee approves costs' : 'Only the head of committee or the admin approves costs' });
     if (!r) return res.status(404).json({ error: 'Request not found' });
     if (r.cost_status !== 'pending') return res.status(409).json({ error: 'No cost waiting for approval on this request' });
+    // (With no head, the admin who set the cost is the only possible approver and still decides.)
+    if (setter === req.user.id && posOf(req.user) === 'head') return res.status(403).json({ error: 'You set this cost, so the admin must decide on it' });
     const d = req.body.decision, note = str(req.body.note, 300);
     if (!['approve', 'reject'].includes(d)) return res.status(400).json({ error: 'Decision must be approve or reject' });
     run("UPDATE requests SET cost_status=?, cost_note=COALESCE(?,cost_note), updated_at=datetime('now') WHERE id=?", d === 'approve' ? 'approved' : 'rejected', note || null, r.id);

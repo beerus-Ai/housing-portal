@@ -48,22 +48,39 @@
   }
   async function openScan(kind, card = '') {
     Object.assign(N, { scan: kind, card: norm(card), who: '', err: '', last: kind === 'tap' ? N.last : null });
-    if (kind === 'register') { try { N.people = await api('GET', '/api/gate/people'); } catch (x) { N.people = []; N.err = x.message; } }
     startNfc(); // the click that opened the scanner is the user gesture Web NFC needs
-    render();
+    // Draw the scanner and focus its card box before the page reloads its data, so a USB reader's first characters
+    // are not lost; PAGES.cards keeps whatever was typed in the meantime.
+    // (render() rebuilds the shell first, so this early copy lives on <body> and PAGES.cards removes it.)
+    document.querySelectorAll('.nfc-early').forEach(e => e.remove());
+    document.body.insertAdjacentHTML('beforeend', scanner().replace('class="nfc-scan"', 'class="nfc-scan nfc-early"'));
+    const early = $('.nfc-early #nfcin') || $('.nfc-early #nfcwho'); if (early) early.focus();
+    await render();
+    if (kind === 'register') {
+      try { [N.people, N.cards] = await Promise.all([api('GET', '/api/gate/people'), api('GET', '/api/gate/cards')]); } catch (x) { N.people = []; N.err = x.message; }
+      if (N.card || N.err) render(); // the dropdown is only on screen once a card is read
+    }
   }
+  // Who already carries a card: a registered card is caught before the guard picks a person.
+  const holderOf = serial => (N.cards || []).find(c => c.active && c.serial === serial);
+  const hasCard = id => (N.cards || []).some(c => c.active && c.user_id === id);
 
   const scanner = () => {
     if (!N.scan) return '';
     const status = nfcWhy() || N.nfcErr || (N.scanning ? 'Listening… hold the card to the back of the phone.' : 'Starting NFC…');
     const listen = `<span class="nfc-ring big ${N.scanning ? 'on' : ''}">${ic('contactless-payment')}</span>`;
-    const input = `<form id="nfcform" class="row nfc-type"><label class="sr" for="nfcin">Card number</label><input class="input" id="nfcin" name="serial" autocomplete="off" placeholder="Or type the card number (a USB reader types it here)"><button class="btn btn-secondary">${ic('arrow-right')}Go</button></form>`;
+    const input = `<form id="nfcform" class="row nfc-type"><label class="sr" for="nfcin">Card number</label><input class="input" id="nfcin" name="serial" autocomplete="off" placeholder="Or type the card number" title="A USB reader or the Windows card reader types the number here"><button class="btn btn-secondary">${ic('arrow-right')}Go</button></form>`;
     const L = N.last;
     let body;
-    if (N.scan === 'register' && N.card) {
+    const owner = N.scan === 'register' && N.card ? holderOf(N.card) : null;
+    if (owner) {
+      body = `<span class="nfc-ring big">${ic('identification-card')}</span><h2>Card already registered</h2><p class="nfc-serial">${esc(N.card)}</p>
+        <p class="callout" style="margin:0">This card belongs to <b>${esc(owner.name)}</b> (${esc(sub(owner))}). Deactivate it under Registered cards first to give it to someone else.</p>
+        <div class="row nfc-actions"><button type="button" class="btn btn-secondary" data-act="nfcrescan">${ic('arrow-counter-clockwise')}Scan a different card</button></div>`;
+    } else if (N.scan === 'register' && N.card) {
       body = `<span class="nfc-ring big done">${ic('identification-card')}</span><h2>Card detected</h2><p class="nfc-serial">${esc(N.card)}</p>
         <div class="field nfc-who"><label for="nfcwho">Who carries this card?</label>
-          <select class="input" id="nfcwho"><option value="">Choose a person</option>${N.people.map(p => `<option value="${p.id}" ${String(p.id) === N.who ? 'selected' : ''}>${esc(p.name)} · ${esc(sub(p))}</option>`).join('')}</select>
+          <select class="input" id="nfcwho"><option value="">Choose a person</option>${N.people.map(p => `<option value="${p.id}" ${String(p.id) === N.who ? 'selected' : ''}>${esc(p.name)} · ${esc(sub(p))}${hasCard(p.id) ? ' · has a card (this one replaces it)' : ''}</option>`).join('')}</select>
           ${N.people.length ? '' : '<p class="muted sm">Nobody can get a card yet: residents and staff must be approved first.</p>'}</div>
         <p class="err" role="alert">${esc(N.err)}</p>
         <div class="row nfc-actions"><button type="button" class="btn btn-primary btn-lg" data-act="nfcsave" ${N.who ? '' : 'disabled'}>${ic('check-circle')}Register card</button>
@@ -86,6 +103,7 @@
     const result = !L ? `<div class="nfc-idle"><span class="nfc-ring">${ic('contactless-payment')}</span><b>Tap a card</b><span class="muted">${hasNfc() && window.isSecureContext ? 'Open the scanner, then hold a card to the phone.' : 'A USB reader or the Windows card reader types the card number below.'}</span>${winApp()}</div>`
       : L.error ? `<div class="nfc-res bad">${ic('x-circle')}<b>${esc(L.error)}</b><span class="muted">Card ${esc(L.serial || '')}</span>${L.unknown ? `<button type="button" class="btn btn-primary" data-act="nfcregcard">${ic('plus-circle')}Register this card</button>` : ''}</div>`
       : `<div class="nfc-res ${L.direction}">${ic(L.direction === 'in' ? 'sign-in' : 'sign-out')}<b>${L.direction === 'in' ? 'Checked in' : 'Checked out'}: ${esc(L.person.name)}</b><span>${esc(fmt(L.at))}${L.shift ? ` · shift ${esc(L.shift)}` : ''}</span></div>`;
+    const typed = ($('.nfc-early #nfcin') || {}).value || ''; // typed into the early scanner while this page was loading
     page(`<div class="rl">${HP.hero({ theme: 'gate', name: S.me.name, kicker: `Gate desk · ${HP.todayLabel()}`, line: `<b>${pr.inside.length}</b> people inside · ${pr.cards} cards registered`, actions: [] })}
       <div class="split-eq" style="align-items:start">
         <section class="form-card col nfc-pad">${result}
@@ -97,7 +115,9 @@
       <section class="col" style="gap:var(--space-2)"><h2>Registered cards</h2>${cards.filter(c => c.active).map(c => `<div class="list-row"><span class="tile">${ic('identification-card')}</span><span style="flex:1">${who(c)}<span class="muted xs"> · ${esc(c.serial)}</span></span>${HP.kebab('Card of ' + c.name, [{ label: 'Deactivate card', icon: 'prohibit', act: 'nfcoff', data: { id: c.id }, danger: true }])}</div>`).join('') || '<p class="muted">No cards registered yet.</p>'}</section></div>
       ${scanner()}`);
     // Focus: the dropdown once a card is read; otherwise the card box, which takes a USB reader's typing.
-    const sel = $('#nfcwho'), box = $('#nfcin');
+    document.querySelectorAll('.nfc-early').forEach(e => e.remove());
+    const sel = $('#nfcwho'), box = $('.nfc-scan #nfcin') || $('#nfcin');
+    if (box && typed && box.closest('.nfc-scan')) box.value = typed;
     if (sel) sel.focus(); else if (box) box.focus();
   };
 

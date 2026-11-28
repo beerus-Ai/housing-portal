@@ -54,15 +54,20 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
         body: ListView(padding: const EdgeInsets.all(16), children: [
           const Text('What is it about?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final c in categories)
-              ChoiceChip(
-                avatar: Icon(c.$3, size: 18),
-                label: Text(c.$2),
-                selected: _category == c.$1,
-                onSelected: (_) => setState(() => _category = c.$1),
-              ),
-          ]),
+          DropdownButtonFormField<String>(
+            initialValue: categories.any((c) => c.$1 == _category) ? _category : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Category'),
+            hint: const Text('Choose a category'),
+            items: [
+              for (final c in categories)
+                DropdownMenuItem<String>(
+                  value: c.$1,
+                  child: Row(children: [Icon(c.$3, size: 18), const SizedBox(width: 10), Text(c.$2)]),
+                ),
+            ],
+            onChanged: (v) => setState(() => _category = v),
+          ),
           const SizedBox(height: 20),
           TextField(
             controller: _title,

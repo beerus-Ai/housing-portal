@@ -164,10 +164,21 @@ class _WasteSheetState extends State<_WasteSheet> {
           Text(widget.missed ? 'Pickup missed?' : 'Log a collection (today)', style: sectionStyle),
           if (widget.missed) const Text('It becomes a housekeeping request you can follow.', style: TextStyle(color: Colors.black54)),
           const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final k in wasteKinds)
-              ChoiceChip(avatar: Icon(k.$3, size: 18), label: Text(k.$2), selected: _kind == k.$1, onSelected: (_) => setState(() => _kind = k.$1)),
-          ]),
+          DropdownButtonFormField<String>(
+            initialValue: wasteKinds.any((k) => k.$1 == _kind) ? _kind : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Kind of waste'),
+            items: [
+              for (final k in wasteKinds)
+                DropdownMenuItem<String>(
+                  value: k.$1,
+                  child: Row(children: [Icon(k.$3, size: 18), const SizedBox(width: 10), Text(k.$2)]),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null) setState(() => _kind = v);
+            },
+          ),
           const SizedBox(height: 12),
           if (!widget.missed) ...[
             TextField(controller: _kg, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Weight (kg)')),

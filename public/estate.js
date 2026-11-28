@@ -5,11 +5,14 @@
   const { esc, ic, toast, initials, stamp } = HP;
   const { S, PAGES, ACT, page, go, isAdmin } = W;
   const $ = (s, r = document) => r.querySelector(s);
-  const E = { veh: [], vq: '', vtype: 'car', vdel: null, pk: null, pksel: null, pkdel: null, wk: [], wedit: null, wdel: null };
+  const E = { veh: [], flats: [], vq: '', vtype: 'car', vdel: null, pk: null, pksel: null, pkdel: null, wk: [], wedit: null, wdel: null };
   const setErr = m => { const e = $('#eserr'); if (e) e.textContent = m || ''; };
   const head = (title, sub) => `<header class="es-h"><h1>${esc(title)}</h1><p class="muted">${esc(sub)}</p></header>`;
   const empty = t => `<p class="es-empty">${esc(t)}</p>`;
   const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+  // Flats with an approved resident (the API only accepts those for vehicles and parking), for the committee's flat dropdowns.
+  const loadFlats = async () => { const us = await API.admin.users('approved').catch(() => []); E.flats = [...new Set(us.filter(u => u.role === 'resident' && u.flat).map(u => u.flat))].sort(natural); };
+  const flatOpts = () => `<option value="">${E.flats.length ? 'Choose a flat' : 'No approved residents yet'}</option>${E.flats.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')}`;
 
   // ---------- Vehicles
   const VT = [['car', 'car', 'Car'], ['bike', 'motorcycle', 'Bike'], ['scooter', 'moped', 'Scooter'], ['other', 'car-profile', 'Other']];
@@ -28,13 +31,14 @@
   PAGES.vehicles = async () => {
     const adm = isAdmin();
     E.veh = await API.vehicles.list();
+    if (adm) await loadFlats();
     const tiles = VT.map(([k, i, l]) => `<button type="button" class="type-tile ${E.vtype === k ? 'on' : ''}" data-act="evtype" data-t="${k}" aria-pressed="${E.vtype === k}">${ic(i)}<b>${l}</b></button>`).join('');
     page(`<div class="es">${head('Vehicles', adm ? 'Every registered vehicle in the society.' : 'Vehicles registered to Flat ' + S.me.flat + '.')}
       <div class="es-grid"><div class="col es-main">
         ${adm ? `<div class="field"><label class="sr" for="esvq">Search vehicles</label><input class="input" id="esvq" type="search" autocomplete="off" placeholder="Search by plate, flat or owner" value="${esc(E.vq)}"></div>` : ''}
         <span class="muted sm" id="veh-count" role="status"></span><div id="veh-list" class="es-list"></div></div>
         <form id="esveh" class="es-form col"><h3>Add a vehicle</h3>
-          ${adm ? '<div class="field"><label for="evf">Flat</label><input class="input" id="evf" name="flat" required maxlength="20" placeholder="B-304"></div>' : ''}
+          ${adm ? `<div class="field"><label for="evf">Flat</label><select class="input" id="evf" name="flat" required>${flatOpts()}</select></div>` : ''}
           <div class="field"><label for="evp">Number plate</label><input class="input" id="evp" name="plate" required maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="MH 12 AB 1234"></div>
           <div class="field"><label id="evtl">Type</label><div class="type-tiles es-tiles" role="group" aria-labelledby="evtl">${tiles}</div></div>
           <div class="two"><div class="field"><label for="evm">Make and model</label><input class="input" id="evm" name="make" maxlength="50"></div><div class="field"><label for="evc">Colour</label><input class="input" id="evc" name="color" maxlength="30"></div></div>
@@ -55,14 +59,13 @@
   const pkStats = sm => `<div class="es-stats">${pkStat('s-white', 'garage', sm.total, 'Total slots')}${pkStat('s-dark', 'car', sm.assigned, 'Assigned')}${pkStat('s-tint', 'check-circle', sm.free, 'Free')}</div>`;
   const slotTile = (s, sel) => `<button type="button" class="pk-slot ${s.flat ? 'taken' : 'free'} ${sel ? 'sel' : ''}" data-act="pksel" data-id="${s.id}" aria-pressed="${sel}" aria-label="Slot ${esc(s.code)}, ${s.flat ? 'assigned to ' + esc(s.flat) : 'free'}">${ic((PK[s.kind] || PK.car)[0])}<b>${esc(s.code)}</b><span>${s.flat ? esc(s.flat) : 'Free'}</span></button>`;
   const levels = slots => { const m = new Map(); slots.forEach(s => { const k = s.level || 'No level'; if (!m.has(k)) m.set(k, []); m.get(k).push(s); }); return [...m.entries()].sort((a, b) => natural(a[0], b[0])).map(([k, v]) => [k, v.sort((a, b) => natural(a.code, b.code))]); };
-  const flats = () => [...new Set(E.veh.map(v => v.flat).filter(Boolean))].sort(natural);
   const vehOptions = flat => { const f = String(flat || '').trim().toLowerCase(); const vs = f ? E.veh.filter(v => String(v.flat).toLowerCase() === f) : []; return '<option value="">No vehicle</option>' + vs.map(v => `<option value="${v.id}">${esc(v.plate)} · ${esc(vt(v.type)[2])}</option>`).join(''); };
   const panel = () => {
     const s = E.pk.slots.find(x => x.id === E.pksel);
     if (!s) return `<div class="es-form col"><h3>Manage a slot</h3><p class="muted" style="margin:0">Choose a slot in the grid to assign, free or delete it.</p></div>`;
     const top = `<div class="row" style="justify-content:space-between"><h3>Slot ${esc(s.code)}</h3><button type="button" class="link-btn" data-act="pkclose">Close</button></div><p class="muted sm" style="margin:0">${esc((PK[s.kind] || PK.car)[1])} · ${esc(s.level || 'No level')}</p>`;
     if (s.flat) return `<div class="es-form col">${top}<div class="es-assigned"><b>Flat ${esc(s.flat)}</b><span>${s.plate ? esc(s.plate) : 'No vehicle linked'}</span></div><div><button type="button" class="btn btn-secondary" data-act="pkfree" data-id="${s.id}">${ic('arrow-counter-clockwise')}Free this slot</button></div></div>`;
-    return `<div class="es-form col">${top}<form id="espkassign" class="col" data-id="${s.id}"><div class="field"><label for="espkflat">Assign to flat</label><input class="input" id="espkflat" name="flat" required maxlength="20" list="espkflats" autocomplete="off" placeholder="B-304"><datalist id="espkflats">${flats().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></div>
+    return `<div class="es-form col">${top}<form id="espkassign" class="col" data-id="${s.id}"><div class="field"><label for="espkflat">Assign to flat</label><select class="input" id="espkflat" name="flat" required>${flatOpts()}</select></div>
       <div class="field"><label for="espkveh">Vehicle</label><select class="input" id="espkveh" name="vehicle_id">${vehOptions('')}</select></div><div><button class="btn btn-primary">Assign slot</button></div></form>
       <div class="row">${E.pkdel === s.id ? `<button type="button" class="btn btn-danger" data-act="pkdelok" data-id="${s.id}">Delete ${esc(s.code)}?</button><button type="button" class="btn btn-secondary" data-act="pkdelkeep">Keep</button>` : `<button type="button" class="btn btn-secondary" data-act="pkdelask" data-id="${s.id}">${ic('trash')}Delete slot</button>`}</div></div>`;
   };
@@ -81,7 +84,7 @@
         <section class="ds-sec"><div class="ds-sec-h"><h2>Your slots</h2></div><div class="es-list">${mine.map(s => `<article class="es-card"><span class="es-ic dark">${ic((PK[s.kind] || PK.car)[0])}</span><span class="col es-grow"><span class="es-plate">${esc(s.code)}</span><span class="muted sm">${esc((PK[s.kind] || PK.car)[1])} · ${esc(s.level || 'No level')}</span>${s.plate ? `<span class="sm">Vehicle ${esc(s.plate)}</span>` : ''}</span></article>`).join('') || empty('No slot is assigned to your flat yet. Ask the committee.')}</div></section>
         <section class="ds-sec"><div class="ds-sec-h"><h2>Building summary</h2></div>${pkStats(sm)}</section></div>`);
     }
-    E.veh = await API.vehicles.list().catch(() => []);
+    [E.veh] = await Promise.all([API.vehicles.list().catch(() => []), loadFlats()]);
     page(`<div class="es">${head('Parking', 'Slots by level. Choose a slot to assign it to a flat and vehicle.')}<div id="pk-stats"></div>
       <div class="es-grid"><div class="col es-main" id="pk-grid"></div>
         <div class="col" style="gap:var(--space-4)"><div id="pk-panel"></div>

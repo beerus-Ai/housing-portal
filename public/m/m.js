@@ -19,7 +19,7 @@
   const feat = k => !S.me.features || S.me.features[k] !== false;
   S.set = { access: null, matrix: null, features: null, users: [], q: '', open: null, confirm: null, reset: false, guards: [], gconfirm: null };
   S.gp = { view: null, confirm: null, list: [] }; S.gRes = null;
-  S.veh = { type: 'car', q: '', list: [], confirm: null }; S.pk = { data: null, vehicles: [], sel: null, confirm: null }; S.wk = { list: [], edit: null, confirm: null };
+  S.veh = { type: 'car', q: '', list: [], confirm: null }; S.pk = { data: null, vehicles: [], flats: [], sel: null, confirm: null }; S.wk = { list: [], edit: null, confirm: null };
   const TABBY = ['approvals', 'requests', 'emergency', 'notices'];
   const TABS = {
     resident: () => [['home', 'Home', 'house'], ['requests', 'Requests', 'list-checks'], ['emergency', 'Emergency', 'siren'], ['alerts', 'Alerts', 'bell'], ['menu', 'Menu', 'squares-four']],
@@ -337,6 +337,9 @@
     async parking() {
       S.pk.data = await API.parking.list();
       S.pk.vehicles = isAdmin() ? await API.vehicles.list().catch(() => []) : [];
+      // Flats with an approved resident (the only ones the API accepts), for the assign dropdown.
+      S.pk.flats = isAdmin() ? [...new Set((await API.admin.users('approved').catch(() => [])).filter(u => u.role === 'resident' && u.flat).map(u => u.flat))]
+        .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })) : [];
       drawParking();
     },
 
@@ -476,8 +479,11 @@
     },
     async 'set-general'() {
       const st = await API.admin.settings();
+      // Same list as the web settings (admin-settings.js KINDS); a custom type already saved stays as its own option.
+      const KINDS = ['Co-operative Housing Society', 'Apartment Owners Association', 'Residential Complex', 'Gated Community'];
+      const kind = st.society_kind || SOCIETY.kind, kinds = !kind || KINDS.includes(kind) ? KINDS : [kind, ...KINDS];
       screen(`${head('General', 'settings-sub')}<form id="setform" class="m-card am-form"><div class="field"><label for="sn">Society name</label><input class="input" id="sn" name="society_name" required maxlength="100" value="${esc(st.society_name || SOCIETY.name)}"></div>
-        <div class="field"><label for="sk">Society type</label><input class="input" id="sk" name="society_kind" maxlength="100" value="${esc(st.society_kind || SOCIETY.kind)}"></div><p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">Save</button></form>`);
+        <div class="field"><label for="sk">Society type</label><select class="input" id="sk" name="society_kind">${kinds.map(k => `<option value="${esc(k)}" ${k === kind ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div><p class="err" id="serr" role="alert"></p><button class="btn btn-primary btn-lg">Save</button></form>`);
     },
     async 'set-access'() {
       const ac = await API.admin.access(); S.set.access = ac; S.set.matrix = JSON.parse(JSON.stringify(ac.matrix || {}));
@@ -587,7 +593,7 @@
 
   // ---------- parking
   const vehOpts = flat => {
-    const f = (flat || '').trim().toLowerCase(); if (!f) return '<option value="">Type the flat first</option>';
+    const f = (flat || '').trim().toLowerCase(); if (!f) return '<option value="">Choose the flat first</option>';
     const vs = S.pk.vehicles.filter(v => (v.flat || '').toLowerCase() === f);
     return '<option value="">No vehicle</option>' + vs.map(v => `<option value="${v.id}">${esc(v.plate)} (${esc(vtInfo(v.type)[2])})</option>`).join('');
   };
@@ -607,7 +613,7 @@
       const groups = Object.keys(lv).sort().map(k => `<section class="am-sec"><h3 class="am-h3">${esc(k)} <span class="muted xs">${lv[k].filter(x => x.flat).length} of ${lv[k].length} assigned</span></h3><div class="pk-grid">${lv[k].map(x => `<button class="pk-slot ${x.flat ? 'taken' : 'free'} ${sel && sel.id === x.id ? 'sel' : ''}" data-act="pkpick" data-id="${x.id}"><b>${esc(x.code)}</b><span class="xs">${x.flat ? esc(x.flat) : 'Free'}</span></button>`).join('')}</div></section>`).join('') || '<p class="muted">No slots yet. Add some below.</p>';
       const sheet = sel ? `<div class="sheet-back" data-act="pkclose"></div><div class="sheet" role="dialog" aria-label="Slot ${esc(sel.code)}"><h3>Slot ${esc(sel.code)}</h3><span class="muted sm">${esc([sel.level, sel.kind].filter(Boolean).join(' · '))}</span>
         ${sel.flat ? `<div class="callout sm">Assigned to flat <b>${esc(sel.flat)}</b>${sel.plate ? ' · ' + esc(sel.plate) : ''}</div><button class="btn btn-primary btn-lg" data-act="pkfree">${ic('arrow-u-up-left')}Free this slot</button>`
-          : `<form id="pkassign" class="col" style="gap:12px"><div class="field"><label for="pkflat">Flat</label><input class="input" id="pkflat" name="flat" required maxlength="20" autocomplete="off" placeholder="B-304"></div>
+          : `<form id="pkassign" class="col" style="gap:12px"><div class="field"><label for="pkflat">Flat</label><select class="input" id="pkflat" name="flat" required><option value="">${(S.pk.flats || []).length ? 'Choose a flat' : 'No approved residents yet'}</option>${(S.pk.flats || []).map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')}</select></div>
             <div class="field"><label for="pkveh">Vehicle</label><select class="input" id="pkveh" name="vehicle_id">${vehOpts('')}</select></div><p class="err" id="pkaerr" role="alert"></p><button class="btn btn-primary btn-lg">${ic('check-circle')}Assign</button></form>
             ${S.pk.confirm === sel.id ? `<div class="callout col" style="gap:8px"><b class="sm">Delete slot ${esc(sel.code)}?</b><div class="two"><button class="btn btn-primary" data-act="pkdelyes">Yes, delete</button><button class="btn btn-secondary" data-act="pkdelno">Keep</button></div></div>` : `<button class="btn btn-secondary" data-act="pkdelask">${ic('trash')}Delete slot</button>`}`}
         <button class="btn btn-secondary btn-lg" data-act="pkclose">Close</button></div>` : '';
