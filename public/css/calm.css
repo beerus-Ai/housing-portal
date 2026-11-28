@@ -271,3 +271,9 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .cp-route { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; flex-wrap: wrap; } .cp-route i { color: var(--color-accent-700, #006d8d); }
 .cp-req { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; cursor: default; }
 .cp-phone { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+/* Bulk upload */
+.bk-step { gap: 12px; } .bk-step h3 { margin: 0; display: flex; align-items: center; gap: 8px; }
+.bk-cols { margin: 0; padding-left: 18px; display: grid; gap: 4px; } .bk-cols code { font-weight: 600; }
+.bk-file { position: relative; cursor: pointer; } .bk-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bk-sum { margin: 0; } .bk-sum .ok { color: #12663f; } .bk-sum .bad { color: #b3261e; }
+.bk-err { color: #8c1d2e; display: inline-flex; gap: 6px; align-items: center; }

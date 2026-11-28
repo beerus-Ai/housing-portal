@@ -84,6 +84,12 @@ window.API = (() => {
       removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
+    // Bulk upload (docs/bulk-upload-api.md): the committee imports a CSV; a dry run checks every row first.
+    bulk: {
+      templates: () => call('GET', '/api/admin/bulk/templates'), // committee: { residents|accounts|vendors|inventory: { label, columns, required, example, help, needs_head } }
+      upload: (type, rows, dryRun) => call('POST', `/api/admin/bulk/${encodeURIComponent(type)}`, { rows, dry_run: !!dryRun }), // committee (accounts: head or admin): dry run -> { total, valid, rows: [{ row, ok, error? }] }; import -> { total, imported, failed, rows: [{ row, ok, id?, error?, email?, name?, password? }] } (password only when the portal made one)
+      resident: body => call('POST', '/api/admin/residents', body), // committee: { name, email, flat, resident_type, phone?, password? } -> 201 { id, password? }
+    },
     // Carpool (docs/carpool-api.md): residents offer rides and ask for seats; phones shared only after acceptance. Times are IST 'YYYY-MM-DDTHH:MM'.
     carpool: {
       list: () => call('GET', '/api/carpool'), // resident or committee: upcoming rides [{ id, from_place, to_place, depart_at, seats, seats_left, cost_per_seat, note, status, past, mine, driver: { id, name, flat, phone|null }, my_request: { id, seats, status }|null, requests?: [{ id, name, flat, seats, status, created_at, phone|null }] }]

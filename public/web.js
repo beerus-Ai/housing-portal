@@ -38,7 +38,7 @@
       ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcels', 'package'], ['events', 'Events', 'calendar-star'], ['carpool', 'Carpool', 'car'], ['amenities', 'Amenity booking', 'calendar-check'], ['dues', 'Maintenance dues', 'receipt'], ['waste', 'Waste collection', 'recycle'], ['gatepass', 'Visitor pass', 'qr-code'], ['vehicles', 'Vehicles', 'car'], ['parking', 'Parking', 'garage'], ['contacts', 'Contacts', 'phone-call'], ...HELP],
     admin: [['dashboard', 'Dashboard', 'chart-bar'], ['approvals', 'Verification', 'user-check'], ['requests', 'Requests', 'list-checks'], ['notices', 'Broadcast', 'megaphone'], ['reports', 'Reports', 'chart-line'], ['audit', 'Monitor', 'clock-counter-clockwise'],
       ['emergencies', 'Emergencies', 'siren'], ['costs', 'Cost approvals', 'currency-inr'],
-      ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
+      ['users', 'Residents', 'users'], ['accounts', 'Accounts', 'user-gear'], ['bulk', 'Bulk upload', 'upload-simple'], ['settings', 'Settings', 'gear-six'], ['health', 'Upgrades and maintenance', 'heartbeat'],
       ['shop', 'Tuck shop', 'storefront'], ['laundry', 'Laundry', 't-shirt'], ['parcels', 'Parcel desk', 'package'], ['events', 'Events', 'calendar-star'], ['wallets', 'Card wallets', 'wallet'], ['carpool', 'Carpool', 'car'],
       ['amenities', 'Amenity management', 'calendar-check'], ['dues', 'Financial management', 'receipt'], ['inventory', 'Inventory management', 'package'], ['waste', 'Waste management', 'recycle'],
       ['gate', 'Visitor management', 'shield-check'], ['cards', 'NFC gate cards', 'identification-card'], ['attendance', 'Workforce management', 'clock-user'], ['workers', 'Workers', 'hard-hat'], ['guards', 'Guards', 'identification-card'],
@@ -53,7 +53,7 @@
   // head/admin governance group; everything of lesser importance sits in "More", collapsed until opened.
   const GROUPS = [['home', 'Home', 'house'], ['core', 'Daily tasks', 'list-checks'], ['admin', 'Administration', 'gear-six'], ['services', 'Services', 'storefront'], ['more', 'Modules', 'squares-four'], ['help', 'Help and support', 'question']];
   const GROUP_OF = { home: 'home', dashboard: 'home', raise: 'core', requests: 'core', notices: 'core', emergency: 'core', household: 'core', approvals: 'core', reports: 'core', audit: 'core', emergencies: 'core', costs: 'core',
-    users: 'admin', accounts: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
+    users: 'admin', accounts: 'admin', bulk: 'admin', settings: 'admin', health: 'admin', ai: 'admin', attendance: 'more',
     lease: 'more', amenities: 'more', dues: 'more', waste: 'more', inventory: 'more', gatepass: 'more', vehicles: 'more', parking: 'more', contacts: 'more', gate: 'more', guards: 'more', leases: 'more', workers: 'more', vendors: 'more',
     cards: 'more', shop: 'services', laundry: 'services', parcels: 'services', events: 'services', carpool: 'services', wallets: 'services', lcounter: 'services',
     help: 'help', support: 'help', profile: 'help' };
@@ -85,7 +85,7 @@
     household: () => can('household.manage'), contacts: () => feat('contacts') && (isAdmin() || can('contacts.read')), notices: () => feat('notices') && (isAdmin() || can('notice.read')), lease: () => can('lease.view'),
     vehicles: () => feat('parking') && (isAdmin() || can('vehicle.manage')), parking: () => feat('parking') && (isAdmin() || can('parking.view')), workers: () => isAdmin(), users: () => isAdmin(), ai: () => isAdmin(),
     accounts: () => isGov(), health: () => isIT() || (isAdmin() && (!S.me.position || S.me.position === 'sysadmin')), itoverview: () => isIT(), shop: () => ['resident', 'admin', 'shop'].includes(S.me.role), laundry: () => ['resident', 'admin', 'laundry'].includes(S.me.role), parcels: () => !isIT() && !isStaff(), events: () => !isGuard() && !isIT() && !isStaff(), costs: () => isAdmin(), reports: () => isAdmin(), attendance: () => isAdmin(), inventory: () => isAdmin() || (isStaff() && dept() === 'maintenance'),
-    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin(), wallets: () => isAdmin(), lcounter: () => S.me.role === 'laundry' };
+    waste: () => !isStaff() || dept() === 'cleaning', cards: () => isGuard() || isAdmin(), wallets: () => isAdmin(), bulk: () => isAdmin(), lcounter: () => S.me.role === 'laundry' };
   const allowed = k => !PAGE_RULE[k] || PAGE_RULE[k]();
   const dept = () => (S.me && S.me.department) || 'maintenance';
   const navFor = () => (NAV[isAdmin() ? 'admin' : flatNav() ? S.me.role : S.me.resident_type] || NAV.owner).filter(([k]) => (flatNav() && !isStaff()) || allowed(k));

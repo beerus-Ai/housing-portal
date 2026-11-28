@@ -179,6 +179,10 @@ const ROWS = [
   ['GET events', 'GET', () => '/api/events', null, only([...RES, ...COM], 200)],
   ['POST events', 'POST', () => '/api/events', (f, r) => ({ title: 'Yoga ' + r, starts_at: '2026-12-02T07:00' }), only(COM, 201)],
   ['POST event rsvp', 'POST', f => `/api/events/${f.event}/rsvp`, () => ({ going: true }), only(RES, 200)],
+  // ---------- bulk upload (committee; accounts need the head or admin)
+  ['GET bulk templates', 'GET', () => '/api/admin/bulk/templates', null, only(COM, 200)],
+  ['POST bulk vendors (dry run)', 'POST', () => '/api/admin/bulk/vendors', () => ({ rows: [{ name: 'V', trade: 'other' }], dry_run: true }), only(COM, 200)],
+  ['POST bulk accounts (dry run)', 'POST', () => '/api/admin/bulk/accounts', () => ({ rows: [{ name: 'G', email: 'g@x.test', kind: 'guard' }], dry_run: true }), only(['head', 'sysadmin'], 200)],
   // ---------- carpool (residents offer and ask; the committee sees all and can take a ride down)
   ['GET carpool', 'GET', () => '/api/carpool', null, only([...RES, ...COM], 200)],
   ['POST carpool ride', 'POST', () => '/api/carpool', (f, r) => ({ to_place: 'Station ' + r, depart_at: '2026-12-05T08:00', seats: 2 }), only(RES, 201)],

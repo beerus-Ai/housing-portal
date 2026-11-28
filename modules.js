@@ -353,3 +353,4 @@ module.exports = function mountModules(app, c) {
 module.exports.WEEKDAYS = WEEKDAYS;
 module.exports.WASTE_KINDS = WASTE_KINDS;
 module.exports.istNow = istNow;
+module.exports.INV_CATEGORIES = INV_CATEGORIES;

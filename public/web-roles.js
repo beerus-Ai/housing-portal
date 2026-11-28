@@ -227,6 +227,95 @@
     return `<tr><td><span class="row" style="gap:var(--space-2);flex-wrap:nowrap"><span class="avatar light">${esc(initials(a.name))}</span><span class="col" style="gap:0"><b>${esc(a.name)}</b><span class="muted xs">${esc(a.email)}</span></span></span></td>
       <td>${esc(kind)}${a.on_shift ? ' <span class="tag tag-accent">on shift</span>' : ''}</td><td><span class="tag ${stag[0]}">${esc(stag[1])}</span></td><td>${esc(day(a.created_at))}</td><td class="acc-menu">${menu}</td></tr>${extra}`;
   };
+  // ---------- committee: Bulk upload (docs/bulk-upload-api.md). Pick a type, download its template, upload or paste a
+  // CSV; every row is checked first (dry run), then only the ready rows are imported through the normal routes.
+  const B = { type: 'residents', tpl: null, rows: null, file: '', dry: null, result: null, busy: false, paste: false };
+  W.noRedraw = (prev => () => (prev && prev()) || (S.page === 'bulk' && (!!B.rows || B.paste)))(W.noRedraw);
+  // RFC 4180-style CSV: quoted fields, doubled quotes, commas and line breaks inside quotes; BOM and blank lines dropped.
+  const trow = cells => `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`; // cells are already escaped
+  const parseCsv = text => {
+    const out = []; let row = [], f = '', q = false;
+    const s = String(text).replace(/^﻿/, '');
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (q) { if (ch === '"') { if (s[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; continue; }
+      if (ch === '"') q = true; else if (ch === ',') { row.push(f); f = ''; } else if (ch === '\n' || ch === '\r') { if (ch === '\r' && s[i + 1] === '\n') i++; row.push(f); out.push(row); row = []; f = ''; } else f += ch;
+    }
+    if (f !== '' || row.length) { row.push(f); out.push(row); }
+    return out.filter(r => r.some(c => String(c).trim() !== ''));
+  };
+  const csvCell = v => (/[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  const saveCsv = (name, rows) => {
+    const url = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const bulkLoad = async text => {
+    const t = B.tpl[B.type], grid = parseCsv(text);
+    B.dry = null; B.result = null;
+    if (grid.length < 2) { R.err = 'The file needs a header row and at least one row of data.'; B.rows = null; return render(); }
+    const headers = grid[0].map(h => String(h).trim().toLowerCase().replace(/\s+/g, '_'));
+    const missing = t.required.filter(c => !headers.includes(c));
+    if (missing.length) { R.err = `The header row is missing: ${missing.join(', ')}. Download the template to see the columns.`; B.rows = null; return render(); }
+    B.rows = grid.slice(1).map(r => Object.fromEntries(t.columns.map(c => [c, headers.indexOf(c) >= 0 ? String(r[headers.indexOf(c)] ?? '').trim() : ''])));
+    R.err = ''; B.busy = true; render();
+    try { B.dry = await HP.api('POST', `/api/admin/bulk/${B.type}`, { rows: B.rows, dry_run: true }); } catch (x) { R.err = x.message; }
+    B.busy = false; render();
+  };
+  PAGES.bulk = async () => {
+    if (!B.tpl) B.tpl = await HP.api('GET', '/api/admin/bulk/templates');
+    const types = Object.entries(B.tpl).filter(([, t]) => !t.needs_head || isGov());
+    if (!types.some(([k]) => k === B.type)) B.type = types[0][0];
+    const t = B.tpl[B.type];
+    const cols = t.columns.map(c => `<li><code>${esc(c)}</code>${t.required.includes(c) ? ' <span class="tag tag-accent-2">required</span>' : ''}${t.help[c] ? ` <span class="muted sm">${esc(t.help[c])}</span>` : ''}</li>`).join('');
+    const step1 = `<section class="form-card col bk-step"><h3>${ic('list-numbers')} 1. What are you uploading?</h3>
+      ${field('bktype', 'Type', `<select class="input" id="bktype" style="max-width:520px">${types.map(([k, x]) => `<option value="${k}" ${k === B.type ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>`)}
+      <ul class="bk-cols">${cols}</ul>
+      <div class="row"><button type="button" class="btn btn-secondary" data-act="bktpl">${ic('download-simple')}Download template</button><span class="muted sm">A CSV file: open it in Excel or Google Sheets, fill one row per ${B.type === 'residents' ? 'resident' : B.type === 'accounts' ? 'person' : 'item'}, then save as CSV.</span></div></section>`;
+    const step2 = `<section class="form-card col bk-step"><h3>${ic('upload-simple')} 2. Upload the file</h3>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><label class="btn btn-primary bk-file">${ic('file-csv')}Choose CSV file<input type="file" id="bkfile" accept=".csv,text/csv" class="sr"></label>
+        <button type="button" class="btn btn-ghost" data-act="bkpaste">${B.paste ? 'Hide' : 'Or paste the rows'}</button>${B.file ? `<span class="muted sm">${ic('file')} ${esc(B.file)}</span>` : ''}</div>
+      ${B.paste ? `<textarea class="input" id="bkpastein" rows="6" placeholder="${esc(t.columns.join(','))}&#10;${esc(t.example.join(','))}"></textarea><div class="row"><button type="button" class="btn btn-secondary" data-act="bkpasteuse">${ic('check')}Check these rows</button></div>` : ''}
+      <p class="err" id="rlerr" role="alert">${esc(R.err)}</p>${B.busy ? `<p class="muted">${ic('spinner')} Checking…</p>` : ''}</section>`;
+    const first = t.columns[0], second = t.columns[1];
+    const res = B.result, dry = B.dry;
+    const rowsTable = (list, withPw) => table(['Row', first, second, 'Result'], list.slice(0, 300).map(r => {
+      const src = B.rows[r.row - 2] || {};
+      return trow([String(r.row), esc(src[first] || ''), esc(src[second] || ''), r.ok ? `<span class="tag tag-accent">${ic('check')} ${res ? 'Imported' : 'Ready'}</span>` : `<span class="bk-err">${ic('warning-circle')} ${esc(r.error)}</span>`]);
+    }), 'No rows');
+    const step3 = dry && !res ? `<section class="form-card col bk-step"><h3>${ic('check-square')} 3. Check and import</h3>
+      <p class="bk-sum"><b>${esc(dry.total)}</b> rows · <b class="ok">${esc(dry.valid)}</b> ready${dry.total - dry.valid ? ` · <b class="bad">${esc(dry.total - dry.valid)}</b> with a problem (fix them in the file and upload again, or import the ready ones now)` : ''}</p>
+      ${rowsTable(dry.rows)}
+      <div class="row"><button type="button" class="btn btn-primary btn-lg" data-act="bkimport" ${dry.valid && !B.busy ? '' : 'disabled'}>${ic('upload-simple')}Import ${esc(dry.valid)} ready row${dry.valid === 1 ? '' : 's'}</button><button type="button" class="btn btn-ghost" data-act="bkreset">Start again</button></div></section>` : '';
+    const sheet = res ? res.rows.filter(r => r.password) : [];
+    const done = res ? `<section class="form-card col bk-step"><h3>${ic('check-circle')} Imported</h3>
+      <p class="bk-sum"><b class="ok">${esc(res.imported)}</b> imported${res.failed ? ` · <b class="bad">${esc(res.failed)}</b> not imported` : ''}</p>
+      ${sheet.length ? `<div class="callout col" style="gap:8px"><b>${ic('key')} Sign-in sheet: shown once</b><span class="sm">These people got a temporary password. Download the sheet and hand each person theirs; they should change it under Profile. It is not stored anywhere in readable form.</span>
+        ${table(['Name', 'Email', 'Temporary password'], sheet.map(r => trow([esc(r.name), esc(r.email), `<code>${esc(r.password)}</code>`])), '')}
+        <div class="row"><button type="button" class="btn btn-primary" data-act="bksheet">${ic('download-simple')}Download sign-in sheet</button></div></div>` : ''}
+      ${rowsTable(res.rows)}<div class="row"><button type="button" class="btn btn-secondary" data-act="bkreset">${ic('arrow-counter-clockwise')}Upload another file</button></div></section>` : '';
+    page(`<div class="rl">${head('Bulk upload', 'Add many residents, accounts, vendors or inventory items at once from a CSV file. Every row is checked before anything is saved.')}
+      ${res ? '' : step1 + step2}${step3}${done}</div>`);
+  };
+  ACT.bktpl = () => { const t = B.tpl[B.type]; saveCsv(`${B.type}-template.csv`, [t.columns, t.example]); };
+  ACT.bkpaste = () => { B.paste = !B.paste; render(); };
+  ACT.bkpasteuse = () => { const v = ($('#bkpastein') || {}).value || ''; B.file = 'pasted rows'; B.paste = false; bulkLoad(v); };
+  ACT.bkreset = () => { Object.assign(B, { rows: null, file: '', dry: null, result: null, paste: false }); R.err = ''; render(); };
+  ACT.bkimport = async () => {
+    if (!B.rows || B.busy) return;
+    B.busy = true; render();
+    try { B.result = await HP.api('POST', `/api/admin/bulk/${B.type}`, { rows: B.rows }); toast(`${B.result.imported} imported`); } catch (x) { R.err = x.message; toast(x.message, 'error'); }
+    B.busy = false; render();
+  };
+  ACT.bksheet = () => { const s = B.result.rows.filter(r => r.password); saveCsv(`sign-in-sheet-${B.type}.csv`, [['name', 'email', 'temporary_password'], ...s.map(r => [r.name, r.email, r.password])]); };
+  document.addEventListener('change', e => {
+    if (e.target.id === 'bktype') { B.type = e.target.value; ACT.bkreset(); }
+    if (e.target.id === 'bkfile' && e.target.files && e.target.files[0]) {
+      const f = e.target.files[0];
+      if (f.size > 2e6) { R.err = 'That file is over 2 MB. Split it into smaller files.'; return render(); }
+      B.file = f.name; const rd = new FileReader(); rd.onload = () => bulkLoad(rd.result); rd.readAsText(f);
+    }
+  });
+
   PAGES.accounts = async () => {
     if (!isGov()) return page(`<div class="rl">${head('Accounts', '')}<p class="callout" style="margin:0">Only the head of committee or the admin can manage accounts.</p></div>`);
     const list = await RAPI.admin.accounts();
