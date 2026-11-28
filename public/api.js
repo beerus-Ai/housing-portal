@@ -84,6 +84,15 @@ window.API = (() => {
       removeSlot: sid => call('DELETE', `/api/parking/${id(sid)}`),
     },
     lease: { get: () => call('GET', '/api/lease') },
+    // Carpool (docs/carpool-api.md): residents offer rides and ask for seats; phones shared only after acceptance. Times are IST 'YYYY-MM-DDTHH:MM'.
+    carpool: {
+      list: () => call('GET', '/api/carpool'), // resident or committee: upcoming rides [{ id, from_place, to_place, depart_at, seats, seats_left, cost_per_seat, note, status, past, mine, driver: { id, name, flat, phone|null }, my_request: { id, seats, status }|null, requests?: [{ id, name, flat, seats, status, created_at, phone|null }] }]
+      offer: body => call('POST', '/api/carpool', body), // resident: { to_place, from_place? (default 'Sahyadri Heights'), depart_at, seats (1..6), cost_per_seat?, note? } -> 201 { id }; 409 same time twice
+      cancel: rid => call('POST', `/api/carpool/${id(rid)}/cancel`), // driver, or the committee (takes it down); riders are notified
+      ask: (rid, seats = 1) => call('POST', `/api/carpool/${id(rid)}/request`, { seats }), // resident: -> 201 { id, status: 'pending' }; 409 own ride, full, already asked, declined, left
+      decide: (qid, decision) => call('POST', `/api/carpool/requests/${id(qid)}/decide`, { decision }), // driver: 'accept'|'decline'; 409 not enough seats
+      withdraw: qid => call('POST', `/api/carpool/requests/${id(qid)}/cancel`), // rider: pending or accepted seat
+    },
     // Community card wallet (docs/card-wallet-api.md): prepaid ledger per flat, frozen cards, one lookup for every counter. Amounts are rupees.
     wallet: {
       mine: () => call('GET', '/api/wallet'), // resident with a flat: { flat, balance, tx: [{ id, amount (+in, -out), kind: 'topup'|'shop'|'laundry'|'refund'|'adjust', method: 'cash'|'upi'|null, note, created_at }] } (last 50, newest first)

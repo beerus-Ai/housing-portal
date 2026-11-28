@@ -293,6 +293,54 @@
     catch (x) { X.evRes = { event: id, error: cardFail(x, serial) }; }
     X.evFocus = true; render();
   };
+  // =====================================================================
+  // Carpool (docs/carpool-api.md): residents offer rides and ask for seats; the driver accepts or declines. Phones are
+  // shown only between a driver and riders they accepted. The committee sees every ride and can take one down.
+  const CP = RAPI.carpool || { list: () => HP.api('GET', '/api/carpool') };
+  const cpWhen = dt => { const [d, t] = String(dt).split('T'); return `${day(d)} · ${t}`; };
+  const cpTag = st => ({ pending: '<span class="tag tag-accent-2">Waiting for the driver</span>', accepted: '<span class="tag tag-accent">Seat confirmed</span>', declined: '<span class="tag tag-neutral">Declined</span>', cancelled: '<span class="tag tag-neutral">Cancelled</span>' }[st] || '');
+  const cpPhone = p => p ? `<a class="cp-phone" href="tel:${esc(String(p).replace(/[^\d+]/g, ''))}">${ic('phone')}${esc(p)}</a>` : '';
+  const cpHead = r => `<span class="cp-route"><b>${esc(r.from_place)}</b>${ic('arrow-right')}<b>${esc(r.to_place)}</b></span>
+    <span class="muted sm">${ic('clock')} ${esc(cpWhen(r.depart_at))} · ${esc(r.seats_left)} of ${esc(r.seats)} seats free${r.cost_per_seat != null ? ` · ${esc(rupees(r.cost_per_seat))} a seat` : ''}</span>${r.note ? `<span class="sm">${esc(r.note)}</span>` : ''}`;
+  PAGES.carpool = async () => {
+    const rides = await CP.list();
+    const live = r => r.status === 'open' && !r.past;
+    const mine = rides.filter(r => r.mine), seats = rides.filter(r => !r.mine && r.my_request && r.my_request.status !== 'cancelled');
+    const join = rides.filter(r => !r.mine && live(r) && (!r.my_request || r.my_request.status === 'cancelled'));
+    const minDt = (() => { const d = new Date(Date.now() + 15 * 6e4); d.setSeconds(0, 0); return new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); })();
+    const form = isRes() ? `<form id="svride" class="form-card col"><h3 style="margin:0">${ic('car')} Offer a ride</h3>
+      <div class="two">${field('cpto', 'Going to', '<input class="input" id="cpto" name="to_place" required maxlength="80" placeholder="Hinjewadi Phase 1">')}${field('cpfrom', 'From', '<input class="input" id="cpfrom" name="from_place" maxlength="80" value="Sahyadri Heights">')}</div>
+      <div class="three">${field('cpat', 'Leaving at', `<input class="input" id="cpat" name="depart_at" type="datetime-local" required min="${minDt}">`)}${field('cpseats', 'Seats', `<select class="input" id="cpseats" name="seats">${[1, 2, 3, 4, 5, 6].map(n => `<option ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}</select>`)}${field('cpcost', 'Cost per seat (₹, optional)', '<input class="input" id="cpcost" name="cost_per_seat" type="number" min="0" max="5000" step="10" placeholder="Free">')}</div>
+      ${field('cpnote', 'Note', '<input class="input" id="cpnote" name="note" maxlength="300" placeholder="e.g. Leaving from gate 2, back at 7 pm">')}
+      ${errLine()}<div class="row"><button class="btn btn-primary">${ic('plus')}Offer ride</button><span class="muted sm">Costs are settled between you. Phone numbers are shared only after you accept a rider.</span></div></form>` : '';
+    const reqRows = r => (r.requests || []).filter(x => x.status !== 'cancelled').map(x => `<div class="list-row cp-req"><span class="tile">${ic('user')}</span>
+      <span class="col" style="gap:0;min-width:0"><b>${esc(x.name)}</b><span class="muted sm">Flat ${esc(x.flat)} · ${esc(x.seats)} seat${x.seats === 1 ? '' : 's'}</span></span>
+      <span class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${x.status === 'pending' && r.mine && live(r) ? `<button class="btn btn-primary" data-act="cpdecide" data-id="${x.id}" data-d="accept">${ic('check')}Accept</button><button class="btn btn-secondary" data-act="cpdecide" data-id="${x.id}" data-d="decline">Decline</button>` : cpTag(x.status)}${cpPhone(x.phone)}</span></div>`).join('');
+    const cancelBtn = (r, label) => X.cpDel === r.id
+      ? `<span class="row" style="gap:6px"><button class="btn btn-danger" data-act="cpcancel" data-id="${r.id}">${ic('x')}${label}?</button><button class="btn btn-secondary" data-act="cpkeep">Keep</button></span>`
+      : `<button class="btn btn-secondary" data-act="cpask" data-id="${r.id}">${ic('x')}${label}</button>`;
+    const myCard = r => `<article class="form-card col cp-card ${live(r) ? '' : 'off'}"><div class="row cp-top"><span class="col" style="gap:2px;min-width:0">${cpHead(r)}</span>
+      ${live(r) ? cancelBtn(r, 'Cancel ride') : `<span class="tag tag-neutral">${r.status === 'cancelled' ? 'Cancelled' : 'Left'}</span>`}</div>
+      ${(r.requests || []).some(x => x.status !== 'cancelled') ? `<div class="col" style="gap:4px">${reqRows(r)}</div>` : '<p class="muted sm" style="margin:0">No requests yet.</p>'}</article>`;
+    const seatCard = r => `<article class="form-card col cp-card"><div class="row cp-top"><span class="col" style="gap:2px;min-width:0">${cpHead(r)}
+      <span class="muted sm">Driver: ${esc(r.driver.name)} · Flat ${esc(r.driver.flat)}</span></span>
+      <span class="col" style="gap:6px;align-items:flex-end">${cpTag(r.my_request.status)}${cpPhone(r.driver.phone)}${['pending', 'accepted'].includes(r.my_request.status) && live(r) ? `<button class="btn btn-ghost" data-act="cpwithdraw" data-id="${r.my_request.id}">Withdraw</button>` : ''}</span></div></article>`;
+    const joinCard = r => `<article class="form-card cp-card"><div class="row cp-top"><span class="col" style="gap:2px;min-width:0">${cpHead(r)}<span class="muted sm">Driver: ${esc(r.driver.name)} · Flat ${esc(r.driver.flat)}</span></span>
+      ${isRes() ? (r.seats_left ? `<button class="btn btn-primary" data-act="cpjoin" data-id="${r.id}">${ic('hand-waving')}Ask for a seat</button>` : '<span class="tag tag-neutral">Full</span>')
+        : `<span class="row" style="gap:6px"><span class="muted sm">${(r.requests || []).filter(x => x.status === 'accepted').length} riders</span>${live(r) ? cancelBtn(r, 'Take down') : ''}</span>`}</div></article>`;
+    const sec = (title, list, card, empty) => `<section class="col" style="gap:var(--space-2)"><h2>${esc(title)}${list.length ? ` <span class="muted">${list.length}</span>` : ''}</h2>${list.map(card).join('') || `<p class="muted">${esc(empty)}</p>`}</section>`;
+    page(`<div class="rl">${head('Carpool', isAdmin() ? 'Rides residents share. You can take down a ride that breaks the rules.' : 'Share rides with your neighbours.')}${form}
+      ${isRes() ? sec('Your rides', mine, myCard, 'You are not offering a ride.') + sec('Your seats', seats, seatCard, 'You have not asked for a seat.') : ''}
+      ${sec(isAdmin() ? 'All rides' : 'Rides you can join', isAdmin() ? rides.filter(live) : join, joinCard, 'No rides offered yet.')}</div>`);
+  };
+  const cpRun = async (fn, ok) => { try { await fn(); if (ok) toast(ok); } catch (x) { toast(x.message, 'error'); } render(); };
+  ACT.cpjoin = el => cpRun(() => HP.api('POST', `/api/carpool/${el.dataset.id}/request`, { seats: 1 }), 'Asked. The driver has been told.');
+  ACT.cpdecide = el => cpRun(() => HP.api('POST', `/api/carpool/requests/${el.dataset.id}/decide`, { decision: el.dataset.d }), el.dataset.d === 'accept' ? 'Seat confirmed. You can now see their phone.' : 'Declined');
+  ACT.cpwithdraw = el => cpRun(() => HP.api('POST', `/api/carpool/requests/${el.dataset.id}/cancel`), 'Withdrawn. The driver has been told.');
+  ACT.cpask = el => { X.cpDel = Number(el.dataset.id); render(); };
+  ACT.cpkeep = () => { X.cpDel = null; render(); };
+  ACT.cpcancel = el => { X.cpDel = null; cpRun(() => HP.api('POST', `/api/carpool/${el.dataset.id}/cancel`), 'Ride cancelled. Riders have been told.'); };
+
   ACT.svrsvp = async el => { try { await V.rsvp(el.dataset.id, el.dataset.g === '1'); toast(el.dataset.g === '1' ? 'See you there' : 'Removed'); } catch (x) { toast(x.message, 'error'); } render(); };
   ACT.svevcancel = async el => { try { await V.cancelEvent(el.dataset.id); toast('Event cancelled; guests told'); } catch (x) { toast(x.message, 'error'); } render(); };
 
@@ -363,6 +411,7 @@
     svwash: async f => { const items = Object.entries(X.wash).map(([id, qty]) => ({ id: Number(id), qty })); const r = await V.bookLaundry({ pickup_date: f.pickup_date.value, pickup_slot: f.pickup_slot.value, note: f.note.value, items, payment: X.pay }); X.wash = {}; toast(`Pickup #${r.id} booked: ${rupees(r.total)}`); },
     svrate: async f => { await V.addRate({ item: f.item.value, price: Number(f.price.value) }); toast('Price added'); },
     svparcel: async f => { await V.logParcel({ flat: f.flat.value, carrier: f.carrier.value, note: f.note.value }); toast('Logged. The flat has been told.'); },
+    svride: async f => { await HP.api('POST', '/api/carpool', { to_place: f.to_place.value.trim(), from_place: f.from_place.value.trim(), depart_at: f.depart_at.value, seats: Number(f.seats.value), cost_per_seat: f.cost_per_seat.value === '' ? null : Number(f.cost_per_seat.value), note: f.note.value.trim() }); toast('Ride offered. Neighbours can ask for a seat.'); },
     svevent: async f => { await V.addEvent({ title: f.title.value, starts_at: f.starts_at.value, location: f.location.value, description: f.description.value }); toast('Event posted'); },
   };
   document.addEventListener('change', e => {
