@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../app_state.dart';
+import 'gate_desk.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'requests.dart';
@@ -34,6 +35,10 @@ class _ShellState extends State<Shell> {
     }
     // Required items get their own tab (requests, notices); extras (amenities, dues, inventory, waste,
     // gate pass) sit under More, as in the Requirements Document. The bar holds at most 5 tabs.
+    // Guards: the gate desk (tap NFC cards to check people in and out, register new cards), as on the web.
+    if (role == 'guard') {
+      tabs.add((label: 'Gate desk', icon: Icons.contactless_outlined, selected: Icons.contactless, page: const GateDeskScreen()));
+    }
     if (role == 'resident' || role == 'admin') {
       tabs.add((label: 'Notices', icon: Icons.campaign_outlined, selected: Icons.campaign, page: const NoticesScreen()));
     }

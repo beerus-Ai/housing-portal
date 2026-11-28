@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../theme.dart';
 import 'amenities.dart';
 import 'dues.dart';
+import 'gate_desk.dart';
 import 'inventory.dart';
 import 'gate_pass.dart';
 import 'waste.dart';
@@ -21,6 +22,8 @@ List<ServiceEntry> serviceEntries(String role) => [
         (title: 'Inventory', sub: role == 'admin' ? 'Stock, reorder levels' : 'Take stock out for a job', icon: Icons.inventory_2_outlined, page: () => const InventoryScreen()),
       if (role == 'resident' || role == 'admin' || role == 'staff')
         (title: role == 'resident' ? 'Waste collection' : 'Waste', sub: role == 'resident' ? 'Pickup days, report a missed pickup' : 'Pickup days, log collections', icon: Icons.recycling, page: () => const WasteScreen()),
+      if (role == 'admin')
+        (title: 'Gate desk', sub: 'NFC cards: check in and out, register cards', icon: Icons.contactless_outlined, page: () => const GateDeskScreen()),
       if (role == 'resident')
         (title: 'Gate pass', sub: 'Visitor passes with a QR or code', icon: Icons.qr_code_2_outlined, page: () => const GatePassScreen()),
     ];

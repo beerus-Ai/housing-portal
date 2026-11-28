@@ -26,7 +26,7 @@ void main() {
   test('More menu follows the API rules per role', () {
     List<String> titles(String role) => serviceEntries(role).map((e) => e.title).toList();
     expect(titles('resident'), ['Amenities', 'Maintenance dues', 'Waste collection', 'Gate pass']);
-    expect(titles('admin'), ['Amenities', 'Maintenance dues', 'Inventory', 'Waste']);
+    expect(titles('admin'), ['Amenities', 'Maintenance dues', 'Inventory', 'Waste', 'Gate desk']);
     expect(titles('staff'), ['Inventory', 'Waste']);
     expect(titles('guard'), isEmpty);
   });

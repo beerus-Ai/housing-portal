@@ -15,6 +15,7 @@ dependencies:
   shared_preferences: ^2.3.2
   qr_flutter: ^4.1.0
   image_picker: ^1.1.2
+  nfc_manager: 3.5.0
 
 dev_dependencies:
   flutter_test:

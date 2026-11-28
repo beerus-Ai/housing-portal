@@ -5,7 +5,7 @@ Flutter 3.50 / Dart 3.14 client for the portal API. It uses the same URLs, sessi
 ## Run
 ```bash
 flutter pub get
-flutter test                 # 18 tests: API client, assign, modules, IST dates, rupees, menus, error colour, login
+flutter test                 # 22 tests: API client, assign, modules, IST dates, rupees, menus, error colour, login, gate desk
 flutter run                  # phone or emulator
 flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 ```
@@ -13,7 +13,7 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 - Local server: emulator `http://10.0.2.2:3000`; USB phone `adb reverse tcp:3000 tcp:3000`, then `http://localhost:3000`.
 
 ## What it does
-- Bottom navigation by role, required items first: residents and committee (Home, Requests, Notices, More, Profile), staff (Home, My jobs, More, Profile), guard and IT (Home, Profile).
+- Bottom navigation by role, required items first: residents and committee (Home, Requests, Notices, More, Profile), staff (Home, My jobs, More, Profile), guard (Home, Gate desk, Profile), IT (Home, Profile).
 - More: amenities (book, cancel), maintenance dues (residents see their flat; committee raises bills and records payments), inventory (committee and staff), waste (schedule; residents report a missed pickup; staff and committee log collections), gate pass (residents). Home shows a "Society services" row at the bottom. Setting up amenities and the waste schedule stays on the web.
 - Screens: sign in, home, requests, new request with photo, request detail (tracker, messages, history; committee assigns a vendor or staff, then moves it to the next stage), notices, SOS, gate QR, profile.
 
@@ -27,3 +27,6 @@ flutter build apk --release  # build/app/outputs/flutter-apk/app-release.apk
 Checked on an Android emulator against a local server. Not verified: physical phone, iOS, the live server.
 
 Errors are neutral (red only for emergencies). Open: physical phone, iOS and live-server check. Jira: HSP-68, HSP-69 (done), HSP-70.
+
+## Gate desk (NFC cards)
+Same as the web gate desk (`public/web-nfc.js`, contract `docs/nfc-api.md`). Guards get a Gate desk tab; the committee opens it from More. The phone reads the card's serial number with `nfc_manager` (the same value Web NFC gives, stored as upper-case hex), so a card registered on the web works in the app and the other way round. A tap checks the holder in or out (staff shifts start and end). **Register a card**: tap the card first or choose the person first, in either order; an unknown card at the tap screen offers "Register this card". A USB reader on OTG, or typing, goes into the card number box. Android only (iOS needs the NFC entitlement); not yet checked on a phone with real cards.
