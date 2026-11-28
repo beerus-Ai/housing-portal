@@ -164,7 +164,8 @@ module.exports = function mountRoles(app, c) {
     if (!mayDecide) return res.status(403).json({ error: hasHead() ? 'Only the head of committee approves costs' : 'Only the head of committee or the admin approves costs' });
     if (!r) return res.status(404).json({ error: 'Request not found' });
     if (r.cost_status !== 'pending') return res.status(409).json({ error: 'No cost waiting for approval on this request' });
-    if (setter === req.user.id) return res.status(403).json({ error: posOf(req.user) === 'head' ? 'You set this cost, so the admin must decide on it' : 'You set this cost, so the head of committee must decide on it' });
+    // (With no head, the admin who set the cost is the only possible approver and still decides.)
+    if (setter === req.user.id && posOf(req.user) === 'head') return res.status(403).json({ error: 'You set this cost, so the admin must decide on it' });
     const d = req.body.decision, note = str(req.body.note, 300);
     if (!['approve', 'reject'].includes(d)) return res.status(400).json({ error: 'Decision must be approve or reject' });
     run("UPDATE requests SET cost_status=?, cost_note=COALESCE(?,cost_note), updated_at=datetime('now') WHERE id=?", d === 'approve' ? 'approved' : 'rejected', note || null, r.id);
