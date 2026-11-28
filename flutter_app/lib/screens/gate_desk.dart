@@ -279,8 +279,8 @@ class GateDeskState extends State<GateDeskScreen> {
                 Text(card, key: const Key('cardNo'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 1.5)),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<int>(
-                  key: const Key('who'),
-                  value: whoId,
+                  key: ValueKey('who-$card'), // a new card starts a fresh dropdown
+                  initialValue: whoId,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Who carries this card?'),
                   hint: const Text('Choose a person'),
