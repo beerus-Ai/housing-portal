@@ -72,7 +72,7 @@
 - **Web NFC and the Android app on a real phone.**
 - **Flutter on a device.** Flutter is covered by CI only; the SDK is not on the development laptop.
 - **The live site after deploy:** only checked to answer with the new code (route or file present). Signed-in flows were checked locally.
-- **Chat, business and daycare, 2FA and passkeys:** still being built at the time of this report.
+- **Chat, business and daycare, 2FA and passkeys:** added after this report (PRs #55 to #58); runs 24 to 31 in the log. Not yet in `/m/`, Java or React.
 - **Not yet done:**
   - accessibility audit;
   - load test on the free plan;
