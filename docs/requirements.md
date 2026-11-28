@@ -301,3 +301,41 @@ Measured on Intel(R) Core(TM) i5-10300H CPU @ 2.50GHz · 8 cores · Node v24.15.
 | Many societies / tens of thousands | Multi-tenant data (society id), push updates instead of 5 s polling, object storage for photos, read replicas, rate limits | Managed PostgreSQL + replicas, S3, WebSockets/SSE |
 
 Re-run: `node scripts/load-test/load.js`.
+
+## 8. How we built it: AI agents, prompts and guardrails
+
+Claude Code built the portal as a team of AI agents, directed and reviewed by the team. A lead agent plans and merges, builder agents work in parallel, and testing agents check the work independently.
+
+**AI agents we used, including testing agents**
+
+| Agent | What it did | Evidence |
+| --- | --- | --- |
+| Lead agent (Claude Code) | Read the project rules in CLAUDE.md, wrote each API contract first, split the work, reviewed every agent report, merged and deployed, kept the prompt log | CLAUDE.md, PROMPT_LOG.md, PRs #40 to #47 |
+| Builder agents (parallel phases) | Built earlier phases side by side, each in its own git worktree limited to named files; the lead merged | PROMPT_LOG #14 |
+| Backend agent | Card wallet API in Node: ledger, top-up and adjust, card lookup, laundry counter, parcels and events by card, freeze; 3 new test files | `wallet.js`, `test/wallet.test.js`, PR #43 |
+| Web agent | Wallet on Profile, committee Card wallets page, shop and laundry counters, parcel collect and event check-in by card | `public/web-services.js`, `public/web-roles.js` |
+| Mobile agent | Phone app counters, parcels by card and My card; Android NFC returns the card number; Flutter My card screen and Counter tab | `public/m/m.js`, `flutter_app/`, PR #43 |
+| UI agent | Found inputs whose values come from a known list and made 11 of them dropdowns (web, phone app, Flutter) | PR #42 |
+| Integration tester agents (6) | Wrote 53 cross-module tests: onboarding to card to gate, the request lifecycle, money, an access matrix of 12 roles across about 90 routes, dashboards, web wiring | `test/integration-*.test.js` |
+| Skeptic agents | Tried to disprove every reported bug before it was fixed: 19 confirmed and fixed (DEF-20 to DEF-29), 5 claims refuted | `docs/testing/defect-log.md` |
+| UI tester agent | Clicked through every page for 12 accounts in Chrome; 17 findings, e.g. clipped pages, a cost the head could approve themselves, dead ends on the phone app | PR #42 (fixes) |
+
+**Types of prompt we used**
+
+1. Story prompt: one Jira story at a time, shipped with a test.
+2. Contract first: the lead writes the API contract (for example `docs/card-wallet-api.md`), then several agents build to it at the same time.
+3. Scoped agent brief: the files the agent owns, the files it must not touch, how to verify, how to commit, and what to report.
+4. Tester brief: report only, no code edits, synthetic accounts, no destructive actions, findings ordered most severe first, plus dropdown candidates.
+5. Skeptic prompt: reproduce and try to disprove each reported bug before anyone fixes it.
+6. Change request: plain-language asks from the team ("fix the card registration", "deploy") turned into reviewed pull requests.
+
+**Guardrails**
+
+| Guardrail | How it is enforced |
+| --- | --- |
+| Project rules (CLAUDE.md) | Synthetic data only; hashed passwords; a role check on every route; parameterised SQL; escaped output; an audit record for every change; API changes made in Node, Java and `public/api.js` together |
+| Isolation | Each agent works in its own git worktree and only on its named files; only the lead merges |
+| Gates | Every change is a pull request; 7 CI checks must pass; deploy only by fast-forwarding the Render branch to a green `main` |
+| People decide | The team approves merges, deploys and downloads; permission checks block risky commands (a combined merge-and-deploy command was stopped and run step by step) |
+| Secrets and privacy | No secrets in GitHub (they live in Render); the product AI never sees names, phones, emails or flat numbers, and only suggests |
+| Honest records | The prompt log, the defect log and a "Not verified" list in the test results; failures are reported, not hidden |
