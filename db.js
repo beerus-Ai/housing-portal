@@ -168,6 +168,14 @@ function openDb(file) {
   CREATE TABLE IF NOT EXISTS events(
     id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, starts_at TEXT NOT NULL, location TEXT, cancelled INTEGER NOT NULL DEFAULT 0,
     created_by INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS carpool_rides(
+    id INTEGER PRIMARY KEY, driver_id INTEGER NOT NULL REFERENCES users(id), from_place TEXT NOT NULL, to_place TEXT NOT NULL,
+    depart_at TEXT NOT NULL, seats INTEGER NOT NULL, cost_per_seat REAL, note TEXT, status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  CREATE TABLE IF NOT EXISTS carpool_requests(
+    id INTEGER PRIMARY KEY, ride_id INTEGER NOT NULL REFERENCES carpool_rides(id), rider_id INTEGER NOT NULL REFERENCES users(id),
+    seats INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT (datetime('now')), decided_at TEXT,
+    UNIQUE(ride_id, rider_id));
   CREATE TABLE IF NOT EXISTS event_rsvps(
     event_id INTEGER NOT NULL REFERENCES events(id), user_id INTEGER NOT NULL REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY(event_id, user_id));`);

@@ -265,3 +265,9 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .req-toggle i { margin-left: auto; }
 .req-toggle:hover { color: var(--color-text); }
 .req-txt .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Carpool */
+.cp-card { gap: 10px; } .cp-card.off { opacity: .6; }
+.cp-top { justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.cp-route { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; flex-wrap: wrap; } .cp-route i { color: var(--color-accent-700, #006d8d); }
+.cp-req { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; cursor: default; }
+.cp-phone { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
