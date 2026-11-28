@@ -277,3 +277,20 @@ tr.wl-on td { background: var(--color-accent-100, #e6f6fb); }
 .bk-file { position: relative; cursor: pointer; } .bk-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .bk-sum { margin: 0; } .bk-sum .ok { color: #12663f; } .bk-sum .bad { color: #b3261e; }
 .bk-err { color: #8c1d2e; display: inline-flex; gap: 6px; align-items: center; }
+/* Business directory (bz-) and daycare (dc-) */
+.bz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-3, 12px); }
+.bz-card, .dc-card { gap: 10px; } .bz-card.off, .dc-card.off { opacity: .6; }
+.bz-top { align-items: flex-start; gap: 12px; flex-wrap: wrap; } .bz-name { font-size: 17px; }
+.bz-meta { gap: 6px 14px; flex-wrap: wrap; } .bz-meta > span, .bz-meta a { display: inline-flex; align-items: center; gap: 6px; }
+.bz-stars { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; } .bz-stars i { color: var(--color-neutral-300, #c9cfd6); } .bz-stars i.on { color: #d99a00; } .bz-stars b { margin-left: 4px; }
+.bz-rev { margin: 0; } .bz-reason { margin: 0; color: #8c1d2e; display: flex; gap: 6px; align-items: center; }
+.bz-acts { gap: 8px; flex-wrap: wrap; } .bz-inline { gap: 8px; flex-wrap: wrap; flex: 1; } .bz-inline .input { flex: 1; min-width: 180px; }
+.bz-find { gap: 8px; flex-wrap: wrap; } .bz-find select { max-width: 220px; } .bz-find input { flex: 1; min-width: 180px; }
+.bz-pick { border: 0; padding: 0; margin: 0; display: flex; gap: 4px; } .bz-pick legend { font-weight: 600; margin-bottom: 4px; }
+.bz-pick label { cursor: pointer; font-size: 22px; color: var(--color-neutral-300, #c9cfd6); } .bz-pick input { position: absolute; opacity: 0; }
+.bz-pick:has(input:checked) label { color: #d99a00; } .bz-pick label:has(input:checked) ~ label { color: var(--color-neutral-300, #c9cfd6); }
+.bz-pick input:focus-visible + i { outline: 2px solid var(--color-accent, #0090b8); border-radius: 4px; }
+.dc-days { border: 0; padding: 0; margin: 0; display: flex; gap: 12px; flex-wrap: wrap; } .dc-days legend { font-weight: 600; margin-bottom: 4px; }
+.dc-days label { display: inline-flex; align-items: center; gap: 6px; }
+.dc-row { grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; cursor: default; }
+.dc-now { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; } .dc-now.in { color: var(--color-accent-700, #006d8d); } .dc-now.done { color: #12663f; }

@@ -186,6 +186,17 @@ const ROWS = [
   // ---------- carpool (residents offer and ask; the committee sees all and can take a ride down)
   ['GET carpool', 'GET', () => '/api/carpool', null, only([...RES, ...COM], 200)],
   ['POST carpool ride', 'POST', () => '/api/carpool', (f, r) => ({ to_place: 'Station ' + r, depart_at: '2026-12-05T08:00', seats: 2 }), only(RES, 201)],
+  // ---------- business directory (residents list and rate; the committee moderates)
+  ['GET business', 'GET', () => '/api/business', null, only([...RES, ...COM], 200)],
+  ['POST business listing', 'POST', () => '/api/business', (f, r) => ({ name: 'Tiffins ' + r, category: 'food', description: 'Lunch boxes', phone: '9800000000', hours: 'Noon' }), only(RES, 201)],
+  ['POST business decide', 'POST', f => `/api/business/${f.biz}/decide`, () => ({ decision: 'approve' }), only(COM, 200),
+    async (t, f, r) => ({ biz: (await t.c.owner('POST', '/api/business', { name: 'Shop ' + r, category: 'other', description: 'x', phone: '9800000000', hours: 'x' })).body.id })],
+  // ---------- daycare (the committee registers providers, decides and marks; residents enrol)
+  ['GET daycare providers', 'GET', () => '/api/daycare/providers', null, only([...RES, ...COM], 200)],
+  ['POST daycare provider', 'POST', () => '/api/daycare/providers', (f, r) => ({ name: 'Creche ' + r, age_min: 1, age_max: 5, capacity: 5, hours: '9-5', fee_month: 5000, location: 'Clubhouse', phone: '9800000000' }), only(COM, 201)],
+  ['POST daycare enrolment', 'POST', () => '/api/daycare/enrolments', f => ({ provider_id: f.care, child_name: 'Kid', child_age: 3, start_date: '2026-11-26', days: ['mon'] }), only(RES, 201),
+    async (t, f, r) => ({ care: (await t.c.sysadmin('POST', '/api/daycare/providers', { name: 'Care ' + r, age_min: 1, age_max: 5, capacity: 5, hours: '9-5', fee_month: 0, location: 'Gate 2', phone: '9800000000' })).body.id })],
+  ['GET daycare today', 'GET', () => '/api/daycare/today', null, only(COM, 200)],
   // ---------- amenities
   ['GET amenities', 'GET', () => '/api/amenities', null, only([...RES, ...COM], 200)],
   ['POST amenities', 'POST', () => '/api/amenities', (f, r) => ({ name: 'Court ' + r }), only(COM, 201)],

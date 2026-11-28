@@ -1442,6 +1442,8 @@ function createApp(opts = {}) {
   require('./services')(app, { q, one, run, log, notify, auth, str, committeeIds, creditLimit, istNow: require('./modules').istNow, clock: opts.clock });
   require('./bulk')(app, { q, one, run, log, notify, auth, admin, str, bcrypt, isGov, desk });
   require('./carpool')(app, { q, one, run, log, notify, auth, str, istNow: require('./modules').istNow, clock: opts.clock });
+  require('./business')(app, { q, one, run, log, notify, auth, admin, str, committeeIds });
+  require('./daycare')(app, { q, one, run, log, notify, auth, admin, str, committeeIds, istNow: require('./modules').istNow, clock: opts.clock });
   require('./wallet')(app, { q, one, run, log, notify, auth, admin, governance, str, creditLimit });
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   desk.mount(app, express);
